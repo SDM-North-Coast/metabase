@@ -1,10 +1,11 @@
+import { t } from "ttag";
+import _ from "underscore";
 import {
   isDimension,
   isMetric,
   isNumeric,
   isAny,
 } from "metabase/lib/schema_metadata";
-import { t } from "ttag";
 import {
   columnsAreValid,
   getFriendlyName,
@@ -19,7 +20,6 @@ import { getOptionFromColumn } from "metabase/visualizations/lib/settings/utils"
 import { dimensionIsNumeric } from "metabase/visualizations/lib/numeric";
 import { dimensionIsTimeseries } from "metabase/visualizations/lib/timeseries";
 
-import _ from "underscore";
 import { getMaxMetricsSupported } from "metabase/visualizations";
 
 // NOTE: currently we don't consider any date extracts to be histgrams

@@ -2,7 +2,6 @@
 // @ts-nocheck
 import _ from "underscore";
 import moment from "moment-timezone";
-import { createLookupByProperty, memoizeClass } from "metabase-lib/lib/utils";
 import { formatField, stripId } from "metabase/lib/formatting";
 import { getFieldValues } from "metabase/lib/query/field";
 import {
@@ -32,12 +31,13 @@ import {
   getIconForField,
   getFilterOperators,
 } from "metabase/lib/schema_metadata";
-import { FieldDimension } from "../Dimension";
-import Base from "./Base";
 import type { FieldFingerprint } from "metabase-types/api/field";
 import type { Field as FieldRef } from "metabase-types/types/Query";
+import { createLookupByProperty, memoizeClass } from "metabase-lib/lib/utils";
 import type StructuredQuery from "metabase-lib/lib/queries/StructuredQuery";
 import type NativeQuery from "metabase-lib/lib/queries/NativeQuery";
+import { FieldDimension } from "../Dimension";
+import Base from "./Base";
 import type Table from "./Table";
 import type Metadata from "./Metadata";
 

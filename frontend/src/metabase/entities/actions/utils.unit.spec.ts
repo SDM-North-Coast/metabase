@@ -1,11 +1,10 @@
-import { removeOrphanSettings } from "./utils";
-
 import {
   getDefaultFormSettings,
   getDefaultFieldSettings,
 } from "metabase/writeback/components/ActionCreator/FormCreator/utils";
 
 import type { Parameter as ParameterObject } from "metabase-types/types/Parameter";
+import { removeOrphanSettings } from "./utils";
 
 describe("entities > actions > utils", () => {
   it("should remove orphan settings", () => {

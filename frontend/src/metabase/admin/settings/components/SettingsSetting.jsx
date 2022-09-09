@@ -2,8 +2,8 @@
 import React, { Component } from "react";
 import PropTypes from "prop-types";
 
-import SettingHeader from "./SettingHeader";
 import { t } from "ttag";
+import SettingHeader from "./SettingHeader";
 
 import SettingInput from "./widgets/SettingInput";
 import SettingNumber from "./widgets/SettingNumber";

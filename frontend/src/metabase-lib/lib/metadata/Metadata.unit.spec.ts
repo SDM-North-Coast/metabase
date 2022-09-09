@@ -1,5 +1,6 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck
+import Question from "../Question";
 import Metadata from "./Metadata";
 import Base from "./Base";
 import Database from "./Database";
@@ -8,7 +9,6 @@ import Schema from "./Schema";
 import Field from "./Field";
 import Segment from "./Segment";
 import Metric from "./Metric";
-import Question from "../Question";
 describe("Metadata", () => {
   describe("instantiation", () => {
     it("should create an instance of Metadata", () => {
