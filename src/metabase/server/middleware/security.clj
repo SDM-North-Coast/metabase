@@ -52,7 +52,11 @@
                                    "'unsafe-eval'" ; TODO - we keep working towards removing this entirely
                                    "https://maps.google.com"
                                    "https://accounts.google.com"
-                                   (when (public-settings/anon-tracking-enabled)
+                                   "https://apis.google.com"
+                                   "https://*.googleapis.com"
+                                   "*.gstatic.com"
+                                   "https://www.googletagmanager.com"
+                                   ( when (public-settings/anon-tracking-enabled)
                                      "https://www.google-analytics.com")
                                    ;; for webpack hot reloading
                                    (when config/is-dev?
@@ -71,10 +75,13 @@
                                  "https://accounts.google.com"]
                   :font-src     ["*"]
                   :img-src      ["*"
-                                 "'self' data:"]
+                                 "'self' data:"
+                                 "www.googletagmanager.com"]
                   :connect-src  ["'self'"
                                  ;; Google Identity Services
                                  "https://accounts.google.com"
+                                 "www.google-analytics.com"
+                                 "www.googletagmanager.com"
                                  ;; MailChimp. So people can sign up for the Metabase mailing list in the sign up process
                                  "metabase.us10.list-manage.com"
                                  ;; Google analytics
@@ -88,7 +95,7 @@
                                    "localhost:8080 ws://localhost:8080")]
                   :manifest-src ["'self'"]}]
       (format "%s %s; " (name k) (str/join " " vs))))})
-
+ 
 (defn- embedding-app-origin
   []
   (when (and (public-settings/enable-embedding) (public-settings/embedding-app-origin))

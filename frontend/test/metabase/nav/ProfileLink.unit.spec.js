@@ -8,8 +8,8 @@ import ProfileLink from "metabase/nav/components/ProfileLink";
 const REGULAR_ITEMS = [
   "Account settings",
   "Activity",
-  "Help",
-  "About Metabase",
+  // "Help",
+  "About Analytics",
   "Sign out",
 ];
 const ADMIN_ITEMS = [...REGULAR_ITEMS, "Admin settings"];

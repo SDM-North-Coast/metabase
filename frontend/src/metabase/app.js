@@ -69,6 +69,12 @@ const theme = {
   space: [4, 8, 16, 32, 64, 128],
 };
 
+// RJL 06/06/2022 -- Google Analytics
+import TagManager from "react-gtm-module";
+const tagManagerArgs = {
+  gtmId: "GTM-N8SNRG7",
+};
+
 function _init(reducers, getRoutes, callback) {
   const store = getStore(reducers, browserHistory);
   const routes = getRoutes(store);
@@ -104,6 +110,9 @@ function _init(reducers, getRoutes, callback) {
   window.Metabase = window.Metabase || {};
   window.Metabase.store = store;
   window.Metabase.settings = MetabaseSettings;
+
+  // RJL 06/06/2022 -- Google Analytics
+  TagManager.initialize(tagManagerArgs);
 
   if (callback) {
     callback(store);

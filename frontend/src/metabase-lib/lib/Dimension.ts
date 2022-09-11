@@ -1708,24 +1708,24 @@ const NUMBER_SUBDIMENSIONS = [
 ];
 
 const DATETIME_SUBDIMENSIONS = [
-  {
-    name: t`Minute`,
-    options: {
-      "temporal-unit": "minute",
-    },
-  },
-  {
-    name: t`Hour`,
-    options: {
-      "temporal-unit": "hour",
-    },
-  },
-  {
-    name: t`Day`,
-    options: {
-      "temporal-unit": "day",
-    },
-  },
+  //{
+  //   name: t`Minute`,
+  //   options: {
+  //     "temporal-unit": "minute",
+  //   },
+  // },
+  // {
+  //   name: t`Hour`,
+  //   options: {
+  //     "temporal-unit": "hour",
+  //   },
+  // },
+  // {
+  //   name: t`Day`,
+  //   options: {
+  //     "temporal-unit": "day",
+  //   },
+  // },
   {
     name: t`Week`,
     options: {
@@ -1750,36 +1750,36 @@ const DATETIME_SUBDIMENSIONS = [
       "temporal-unit": "year",
     },
   },
-  {
-    name: t`Minute of Hour`,
-    options: {
-      "temporal-unit": "minute-of-hour",
-    },
-  },
-  {
-    name: t`Hour of Day`,
-    options: {
-      "temporal-unit": "hour-of-day",
-    },
-  },
-  {
-    name: t`Day of Week`,
-    options: {
-      "temporal-unit": "day-of-week",
-    },
-  },
-  {
-    name: t`Day of Month`,
-    options: {
-      "temporal-unit": "day-of-month",
-    },
-  },
-  {
-    name: t`Day of Year`,
-    options: {
-      "temporal-unit": "day-of-year",
-    },
-  },
+  // {
+  //   name: t`Minute of Hour`,
+  //   options: {
+  //     "temporal-unit": "minute-of-hour",
+  //   },
+  // },
+  // {
+  //   name: t`Hour of Day`,
+  //   options: {
+  //     "temporal-unit": "hour-of-day",
+  //   },
+  // },
+  // {
+  //   name: t`Day of Week`,
+  //   options: {
+  //     "temporal-unit": "day-of-week",
+  //   },
+  // },
+  // {
+  //   name: t`Day of Month`,
+  //   options: {
+  //     "temporal-unit": "day-of-month",
+  //   },
+  // },
+  // {
+  //   name: t`Day of Year`,
+  //   options: {
+  //     "temporal-unit": "day-of-year",
+  //   },
+  // },
   {
     name: t`Week of Year`,
     options: {
