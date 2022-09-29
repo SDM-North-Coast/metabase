@@ -83,6 +83,13 @@ class ErrorBoundary extends React.Component<{
   }
 }
 
+// RJL 06/06/2022 -- Google Analytics
+//                -- This didn't work due to Content-Security-Restrictions.
+// import TagManager from "react-gtm-module";
+// import { User } from "metabase-types/api";
+// let a = {} as User;
+//console.log(User);
+
 function App({
   errorPage,
   isAdminApp,
@@ -96,6 +103,14 @@ function App({
   useOnMount(() => {
     initializeIframeResizer();
   });
+
+  // const tagManagerArgs = {
+  //   gtmId: "GTM-N8SNRG7",
+  //   dataLayer: {
+  //     userID: a.email ,
+  //   }
+  // };
+  // TagManager.initialize(tagManagerArgs);
 
   return (
     <ErrorBoundary onError={setErrorInfo}>
