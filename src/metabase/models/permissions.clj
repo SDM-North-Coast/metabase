@@ -562,6 +562,15 @@
   (every? (partial set-has-partial-permissions? permissions-set)
           paths-set))
 
+(s/defn set-has-any-native-query-permissions? :- s/Bool
+  "Do the permission paths in `permission-set` grant native query access to any database?"
+  [permissions-set]
+  (boolean
+    ;; Matches "/", "/db/:id/", or "/db/:id/native/"
+    (some
+     #(first (re-find #"^/(db/\d+/(native/)?)?$" %))
+     permissions-set)))
+
 (s/defn set-has-application-permission-of-type? :- s/Bool
   "Does `permissions-set` grant *full* access to a application permission of type `perm-type`?"
   [permissions-set perm-type]
@@ -1204,7 +1213,8 @@
   ([new-graph :- StrictPermissionsGraph]
    (let [old-graph (data-perms-graph)
          [old new] (data/diff (:groups old-graph) (:groups new-graph))
-         old       (or old {})]
+         old       (or old {})
+         new       (or new {})]
      (when (or (seq old) (seq new))
        (log-permissions-changes old new)
        (check-revision-numbers old-graph new-graph)

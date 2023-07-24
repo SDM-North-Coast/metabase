@@ -1487,8 +1487,7 @@ class StructuredQueryInner extends AtomicQuery {
    * Returns the "first" of the nested queries, or this query it not nested
    */
   rootQuery(): StructuredQuery {
-    const sourceQuery = this.sourceQuery();
-    return sourceQuery ? sourceQuery.rootQuery() : this;
+    return this;
   }
 
   /**
@@ -1581,16 +1580,18 @@ class StructuredQueryInner extends AtomicQuery {
    * returns the corresponding {Dimension} in the sourceQuery, if any
    */
   dimensionForSourceQuery(dimension: Dimension): Dimension | null | undefined {
-    if (dimension instanceof FieldDimension && dimension.isStringFieldName()) {
+    if (dimension instanceof FieldDimension) {
       const sourceQuery = this.sourceQuery();
 
       if (sourceQuery) {
-        const index = sourceQuery
-          .columnNames()
-          .indexOf(dimension.fieldIdOrName());
+        const fieldIdOrName = dimension.fieldIdOrName();
 
-        if (index >= 0) {
-          return sourceQuery.columnDimensions()[index];
+        const columnIndex = sourceQuery
+          .columns()
+          .findIndex(c => c.id === fieldIdOrName || c.name === fieldIdOrName);
+
+        if (columnIndex >= 0) {
+          return sourceQuery.columnDimensions()[columnIndex];
         }
       }
     }
@@ -1744,6 +1745,10 @@ class NestedStructuredQuery extends StructuredQuery {
       datasetQuery,
       this._parent,
     );
+  }
+
+  rootQuery(): StructuredQuery {
+    return this.parentQuery().rootQuery();
   }
 
   parentQuery() {
