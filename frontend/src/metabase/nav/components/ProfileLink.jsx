@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
+
 import PropTypes from "prop-types";
 import { t } from "ttag";
 import { connect } from "react-redux";
-import _ from "underscore";
+//import _ from "underscore";
 
-import { capitalize } from "metabase/lib/formatting";
+//import { capitalize } from "metabase/lib/formatting";
 import { color } from "metabase/lib/colors";
-import { UtilApi } from "metabase/services";
+//import { UtilApi } from "metabase/services";
 
 import MetabaseSettings from "metabase/lib/settings";
 import * as Urls from "metabase/lib/urls";
@@ -26,7 +27,7 @@ export default connect(mapStateToProps)(ProfileLink);
 
 function ProfileLink({ user, adminItems, onLogout }) {
   const [modalOpen, setModalOpen] = useState(null);
-  const [bugReportDetails, setBugReportDetails] = useState(null);
+  //const [bugReportDetails, setBugReportDetails] = useState(null);
 
   const openModal = modalName => {
     setModalOpen(modalName);
@@ -38,11 +39,11 @@ function ProfileLink({ user, adminItems, onLogout }) {
 
   const generateOptionsForUser = () => {
     const { tag } = MetabaseSettings.get("version");
-    const isAdmin = user.is_superuser;
+    //const isAdmin = user.is_superuser;
     const showAdminSettingsItem = adminItems?.length > 0;
-    const compactBugReportDetailsForUrl = encodeURIComponent(
-      JSON.stringify(bugReportDetails),
-    );
+    // const compactBugReportDetailsForUrl = encodeURIComponent(
+    //   JSON.stringify(bugReportDetails),
+    // );
 
     return [
       {
@@ -58,18 +59,7 @@ function ProfileLink({ user, adminItems, onLogout }) {
         event: `Navbar;Profile Dropdown;Enter Admin`,
       },
       {
-        title: t`Help`,
-        icon: null,
-        link:
-          isAdmin && MetabaseSettings.isPaidPlan()
-            ? `https://www.metabase.com/help-premium?utm_source=in-product&utm_medium=menu&utm_campaign=help&instance_version=${tag}&diag=${compactBugReportDetailsForUrl}`
-            : `https://www.metabase.com/help?utm_source=in-product&utm_medium=menu&utm_campaign=help&instance_version=${tag}`,
-
-        externalLink: true,
-        event: `Navbar;Profile Dropdown;About ${tag}`,
-      },
-      {
-        title: t`About Metabase`,
+        title: t`About SDM Analytics`,
         icon: null,
         action: () => openModal("about"),
         event: `Navbar;Profile Dropdown;About ${tag}`,
@@ -83,16 +73,16 @@ function ProfileLink({ user, adminItems, onLogout }) {
     ].filter(Boolean);
   };
 
-  useEffect(() => {
-    const isAdmin = user.is_superuser;
-    if (isAdmin && MetabaseSettings.isPaidPlan()) {
-      UtilApi.bug_report_details().then(setBugReportDetails);
-    }
-  }, [user.is_superuser]);
+  // useEffect(() => {
+  //   const isAdmin = user.is_superuser;
+  //   if (isAdmin && MetabaseSettings.isPaidPlan()) {
+  //     UtilApi.bug_report_details().then(setBugReportDetails);
+  //   }
+  // }, [user.is_superuser]);
 
-  const { tag, date, ...versionExtra } = MetabaseSettings.get("version");
+  //const { tag, date, ...versionExtra } = MetabaseSettings.get("version");
   // don't show trademark if application name is whitelabeled
-  const showTrademark = t`Metabase` === "Metabase";
+  //const showTrademark = t`Metabase` === "Metabase";
   return (
     <div>
       <EntityMenu
@@ -116,26 +106,15 @@ function ProfileLink({ user, adminItems, onLogout }) {
             <h2
               style={{ fontSize: "1.75em" }}
               className="text-dark"
-            >{t`Thanks for using Metabase!`}</h2>
+            >{t`Thanks for using SDM Analytics!`}</h2>
             <div className="pt2">
-              <h3 className="text-dark mb1">
-                {t`You're on version`} {tag}
-              </h3>
+              <h3 className="text-dark mb1">{t`You're on version 1.46.6.1`}</h3>
               <p className="text-medium text-bold">
-                {t`Built on`} {date}
+                {t`Built on July 25, 2023`}
               </p>
-              {!/^v\d+\.\d+\.\d+$/.test(tag) && (
-                <div>
-                  {_.map(versionExtra, (value, key) => (
-                    <p key={key} className="text-medium text-bold">
-                      {capitalize(key)}: {value}
-                    </p>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
-          {showTrademark && (
+          {/* {showTrademark && (
             <div
               style={{ borderWidth: "2px" }}
               className="p2 h5 text-centered text-medium border-top"
@@ -146,7 +125,7 @@ function ProfileLink({ user, adminItems, onLogout }) {
               </span>
               <span>{t`and is built with care by a team from all across this pale blue dot.`}</span>
             </div>
-          )}
+          )} */}
         </Modal>
       ) : null}
     </div>

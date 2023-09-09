@@ -15,7 +15,7 @@ import ProfileLink from "metabase/nav/components/ProfileLink";
 const REGULAR_ITEMS = [
   "Account settings",
   "Help",
-  "About Metabase",
+  "About SDM Analytics",
   "Sign out",
 ];
 const ADMIN_ITEMS = [...REGULAR_ITEMS, "Admin settings"];
