@@ -1,20 +1,16 @@
 (ns metabase.server.middleware.security
   "Ring middleware for adding security-related headers to API responses."
-  (:require
-   [clojure.java.io :as io]
-   [clojure.string :as str]
-   [java-time :as t]
-   [metabase.analytics.snowplow :as snowplow]
-   [metabase.config :as config]
-   [metabase.models.setting :refer [defsetting]]
-   [metabase.public-settings :as public-settings]
-   [metabase.server.request.util :as request.u]
-   [metabase.util.i18n :refer [deferred-tru]]
-   [ring.util.codec :refer [base64-encode]])
-  (:import
-   (java.security MessageDigest)))
-
-(set! *warn-on-reflection* true)
+  (:require [clojure.java.io :as io]
+            [clojure.string :as str]
+            [java-time :as t]
+            [metabase.analytics.snowplow :as snowplow]
+            [metabase.config :as config]
+            [metabase.models.setting :refer [defsetting]]
+            [metabase.public-settings :as public-settings]
+            [metabase.server.request.util :as request.u]
+            [metabase.util.i18n :refer [deferred-tru]]
+            [ring.util.codec :refer [base64-encode]])
+  (:import java.security.MessageDigest))
 
 (defonce ^:private ^:const inline-js-hashes
   (letfn [(file-hash [resource-filename]
@@ -56,6 +52,11 @@
                                    "'unsafe-eval'" ; TODO - we keep working towards removing this entirely
                                    "https://maps.google.com"
                                    "https://accounts.google.com"
+                                   "https://apis.google.com"
+                                   "https://*.googleapis.com"
+                                   "https://tagmanager.google.com"
+                                   "*.gstatic.com"
+                                   "https://*.googletagmanager.com"
                                    (when (public-settings/anon-tracking-enabled)
                                      "https://www.google-analytics.com")
                                    ;; for webpack hot reloading
@@ -65,29 +66,38 @@
                                    ;; https://github.com/facebook/react/issues/17997
                                    (when config/is-dev?
                                      "'unsafe-inline'")]
-                                  (when-not config/is-dev?
+                                   (when-not config/is-dev?
                                     (map (partial format "'sha256-%s'") inline-js-hashes)))
                   :child-src    ["'self'"
                                  ;; TODO - double check that we actually need this for Google Auth
                                  "https://accounts.google.com"]
                   :style-src    ["'self'"
                                  "'unsafe-inline'"
-                                 "https://accounts.google.com"]
+                                 "https://accounts.google.com"
+                                 "https://tagmanager.google.com"]
                   :font-src     ["*"]
                   :img-src      ["*"
-                                 "'self' data:"]
+                                 "https://*.googletagmanager.com"
+                                 "https://*.google-analytics.com"
+                                 "https://*.analytics.google.com"
+                                 "'self' data:"
+                                 "https://ssl.gstatic.com" 
+                                 "https://www.gstatic.com"
+                                 "www.googletagmanager.com"]
                   :connect-src  ["'self'"
                                  ;; Google Identity Services
                                  "https://accounts.google.com"
                                  ;; MailChimp. So people can sign up for the Metabase mailing list in the sign up process
                                  "metabase.us10.list-manage.com"
+                                 "www.google-analytics.com"
+                                 "www.googletagmanager.com"
                                  ;; Google analytics
                                  (when (public-settings/anon-tracking-enabled)
                                    "www.google-analytics.com")
                                  ;; Snowplow analytics
                                  (when (public-settings/anon-tracking-enabled)
                                    (snowplow/snowplow-url))
-                                 ;; Webpack dev server
+                                 ;; Webpack dev server 
                                  (when config/is-dev?
                                    "*:8080 ws://*:8080")]
                   :manifest-src ["'self'"]}]

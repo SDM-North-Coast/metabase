@@ -110,7 +110,7 @@ function ProfileLink({ user, adminItems, onLogout }) {
             <div className="pt2">
               <h3 className="text-dark mb1">{t`You're on version 1.46.6.1`}</h3>
               <p className="text-medium text-bold">
-                {t`Built on July 25, 2023`}
+                {t`Built on September 10, 2023`}
               </p>
             </div>
           </div>

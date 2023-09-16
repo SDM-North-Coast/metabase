@@ -3,5 +3,7 @@
     "grunt.autoDetect": "off",
     "jake.autoDetect": "off",
     "gulp.autoDetect": "off",
-    "npm.autoDetect": "off"
+    "npm.autoDetect": "off",
+    "appService.defaultWebAppToDeploy": "/subscriptions/6e8eaa3a-6471-407f-bf15-c9076794f016/resourceGroups/Metabase/providers/Microsoft.Web/sites/sdm-metabase",
+    "appService.deploySubpath": "container-output/app/metabase.jar"
 }

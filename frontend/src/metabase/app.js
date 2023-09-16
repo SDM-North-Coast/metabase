@@ -32,10 +32,13 @@ import React from "react";
 import ReactDOM from "react-dom";
 
 // RJL 06/06/2022 -- Google Analytics
-import TagManager from "react-gtm-module";
-const tagManagerArgs = {
-  gtmId: "GTM-N8SNRG7",
-};
+// import TagManager from "react-gtm-module";
+// const tagManagerArgs = {
+//   gtmId: "GTM-N8SNRG7",
+// };
+
+// RJL 09/16/2023 -- Google Analytics GA4
+import ReactGA from "react-ga4";
 
 import { Provider } from "react-redux";
 import { ThemeProvider } from "@emotion/react";
@@ -99,7 +102,10 @@ function _init(reducers, getRoutes, callback) {
   initializeEmbedding(store);
 
   // RJL 06/06/2022 -- Google Analytics
-  TagManager.initialize(tagManagerArgs);
+  //TagManager.initialize(tagManagerArgs);
+
+  // RJL 09/16/2023 -- Google Analytics GA4
+  ReactGA.initialize("G-LQXDF5V0Z5");
 
   store.dispatch(refreshSiteSettings());
 
