@@ -238,11 +238,12 @@ class MetabaseSettings {
   }
 
   learnUrl(path = "") {
-    return `https://www.metabase.com/learn/${path}`;
+    // RJL - 11/25/2023 - Replaced with SDM URL
+    return `https://www.sdmnorthcoast.com/`;
   }
 
   storeUrl(path = "") {
-    return `https://store.metabase.com/${path}`;
+    return `https://store.sdmnorthcoast.com/`;
   }
 
   migrateToCloudGuideUrl() {

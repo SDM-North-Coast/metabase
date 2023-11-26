@@ -12161,33 +12161,33 @@ databaseChangeLog:
                     foreignKeyName: fk_query_action_ref_card_id
                     deleteCascade: true
 
-  - changeSet:
-      id: v45.00-003
-      author: snoe
-      comment: Added 0.44.0 - writeback
-      # This migration was previously numbered v44.00-014 but ultimately was not shipped with 44.
-      preConditions:
-        - onFail: MARK_RAN
-        - or:
-            # For some insane reason databasechangelog is upper-case in MySQL and MariaDB.
-            - and:
-                - dbms:
-                    type: postgresql,h2
-                - sqlCheck:
-                    expectedResult: 0
-                    sql: SELECT count(*) FROM databasechangelog WHERE id = 'v44.00-014';
-            - and:
-                - dbms:
-                    type: mysql,mariadb
-                - sqlCheck:
-                    expectedResult: 0
-                    sql: SELECT count(*) FROM `DATABASECHANGELOG` WHERE id = 'v44.00-014';
-      changes:
-        - addPrimaryKey:
-            tableName: query_action
-            columnNames: action_id, card_id
-            constraintName: pk_query_action
-      rollback: # will be deleted when table is deleted
+  # - changeSet:
+  #     id: v45.00-003
+  #     author: snoe
+  #     comment: Added 0.44.0 - writeback
+  #     # This migration was previously numbered v44.00-014 but ultimately was not shipped with 44.
+  #     preConditions:
+  #       - onFail: MARK_RAN
+  #       - or:
+  #           # For some insane reason databasechangelog is upper-case in MySQL and MariaDB.
+  #           - and:
+  #               - dbms:
+  #                   type: postgresql,h2
+  #               - sqlCheck:
+  #                   expectedResult: 0
+  #                   sql: SELECT count(*) FROM databasechangelog WHERE id = 'v44.00-014';
+  #           - and:
+  #               - dbms:
+  #                   type: mysql,mariadb
+  #               - sqlCheck:
+  #                   expectedResult: 0
+  #                   sql: SELECT count(*) FROM `DATABASECHANGELOG` WHERE id = 'v44.00-014';
+  #     changes:
+  #       - addPrimaryKey:
+  #           tableName: query_action
+  #           columnNames: action_id, card_id
+  #           constraintName: pk_query_action
+  #     rollback: # will be deleted when table is deleted
 
   # note: some migrations which only added and deleted tables within v45 were removed, hence an ID gap here
 
@@ -12285,33 +12285,33 @@ databaseChangeLog:
                   type: ${text.type}
                   remarks: A program to take an api response to determine if an error occurred
 
-  - changeSet:
-      id: v45.00-013
-      author: snoe
-      comment: Added 0.44.0 - writeback
-      # This migration was previously numbered v44.00-032 but ultimately was not shipped with 44.
-      preConditions:
-        - onFail: MARK_RAN
-        - or:
-            # For some insane reason databasechangelog is upper-case in MySQL and MariaDB.
-            - and:
-                - dbms:
-                    type: postgresql,h2
-                - sqlCheck:
-                    expectedResult: 0
-                    sql: SELECT count(*) FROM databasechangelog WHERE id = 'v44.00-032';
-            - and:
-                - dbms:
-                    type: mysql,mariadb
-                - sqlCheck:
-                    expectedResult: 0
-                    sql: SELECT count(*) FROM `DATABASECHANGELOG` WHERE id = 'v44.00-032';
-      changes:
-        - addPrimaryKey:
-            tableName: http_action
-            columnNames: action_id
-            constraintName: pk_http_action
-      rollback: # no rollback needed, will be deleted with table
+  # - changeSet:
+  #     id: v45.00-013
+  #     author: snoe
+  #     comment: Added 0.44.0 - writeback
+  #     # This migration was previously numbered v44.00-032 but ultimately was not shipped with 44.
+  #     preConditions:
+  #       - onFail: MARK_RAN
+  #       - or:
+  #           # For some insane reason databasechangelog is upper-case in MySQL and MariaDB.
+  #           - and:
+  #               - dbms:
+  #                   type: postgresql,h2
+  #               - sqlCheck:
+  #                   expectedResult: 0
+  #                   sql: SELECT count(*) FROM databasechangelog WHERE id = 'v44.00-032';
+  #           - and:
+  #               - dbms:
+  #                   type: mysql,mariadb
+  #               - sqlCheck:
+  #                   expectedResult: 0
+  #                   sql: SELECT count(*) FROM `DATABASECHANGELOG` WHERE id = 'v44.00-032';
+      # changes:
+      #   - addPrimaryKey:
+      #       tableName: http_action
+      #       columnNames: action_id
+      #       constraintName: pk_http_action
+      # rollback: # no rollback needed, will be deleted with table
 
 
   # note: some migrations which only added and deleted tables within v45 were removed, hence an ID gap here
@@ -13198,43 +13198,43 @@ databaseChangeLog:
             constraintName: fk_query_action_database_id
             onDelete: CASCADE
 
-  - changeSet:
-      id: v46.00-011
-      author: snoe
-      validCheckSum: ANY
-      comment: Added 0.46.0 - Unify action representation
-      changes:
-        - sql:
-            dbms: mysql,mariadb
-            sql: >-
-              ALTER TABLE query_action DROP PRIMARY KEY, ADD PRIMARY KEY pk_query_action (action_id);
-        - sql:
-            dbms: h2
-            sql: >-
-              ALTER TABLE query_action DROP PRIMARY KEY;
-              ALTER TABLE query_action ADD CONSTRAINT pk_query_action PRIMARY KEY (action_id);
-        - sql:
-            dbms: postgresql
-            sql: >-
-              ALTER TABLE query_action DROP CONSTRAINT pk_query_action;
-              ALTER TABLE query_action ADD CONSTRAINT pk_query_action PRIMARY KEY (action_id);
-      rollback:
-        - sql:
-            dbms: mysql,mariadb
-            sql: >-
-              ALTER TABLE query_action DROP PRIMARY KEY, ADD PRIMARY KEY pk_query_action (action_id, card_id);
-        - sql:
-            dbms: h2
-            sql: >-
-              ALTER TABLE query_action DROP CONSTRAINT fk_query_action_ref_action_id;
-              ALTER TABLE query_action DROP PRIMARY KEY;
-              ALTER TABLE query_action ADD CONSTRAINT fk_query_action_ref_action_id FOREIGN KEY (action_id) REFERENCES action(id) ON DELETE CASCADE;
-              ALTER TABLE query_action ADD CONSTRAINT pk_query_action PRIMARY KEY (action_id, card_id);
-        - sql:
-            dbms: postgresql
-            sql: >-
-              ALTER TABLE query_action DROP CONSTRAINT pk_query_action;
-              ALTER TABLE query_action ADD CONSTRAINT pk_query_action PRIMARY KEY (action_id, card_id);
+  # - changeSet:
+  #     id: v46.00-011
+  #     author: snoe
+  #     validCheckSum: ANY
+  #     comment: Added 0.46.0 - Unify action representation
+  #     changes:
+  #       - sql:
+  #           dbms: mysql,mariadb
+  #           sql: >-
+  #             ALTER TABLE query_action DROP PRIMARY KEY, ADD PRIMARY KEY pk_query_action (action_id);
+  #       - sql:
+  #           dbms: h2
+  #           sql: >-
+  #             ALTER TABLE query_action DROP PRIMARY KEY;
+  #             ALTER TABLE query_action ADD CONSTRAINT pk_query_action PRIMARY KEY (action_id);
+  #       - sql:
+  #           dbms: postgresql
+  #           sql: >-
+  #             ALTER TABLE query_action DROP CONSTRAINT pk_query_action;
+  #             ALTER TABLE query_action ADD CONSTRAINT pk_query_action PRIMARY KEY (action_id);
+  #     rollback:
+  #       - sql:
+  #           dbms: mysql,mariadb
+  #           sql: >-
+  #             ALTER TABLE query_action DROP PRIMARY KEY, ADD PRIMARY KEY pk_query_action (action_id, card_id);
+  #       - sql:
+  #           dbms: h2
+  #           sql: >-
+  #             ALTER TABLE query_action DROP CONSTRAINT fk_query_action_ref_action_id;
+  #             ALTER TABLE query_action DROP PRIMARY KEY;
+  #             ALTER TABLE query_action ADD CONSTRAINT fk_query_action_ref_action_id FOREIGN KEY (action_id) REFERENCES action(id) ON DELETE CASCADE;
+  #             ALTER TABLE query_action ADD CONSTRAINT pk_query_action PRIMARY KEY (action_id, card_id);
+  #       - sql:
+  #           dbms: postgresql
+  #           sql: >-
+  #             ALTER TABLE query_action DROP CONSTRAINT pk_query_action;
+  #             ALTER TABLE query_action ADD CONSTRAINT pk_query_action PRIMARY KEY (action_id, card_id);
 
   - changeSet:
       id: v46.00-012
