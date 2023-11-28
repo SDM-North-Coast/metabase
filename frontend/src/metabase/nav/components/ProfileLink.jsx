@@ -108,9 +108,9 @@ function ProfileLink({ user, adminItems, onLogout }) {
               className="text-dark"
             >{t`Thanks for using SDM Analytics!`}</h2>
             <div className="pt2">
-              <h3 className="text-dark mb1">{t`You're on version 1.46.6.1`}</h3>
+              <h3 className="text-dark mb1">{t`You're on version 1.47.8.1`}</h3>
               <p className="text-medium text-bold">
-                {t`Built on November 27, 2023`}
+                {t`Built on November 28, 2023`}
               </p>
             </div>
           </div>
