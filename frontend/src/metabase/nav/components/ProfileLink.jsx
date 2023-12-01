@@ -41,11 +41,13 @@ function ProfileLink({ user, adminItems, onLogout }) {
   };
 
   const generateOptionsForUser = () => {
-    const isAdmin = user.is_superuser;
+    // RJL - 11/29/2023 - Not Used
+    //const isAdmin = user.is_superuser;
     const showAdminSettingsItem = adminItems?.length > 0;
-    const compactBugReportDetailsForUrl = encodeURIComponent(
-      JSON.stringify(bugReportDetails),
-    );
+    // RJL - 11/29/2023 - Not Used
+    //const compactBugReportDetailsForUrl = encodeURIComponent(
+    //  JSON.stringify(bugReportDetails),
+    //);
 
     return [
       {
@@ -60,19 +62,21 @@ function ProfileLink({ user, adminItems, onLogout }) {
         link: "/admin",
         event: `Navbar;Profile Dropdown;Enter Admin`,
       },
-      {
-        title: t`Help`,
-        icon: null,
-        link:
-          isAdmin && isPaidPlan
-            ? `https://www.metabase.com/help-premium?utm_source=in-product&utm_medium=menu&utm_campaign=help&instance_version=${tag}&diag=${compactBugReportDetailsForUrl}`
-            : `https://www.metabase.com/help?utm_source=in-product&utm_medium=menu&utm_campaign=help&instance_version=${tag}`,
+      // RJL - 11/29/2023 - Removed
+      // {
+      //   title: t`Help`,
+      //   icon: null,
+      //   link:
+      //     isAdmin && isPaidPlan
+      //       ? `https://www.metabase.com/help-premium?utm_source=in-product&utm_medium=menu&utm_campaign=help&instance_version=${tag}&diag=${compactBugReportDetailsForUrl}`
+      //       : `https://www.metabase.com/help?utm_source=in-product&utm_medium=menu&utm_campaign=help&instance_version=${tag}`,
 
-        externalLink: true,
-        event: `Navbar;Profile Dropdown;About ${tag}`,
-      },
+      //   externalLink: true,
+      //   event: `Navbar;Profile Dropdown;About ${tag}`,
+      // },
       {
-        title: t`About Metabase`,
+        // RJL - 11/29/2023 - Changed Metabase to SDM Analytics
+        title: t`About SDM Analytics`,
         icon: null,
         action: () => openModal("about"),
         event: `Navbar;Profile Dropdown;About ${tag}`,
@@ -111,45 +115,34 @@ function ProfileLink({ user, adminItems, onLogout }) {
       />
       {modalOpen === "about" ? (
         <Modal small onClose={closeModal}>
-          <div className="px4 pt4 pb2 text-centered relative">
-            <div className="text-brand pb2">
-              <LogoIcon height={48} />
-            </div>
-            <h2
-              style={{ fontSize: "1.75em" }}
-              className="text-dark"
-            >{t`Thanks for using Metabase!`}</h2>
-            <div className="pt2">
-              <h3 className="text-dark mb1">
-                {t`You're on version`} {tag}
-              </h3>
-              <p className="text-medium text-bold">
-                {t`Built on`} {date}
-              </p>
-              {!/^v\d+\.\d+\.\d+$/.test(tag) && (
-                <div>
-                  {_.map(versionExtra, (value, key) => (
-                    <p key={key} className="text-medium text-bold">
-                      {capitalize(key)}: {value}
-                    </p>
-                  ))}
-                </div>
-              )}
-            </div>
+        <div className="px4 pt4 pb2 text-centered relative">
+          <div className="text-brand pb2">
+            <LogoIcon height={48} />
           </div>
-          {showTrademark && (
-            <div
-              style={{ borderWidth: "2px" }}
-              className="p2 h5 text-centered text-medium border-top"
-            >
-              <span className="block">
-                <span className="text-bold">Metabase</span>{" "}
-                {t`is a Trademark of`} Metabase, Inc
-              </span>
-              <span>{t`and is built with care by a team from all across this pale blue dot.`}</span>
-            </div>
-          )}
-        </Modal>
+          <h2
+            style={{ fontSize: "1.75em" }}
+            className="text-dark"
+          >{t`Thanks for using SDM Analytics!`}</h2>
+          <div className="pt2">
+            <h3 className="text-dark mb1">{t`You're on version 1.47.8`}</h3>
+            <p className="text-medium text-bold">
+              {t`Built on November 29, 2023`}
+            </p>
+          </div>
+        </div>
+        {/* {showTrademark && (
+          <div
+            style={{ borderWidth: "2px" }}
+            className="p2 h5 text-centered text-medium border-top"
+          >
+            <span className="block">
+              <span className="text-bold">Metabase</span>{" "}
+              {t`is a Trademark of`} Metabase, Inc
+            </span>
+            <span>{t`and is built with care by a team from all across this pale blue dot.`}</span>
+          </div>
+        )} */}
+      </Modal>
       ) : null}
     </div>
   );

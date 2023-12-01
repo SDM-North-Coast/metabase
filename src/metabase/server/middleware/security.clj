@@ -65,6 +65,8 @@
                                   ["'self'"
                                    "https://maps.google.com"
                                    "https://accounts.google.com"
+                                   "https://www.googletagmanager.com"
+                                   "https://www.google-analytics.com"
                                    (when (public-settings/anon-tracking-enabled)
                                      "https://www.google-analytics.com")
                                    ;; for webpack hot reloading
@@ -82,7 +84,9 @@
                                    (map (partial format "'sha256-%s'") inline-js-hashes)))
                   :child-src    ["'self'"
                                  ;; TODO - double check that we actually need this for Google Auth
-                                 "https://accounts.google.com"]
+                                 "https://accounts.google.com"
+                                   "https://www.googletagmanager.com"
+                                   "https://www.google-analytics.com"]
                   :style-src    ["'self'"
                                  ;; See [[generate-nonce]]
                                  (when nonce
@@ -93,13 +97,17 @@
                                  ;; CLJS REPL
                                  (when config/is-dev?
                                    "http://localhost:9630")
-                                 "https://accounts.google.com"]
+                                   "https://accounts.google.com"
+                                   "https://www.googletagmanager.com"
+                                   "https://www.google-analytics.com"]
                   :font-src     ["*"]
                   :img-src      ["*"
                                  "'self' data:"]
                   :connect-src  ["'self'"
                                  ;; Google Identity Services
-                                 "https://accounts.google.com"
+                                   "https://www.googletagmanager.com"
+                                   "https://www.google-analytics.com"
+                                   "https://accounts.google.com"
                                  ;; MailChimp. So people can sign up for the Metabase mailing list in the sign up process
                                  "metabase.us10.list-manage.com"
                                  ;; Google analytics

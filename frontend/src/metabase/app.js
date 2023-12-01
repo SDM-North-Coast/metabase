@@ -33,6 +33,9 @@ import "ee-plugins"; // eslint-disable-line import/no-duplicates
 import ReactDOM from "react-dom";
 import { Provider } from "react-redux";
 
+// RJL 09/16/2023 -- Google Analytics GA4
+import ReactGA from "react-ga4";
+
 // router
 import { Router, useRouterHistory } from "react-router";
 import { createHistory } from "history";
@@ -90,6 +93,9 @@ function _init(reducers, getRoutes, callback) {
   registerVisualizations();
 
   initializeEmbedding(store);
+
+  // RJL 09/16/2023 -- Google Analytics GA4
+  ReactGA.initialize("G-LQXDF5V0Z5");
 
   store.dispatch(refreshSiteSettings());
 
