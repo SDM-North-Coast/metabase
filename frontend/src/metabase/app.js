@@ -54,6 +54,7 @@ import registerVisualizations from "metabase/visualizations/register";
 import { PLUGIN_APP_INIT_FUCTIONS } from "metabase/plugins";
 
 import GlobalStyles from "metabase/styled-components/containers/GlobalStyles";
+import { EmotionCacheProvider } from "metabase/styled-components/components/EmotionCacheProvider";
 import { getStore } from "./store";
 
 // remove trailing slash
