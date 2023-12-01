@@ -63,8 +63,14 @@
     (for [[k vs] {:default-src  ["'none'"]
                   :script-src   (concat
                                   ["'self'"
+                                   "'unsafe-eval'" ; TODO - we keep working towards removing this entirely
                                    "https://maps.google.com"
                                    "https://accounts.google.com"
+                                   "https://apis.google.com"
+                                   "https://*.googleapis.com"
+                                   "https://tagmanager.google.com"
+                                   "*.gstatic.com"
+                                   "https://*.googletagmanager.com"                                   
                                    (when (public-settings/anon-tracking-enabled)
                                      "https://www.google-analytics.com")
                                    ;; for webpack hot reloading
@@ -84,6 +90,10 @@
                                  ;; TODO - double check that we actually need this for Google Auth
                                  "https://accounts.google.com"]
                   :style-src    ["'self'"
+                                 "'unsafe-inline'"
+                                 "https://accounts.google.com"
+                                 "https://*.googletagmanager.com"                                   
+                                 "https://tagmanager.google.com"]
                                  ;; See [[generate-nonce]]
                                  (when nonce
                                    (format "'nonce-%s'" nonce))
@@ -97,11 +107,20 @@
                   :font-src     ["*"]
                   :img-src      ["*"
                                  "'self' data:"]
+                                 "https://*.googletagmanager.com"
+                                 "https://*.google-analytics.com"
+                                 "https://*.analytics.google.com"
+                                 "'self' data:"
+                                 "https://ssl.gstatic.com" 
+                                 "https://www.gstatic.com"
+                                 "www.googletagmanager.com"]
                   :connect-src  ["'self'"
                                  ;; Google Identity Services
                                  "https://accounts.google.com"
                                  ;; MailChimp. So people can sign up for the Metabase mailing list in the sign up process
                                  "metabase.us10.list-manage.com"
+                                 "www.google-analytics.com"
+                                 "www.googletagmanager.com"
                                  ;; Google analytics
                                  (when (public-settings/anon-tracking-enabled)
                                    "www.google-analytics.com")

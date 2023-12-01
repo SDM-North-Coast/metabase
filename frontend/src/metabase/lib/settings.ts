@@ -301,8 +301,10 @@ class MetabaseSettings {
   /**
    * @deprecated use getLearnUrl
    */
+  
+  //RJL 11/30/2023 - Changed to SDM Website
   learnUrl(path = "") {
-    return `https://www.metabase.com/learn/${path}`;
+    return `https://https://www.sdmnorthcoast.com/dental-market-products-services/tutorials/`;
   }
 
   /**

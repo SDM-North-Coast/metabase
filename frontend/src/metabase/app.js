@@ -33,6 +33,9 @@ import "ee-plugins"; // eslint-disable-line import/no-duplicates
 import ReactDOM from "react-dom";
 import { Provider } from "react-redux";
 
+// RJL 09/16/2023 -- Google Analytics GA4
+import ReactGA from "react-ga4";
+
 // router
 import { Router, useRouterHistory } from "react-router";
 import { createHistory } from "history";
@@ -51,7 +54,6 @@ import registerVisualizations from "metabase/visualizations/register";
 import { PLUGIN_APP_INIT_FUCTIONS } from "metabase/plugins";
 
 import GlobalStyles from "metabase/styled-components/containers/GlobalStyles";
-import { EmotionCacheProvider } from "metabase/styled-components/components/EmotionCacheProvider";
 import { getStore } from "./store";
 
 // remove trailing slash
@@ -90,6 +92,9 @@ function _init(reducers, getRoutes, callback) {
   registerVisualizations();
 
   initializeEmbedding(store);
+
+  // RJL 09/16/2023 -- Google Analytics GA4
+  ReactGA.initialize("G-LQXDF5V0Z5");
 
   store.dispatch(refreshSiteSettings());
 
