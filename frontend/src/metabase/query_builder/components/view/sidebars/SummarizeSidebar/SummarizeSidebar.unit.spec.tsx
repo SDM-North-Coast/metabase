@@ -1,74 +1,72 @@
-import { useState } from "react";
 import userEvent from "@testing-library/user-event";
-import { createMockMetadata } from "__support__/metadata";
-import { render, screen, waitFor, within } from "__support__/ui";
-import { checkNotNull } from "metabase/lib/types";
-import type { Card, UnsavedCard } from "metabase-types/api";
-import {
-  ORDERS,
-  PRODUCTS,
-  ORDERS_ID,
-  PEOPLE_ID,
-  PRODUCTS_ID,
-  SAMPLE_DB_ID,
-  createAdHocCard,
-  createSampleDatabase,
-} from "metabase-types/api/mocks/presets";
+import { useState } from "react";
+
+import { renderWithProviders, screen, waitFor, within } from "__support__/ui";
 import * as Lib from "metabase-lib";
-import Question from "metabase-lib/Question";
-import type StructuredQuery from "metabase-lib/queries/StructuredQuery";
+import { createQuery, createQueryWithClauses } from "metabase-lib/test-helpers";
+import { createMockCard } from "metabase-types/api/mocks";
+import {
+  createMockQueryBuilderState,
+  createMockState,
+} from "metabase-types/store/mocks";
+
 import { SummarizeSidebar } from "./SummarizeSidebar";
 
 type SetupOpts = {
-  card?: Card | UnsavedCard;
+  query?: Lib.Query;
   withDefaultAggregation?: boolean;
 };
 
-function createSummarizedCard() {
-  return createAdHocCard({
-    dataset_query: {
-      type: "query",
-      database: SAMPLE_DB_ID,
-      query: {
-        "source-table": ORDERS_ID,
-        aggregation: [["max", ["field", ORDERS.QUANTITY, null]]],
-        breakout: [
-          ["field", ORDERS.CREATED_AT, { "temporal-unit": "month" }],
-          ["field", PRODUCTS.CATEGORY, { "source-field": ORDERS.PRODUCT_ID }],
-        ],
+function createSummarizedQuery() {
+  return createQueryWithClauses({
+    aggregations: [
+      { operatorName: "max", tableName: "ORDERS", columnName: "QUANTITY" },
+    ],
+    breakouts: [
+      {
+        tableName: "ORDERS",
+        columnName: "CREATED_AT",
+        temporalBucketName: "Month",
       },
-    },
+      {
+        tableName: "PRODUCTS",
+        columnName: "CATEGORY",
+      },
+    ],
   });
 }
 
-function setup({
-  card = createAdHocCard(),
+function createQueryWithBreakoutsForSameColumn() {
+  return createQueryWithClauses({
+    aggregations: [{ operatorName: "count" }],
+    breakouts: [
+      {
+        tableName: "ORDERS",
+        columnName: "CREATED_AT",
+        temporalBucketName: "Year",
+      },
+      {
+        tableName: "ORDERS",
+        columnName: "CREATED_AT",
+        temporalBucketName: "Quarter",
+      },
+    ],
+  });
+}
+
+async function setup({
+  query: initialQuery = createQuery(),
   withDefaultAggregation = true,
 }: SetupOpts = {}) {
   const onQueryChange = jest.fn();
   const onClose = jest.fn();
 
-  const metadata = createMockMetadata({
-    databases: [createSampleDatabase()],
-    questions: "id" in card ? [card] : [],
-  });
-
-  const question =
-    "id" in card
-      ? checkNotNull(metadata.question(card.id))
-      : new Question(card, metadata);
-
   function Wrapper() {
-    const [query, setQuery] = useState(question._getMLv2Query());
-
-    const legacyQuery = question
-      .setDatasetQuery(Lib.toLegacyQuery(query))
-      .query() as StructuredQuery;
+    const [query, setQuery] = useState(initialQuery);
 
     return (
       <SummarizeSidebar
         query={query}
-        legacyQuery={legacyQuery}
         onQueryChange={nextQuery => {
           setQuery(nextQuery);
           onQueryChange(nextQuery);
@@ -78,11 +76,17 @@ function setup({
     );
   }
 
-  render(<Wrapper />);
+  renderWithProviders(<Wrapper />, {
+    storeInitialState: createMockState({
+      qb: createMockQueryBuilderState({
+        card: createMockCard(),
+      }),
+    }),
+  });
 
   if (!withDefaultAggregation) {
     const countButton = screen.getByLabelText("Count");
-    userEvent.click(within(countButton).getByLabelText("close icon"));
+    await userEvent.click(within(countButton).getByLabelText("close icon"));
   }
 
   function getNextQuery() {
@@ -105,7 +109,6 @@ function setup({
   }
 
   return {
-    metadata,
     getNextAggregations,
     getNextBreakouts,
     onQueryChange,
@@ -115,11 +118,11 @@ function setup({
 
 describe("SummarizeSidebar", () => {
   describe("default aggregation", () => {
-    it("should apply default aggregation for bare rows query", () => {
-      const { getNextAggregations, onQueryChange } = setup();
+    it("should apply default aggregation for bare rows query", async () => {
+      const { getNextAggregations, onQueryChange } = await setup();
 
       expect(screen.getByLabelText("Count")).toBeInTheDocument();
-      userEvent.click(screen.getByText("Done"));
+      await userEvent.click(screen.getByText("Done"));
 
       const aggregations = getNextAggregations();
       const [aggregation] = aggregations;
@@ -128,55 +131,70 @@ describe("SummarizeSidebar", () => {
       expect(onQueryChange).toHaveBeenCalledTimes(1);
     });
 
-    it("should allow to remove a default aggregation", () => {
-      const { getNextAggregations, onQueryChange } = setup();
+    it("should allow to remove the default aggregation without triggering a query update", async () => {
+      const { onQueryChange } = await setup();
 
       const countButton = screen.getByLabelText("Count");
-      userEvent.click(within(countButton).getByLabelText("close icon"));
+      await userEvent.click(within(countButton).getByLabelText("close icon"));
+
+      expect(screen.queryByLabelText("Count")).not.toBeInTheDocument();
+      expect(onQueryChange).not.toHaveBeenCalled();
+    });
+
+    it("should allow to add the default aggregation manually after it was removed", async () => {
+      const { getNextAggregations, onQueryChange } = await setup();
+
+      const countButton = screen.getByLabelText("Count");
+      await userEvent.click(within(countButton).getByLabelText("close icon"));
+      await userEvent.click(screen.getByText("Add a metric"));
+      await userEvent.click(await screen.findByText("Count of rows"));
 
       const aggregations = getNextAggregations();
-      expect(aggregations).toHaveLength(0);
+      const [aggregation] = aggregations;
+      expect(aggregations).toHaveLength(1);
+      expect(aggregation.displayName).toBe("Count");
       expect(onQueryChange).toHaveBeenCalledTimes(1);
     });
 
-    it("shouldn't apply default aggregation if a query is already aggregated", () => {
-      setup({ card: createSummarizedCard() });
+    it("shouldn't apply default aggregation if a query is already aggregated", async () => {
+      await setup({ query: createSummarizedQuery() });
       expect(screen.queryByLabelText("Count")).not.toBeInTheDocument();
     });
   });
 
-  it("should list breakoutable columns", () => {
-    const { metadata } = setup();
-    const ordersTable = checkNotNull(metadata.table(ORDERS_ID));
-    const productsTable = checkNotNull(metadata.table(PRODUCTS_ID));
-    const peopleTable = checkNotNull(metadata.table(PEOPLE_ID));
-    const expectedColumnCount = [
-      ordersTable.fields,
-      productsTable.fields,
-      peopleTable.fields,
-    ].flat().length;
+  it("should list breakoutable columns", async () => {
+    const query = createQuery();
+    const columns = Lib.breakoutableColumns(query, -1);
+    await setup({ query });
 
     expect(screen.getByText("Group by")).toBeInTheDocument();
     expect(screen.getByText("Discount")).toBeInTheDocument();
     expect(screen.getByText("Category")).toBeInTheDocument();
     expect(screen.getByText("Email")).toBeInTheDocument();
     expect(screen.getAllByTestId("dimension-list-item")).toHaveLength(
-      expectedColumnCount,
+      columns.length,
     );
   });
 
-  it("shouldn't list breakout columns without an aggregation", () => {
-    setup({ withDefaultAggregation: false });
+  it("should list render the info icon on breakout columns", async () => {
+    await setup();
+    expect(screen.getAllByLabelText("More info").length).toBeGreaterThanOrEqual(
+      1,
+    );
+  });
+
+  it("shouldn't list breakout columns without an aggregation", async () => {
+    await setup({ withDefaultAggregation: false });
 
     expect(screen.queryByText("Group by")).not.toBeInTheDocument();
     expect(screen.queryAllByTestId("dimension-list-item").length).toBe(0);
   });
 
   it("should allow searching breakout columns", async () => {
-    setup();
+    await setup();
 
     const searchInput = screen.getByPlaceholderText(/Find/);
-    userEvent.type(searchInput, "Created");
+    await userEvent.type(searchInput, "Created");
 
     await waitFor(() =>
       expect(screen.getAllByTestId("dimension-list-item")).toHaveLength(3),
@@ -184,8 +202,8 @@ describe("SummarizeSidebar", () => {
     expect(screen.getAllByLabelText("Created At")).toHaveLength(3);
   });
 
-  it("should highlight selected breakout columns", () => {
-    setup({ card: createSummarizedCard() });
+  it("should highlight selected breakout columns", async () => {
+    await setup({ query: createSummarizedQuery() });
 
     const [ordersCreatedAt, peopleCreatedAt] =
       screen.getAllByLabelText("Created At");
@@ -196,39 +214,112 @@ describe("SummarizeSidebar", () => {
     expect(peopleCreatedAt).toHaveAttribute("aria-selected", "false");
   });
 
-  it("should list breakouts added before opening the sidebar in a separate section", () => {
-    setup({ card: createSummarizedCard() });
-
-    const pinnedColumnList = screen.getByTestId("pinned-dimensions");
-    const unpinnedColumnList = screen.getByTestId("unpinned-dimensions");
+  it("should list breakouts added before opening the sidebar in a separate section", async () => {
+    await setup({ query: createSummarizedQuery() });
 
     expect(
-      within(pinnedColumnList).getByText("Product → Category"),
+      within(getPinnedColumnList()).getByText("Product → Category"),
     ).toBeInTheDocument();
     expect(
-      within(pinnedColumnList).getByText("Created At"),
+      within(getPinnedColumnList()).getByText("Created At"),
     ).toBeInTheDocument();
 
     expect(
-      within(unpinnedColumnList).queryByText("Category"),
+      within(getUnpinnedColumnList()).queryByText("Category"),
     ).not.toBeInTheDocument();
 
     // "Product → Created At" and "User → Created At" should still be there
-    expect(within(unpinnedColumnList).getAllByText("Created At")).toHaveLength(
-      2,
+    expect(
+      within(getUnpinnedColumnList()).getAllByText("Created At"),
+    ).toHaveLength(2);
+  });
+
+  it("should show multiple breakouts of the same column", async () => {
+    await setup({
+      query: createQueryWithBreakoutsForSameColumn(),
+    });
+    expect(
+      within(getPinnedColumnList()).getAllByText("Created At"),
+    ).toHaveLength(2);
+  });
+
+  it("should allow to modify temporal buckets for breakouts of the same column", async () => {
+    const { getNextBreakouts } = await setup({
+      query: createQueryWithBreakoutsForSameColumn(),
+    });
+
+    await userEvent.click(await screen.findByText("by year"));
+    await userEvent.click(await screen.findByText("Day"));
+    expect(getNextBreakouts()).toMatchObject([
+      { displayName: "Created At: Day" },
+      { displayName: "Created At: Quarter" },
+    ]);
+
+    await userEvent.click(await screen.findByText("by quarter"));
+    await userEvent.click(await screen.findByText("Month"));
+    expect(getNextBreakouts()).toMatchObject([
+      { displayName: "Created At: Day" },
+      { displayName: "Created At: Month" },
+    ]);
+  });
+
+  it("should ignore attempts to create duplicate breakouts by changing the temporal bucket for one of the breakouts", async () => {
+    const { getNextBreakouts } = await setup({
+      query: createQueryWithBreakoutsForSameColumn(),
+    });
+
+    await userEvent.click(await screen.findByText("by year"));
+    await userEvent.click(await screen.findByText("Quarter"));
+    expect(getNextBreakouts()).toMatchObject([
+      { displayName: "Created At: Year" },
+      { displayName: "Created At: Quarter" },
+    ]);
+  });
+
+  it("should allow to remove breakouts of the same column", async () => {
+    const { getNextBreakouts } = await setup({
+      query: createQueryWithBreakoutsForSameColumn(),
+    });
+
+    const [firstBreakout] = within(getPinnedColumnList()).getAllByLabelText(
+      "Created At",
     );
+    await userEvent.click(
+      within(firstBreakout).getByLabelText("Remove dimension"),
+    );
+    expect(
+      within(getPinnedColumnList()).getByText("Created At"),
+    ).toBeInTheDocument();
+    expect(
+      within(getUnpinnedColumnList()).getAllByText("Created At"),
+    ).toHaveLength(2);
+    expect(getNextBreakouts()).toMatchObject([
+      { displayName: "Created At: Quarter" },
+    ]);
+
+    const [secondBreakout] = within(getPinnedColumnList()).getAllByLabelText(
+      "Created At",
+    );
+    await userEvent.click(
+      within(secondBreakout).getByLabelText("Remove dimension"),
+    );
+    expect(
+      within(getPinnedColumnList()).queryByText("Created At"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(getUnpinnedColumnList()).getAllByText("Created At"),
+    ).toHaveLength(3);
+    expect(getNextBreakouts()).toEqual([]);
   });
 
   it("should add an aggregation", async () => {
-    const { getNextAggregations } = setup({ withDefaultAggregation: false });
+    const { getNextAggregations } = await setup({
+      withDefaultAggregation: false,
+    });
 
-    userEvent.click(screen.getByLabelText("Add aggregation"));
-
-    let popover = await screen.findByLabelText("grid");
-    userEvent.click(within(popover).getByText("Average of ..."));
-
-    popover = await screen.findByLabelText("grid");
-    userEvent.click(within(popover).getByText("Total"));
+    await userEvent.click(screen.getByLabelText("Add aggregation"));
+    await userEvent.click(await screen.findByText("Average of ..."));
+    await userEvent.click(await screen.findByText("Total"));
 
     await waitFor(() => {
       const [aggregation] = getNextAggregations();
@@ -238,12 +329,12 @@ describe("SummarizeSidebar", () => {
   });
 
   it("should add a column-less aggregation", async () => {
-    const { getNextAggregations } = setup({ withDefaultAggregation: false });
+    const { getNextAggregations } = await setup({
+      withDefaultAggregation: false,
+    });
 
-    userEvent.click(screen.getByLabelText("Add aggregation"));
-
-    const popover = await screen.findByLabelText("grid");
-    userEvent.click(within(popover).getByText("Count of rows"));
+    await userEvent.click(screen.getByLabelText("Add aggregation"));
+    await userEvent.click(await screen.findByText("Count of rows"));
 
     await waitFor(() => {
       const [aggregation] = getNextAggregations();
@@ -253,33 +344,27 @@ describe("SummarizeSidebar", () => {
   });
 
   it("shouldn't allow adding an expression aggregation", async () => {
-    setup();
+    await setup();
 
-    userEvent.click(screen.getByLabelText("Add aggregation"));
+    await userEvent.click(screen.getByLabelText("Add aggregation"));
 
-    const popover = await screen.findByLabelText("grid");
-    expect(
-      within(popover).queryByText(/Custom Expression/i),
-    ).not.toBeInTheDocument();
+    expect(await screen.findByText("Total")).toBeInTheDocument();
+    expect(screen.queryByText(/Custom Expression/i)).not.toBeInTheDocument();
   });
 
   it("shouldn't allow changing an aggregation to an expression", async () => {
-    setup({ card: createSummarizedCard() });
+    await setup({ query: createSummarizedQuery() });
 
-    userEvent.click(screen.getByText("Max of Quantity"));
-    let popover = await screen.findByTestId("aggregation-column-picker");
-    userEvent.click(within(popover).getByLabelText("Back"));
-    popover = await screen.findByLabelText("grid");
+    await userEvent.click(screen.getByText("Max of Quantity"));
+    await userEvent.click(await screen.findByLabelText("Back"));
 
-    expect(
-      within(popover).queryByText(/Custom Expression/i),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Custom Expression/i)).not.toBeInTheDocument();
   });
 
   it("should add a breakout", async () => {
-    const { getNextBreakouts } = setup();
+    const { getNextBreakouts } = await setup();
 
-    userEvent.click(screen.getByText("Category"));
+    await userEvent.click(screen.getByText("Category"));
 
     await waitFor(() => {
       const [breakout] = getNextBreakouts();
@@ -289,17 +374,19 @@ describe("SummarizeSidebar", () => {
   });
 
   it("should add multiple breakouts", async () => {
-    const { getNextBreakouts } = setup();
+    const { getNextBreakouts } = await setup();
 
-    userEvent.click(screen.getByText("Category"));
+    await userEvent.click(screen.getByText("Category"));
     await waitFor(() => {
       const [breakout] = getNextBreakouts();
       expect(breakout.displayName).toBe("Category");
     });
 
     const breakoutOption = screen.getByLabelText("Quantity");
-    userEvent.hover(breakoutOption);
-    userEvent.click(within(breakoutOption).getByLabelText("Add dimension"));
+    await userEvent.hover(breakoutOption);
+    await userEvent.click(
+      within(breakoutOption).getByLabelText("Add dimension"),
+    );
 
     await waitFor(() => expect(getNextBreakouts()).toHaveLength(2));
     const [breakout1, breakout2] = getNextBreakouts();
@@ -308,13 +395,13 @@ describe("SummarizeSidebar", () => {
   });
 
   it("should allow picking a temporal bucket for breakout columns", async () => {
-    const { getNextBreakouts } = setup();
+    const { getNextBreakouts } = await setup();
 
     const [createdAt] = screen.getAllByLabelText("Created At");
-    userEvent.hover(createdAt);
-    userEvent.click(within(createdAt).getByText("by month"));
+    await userEvent.hover(createdAt);
+    await userEvent.click(within(createdAt).getByText("by month"));
     const [quarter] = await screen.findAllByText("Quarter");
-    userEvent.click(quarter);
+    await userEvent.click(quarter);
 
     await waitFor(() => {
       const [breakout] = getNextBreakouts();
@@ -324,13 +411,13 @@ describe("SummarizeSidebar", () => {
   });
 
   it("should allow picking a binning strategy for breakout columns", async () => {
-    const { getNextBreakouts } = setup();
+    const { getNextBreakouts } = await setup();
 
     const [total] = screen.getAllByLabelText("Total");
-    userEvent.hover(total);
-    userEvent.click(within(total).getByText("Auto bin"));
+    await userEvent.hover(total);
+    await userEvent.click(within(total).getByText("Auto bin"));
     const [strategy] = await screen.findAllByText("10 bins");
-    userEvent.click(strategy);
+    await userEvent.click(strategy);
 
     await waitFor(() => {
       const [breakout] = getNextBreakouts();
@@ -340,31 +427,37 @@ describe("SummarizeSidebar", () => {
   });
 
   it("should add a new column instead of replacing when adding a bucketed column", async () => {
-    const { getNextBreakouts } = setup({ card: createSummarizedCard() });
+    const { getNextBreakouts } = await setup({
+      query: createSummarizedQuery(),
+    });
 
     const [total] = screen.getAllByLabelText("Total");
-    userEvent.hover(total);
-    userEvent.click(within(total).getByText("Auto bin"));
+    await userEvent.hover(total);
+    await userEvent.click(within(total).getByText("Auto bin"));
     const [strategy] = await screen.findAllByText("10 bins");
-    userEvent.click(strategy);
+    await userEvent.click(strategy);
 
     await waitFor(() => expect(getNextBreakouts()).toHaveLength(3));
   });
 
   it("should remove breakout", async () => {
-    const { getNextBreakouts } = setup({ card: createSummarizedCard() });
+    const { getNextBreakouts } = await setup({
+      query: createSummarizedQuery(),
+    });
 
     const [breakout] = screen.getAllByLabelText("Created At");
-    userEvent.click(within(breakout).getByLabelText("Remove dimension"));
+    await userEvent.click(within(breakout).getByLabelText("Remove dimension"));
 
     await waitFor(() => expect(getNextBreakouts()).toHaveLength(1));
     expect(getNextBreakouts()[0].longDisplayName).toBe("Product → Category");
   });
 
   it("should replace breakouts by clicking on a column", async () => {
-    const { getNextBreakouts } = setup({ card: createSummarizedCard() });
+    const { getNextBreakouts } = await setup({
+      query: createSummarizedQuery(),
+    });
 
-    userEvent.click(screen.getByText("Quantity"));
+    await userEvent.click(screen.getByText("Quantity"));
 
     await waitFor(() => {
       const [breakout] = getNextBreakouts();
@@ -373,9 +466,17 @@ describe("SummarizeSidebar", () => {
     expect(getNextBreakouts()).toHaveLength(1);
   });
 
-  it("should close on 'Done' button", () => {
-    const { onClose } = setup();
-    userEvent.click(screen.getByText("Done"));
+  it("should close on 'Done' button", async () => {
+    const { onClose } = await setup();
+    await userEvent.click(screen.getByText("Done"));
     expect(onClose).toHaveBeenCalled();
   });
 });
+
+function getPinnedColumnList() {
+  return screen.getByTestId("pinned-dimensions");
+}
+
+function getUnpinnedColumnList() {
+  return screen.getByTestId("unpinned-dimensions");
+}

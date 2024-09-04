@@ -1,10 +1,13 @@
+import { arrayMove } from "@dnd-kit/sortable";
 import { updateIn } from "icepick";
+import { useCallback } from "react";
 import { t } from "ttag";
 
-import type { Series } from "metabase-types/api";
-
+import type { DragEndEvent } from "metabase/core/components/Sortable";
 import { NULL_DISPLAY_VALUE } from "metabase/lib/constants";
 import { isEmpty } from "metabase/lib/validate";
+import type { Series } from "metabase-types/api";
+
 import { ChartSettingOrderedItems } from "./ChartSettingOrderedItems";
 import {
   ChartSettingMessage,
@@ -16,6 +19,11 @@ interface SortableItem {
   enabled: boolean;
   name: string;
   color?: string;
+  // Note: when providing the `orderedItems` prop, hidden items should be put at
+  // the end of the list to ensure non-hidden items are ordered correctly when
+  // moving them.
+  hidden?: boolean;
+  isOther?: boolean;
 }
 
 interface ChartSettingOrderedSimpleProps {
@@ -28,6 +36,7 @@ interface ChartSettingOrderedSimpleProps {
   series: Series;
   hasEditSettings: boolean;
   onChangeSeriesColor: (seriesKey: string, color: string) => void;
+  onSortEnd: (newItems: SortableItem[]) => void;
 }
 
 export const ChartSettingOrderedSimple = ({
@@ -36,55 +45,76 @@ export const ChartSettingOrderedSimple = ({
   onShowWidget,
   hasEditSettings = true,
   onChangeSeriesColor,
+  onSortEnd,
 }: ChartSettingOrderedSimpleProps) => {
-  const toggleDisplay = (selectedItem: SortableItem) => {
-    const index = orderedItems.findIndex(item => item.key === selectedItem.key);
-    onChange(updateIn(orderedItems, [index, "enabled"], enabled => !enabled));
-  };
+  const toggleDisplay = useCallback(
+    (selectedItem: SortableItem) => {
+      const index = orderedItems.findIndex(
+        item => item.key === selectedItem.key,
+      );
+      onChange(updateIn(orderedItems, [index, "enabled"], enabled => !enabled));
+    },
+    [orderedItems, onChange],
+  );
 
-  const handleSortEnd = ({
-    oldIndex,
-    newIndex,
-  }: {
-    oldIndex: number;
-    newIndex: number;
-  }) => {
-    const itemsCopy = [...orderedItems];
-    itemsCopy.splice(newIndex, 0, itemsCopy.splice(oldIndex, 1)[0]);
-    onChange(itemsCopy);
-  };
+  const handleSortEnd = useCallback(
+    ({ id, newIndex }: DragEndEvent) => {
+      const oldIndex = orderedItems.findIndex(item => item.key === id);
 
-  const getItemTitle = (item: SortableItem) => {
-    return isEmpty(item.name) ? NULL_DISPLAY_VALUE : item.name;
-  };
+      if (onSortEnd != null) {
+        onSortEnd(arrayMove(orderedItems, oldIndex, newIndex));
+      } else {
+        onChange(arrayMove(orderedItems, oldIndex, newIndex));
+      }
+    },
+    [orderedItems, onChange, onSortEnd],
+  );
 
-  const handleOnEdit = (item: SortableItem, ref: HTMLElement | undefined) => {
-    onShowWidget(
-      {
-        props: {
-          seriesKey: item.key,
+  const getItemTitle = useCallback((item: SortableItem) => {
+    if (isEmpty(item.name)) {
+      return NULL_DISPLAY_VALUE;
+    }
+
+    return item.name;
+  }, []);
+
+  const handleOnEdit = useCallback(
+    (item: SortableItem, ref: HTMLElement | undefined) => {
+      onShowWidget(
+        {
+          props: {
+            seriesKey: item.key,
+          },
         },
-      },
-      ref,
-    );
-  };
+        ref,
+      );
+    },
+    [onShowWidget],
+  );
 
-  const handleColorChange = (item: SortableItem, color: string) => {
-    onChangeSeriesColor(item.key, color);
-  };
+  const handleColorChange = useCallback(
+    (item: SortableItem, color: string) => {
+      onChangeSeriesColor(item.key, color);
+    },
+    [onChangeSeriesColor],
+  );
+
+  const getId = useCallback((item: SortableItem) => item.key, []);
+
+  const nonHiddenItems = orderedItems.filter(item => !item.hidden);
 
   return (
     <ChartSettingOrderedSimpleRoot>
       {orderedItems.length > 0 ? (
         <ChartSettingOrderedItems
-          items={orderedItems}
+          items={nonHiddenItems}
           getItemName={getItemTitle}
           onRemove={toggleDisplay}
           onEnable={toggleDisplay}
           onSortEnd={handleSortEnd}
           onEdit={hasEditSettings ? handleOnEdit : undefined}
           onColorChange={handleColorChange}
-          distance={5}
+          getId={getId}
         />
       ) : (
         <ChartSettingMessage>{t`Nothing to order`}</ChartSettingMessage>

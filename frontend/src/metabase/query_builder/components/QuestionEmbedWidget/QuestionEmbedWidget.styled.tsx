@@ -1,7 +1,7 @@
 import styled from "@emotion/styled";
-import { color } from "metabase/lib/colors";
-import { Icon } from "metabase/core/components/Icon";
+
 import { breakpointMinSmall } from "metabase/styled-components/theme";
+import { Icon } from "metabase/ui";
 
 export const TriggerIcon = styled(Icon)`
   display: none;
@@ -9,7 +9,7 @@ export const TriggerIcon = styled(Icon)`
   cursor: pointer;
 
   &:hover {
-    color: ${color("brand")};
+    color: var(--mb-color-brand);
   }
 
   ${breakpointMinSmall} {

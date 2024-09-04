@@ -1,6 +1,7 @@
 import { useFormikContext } from "formik";
 import { jt, t } from "ttag";
-import MetabaseSettings from "metabase/lib/settings";
+
+import { useDocsUrl } from "metabase/common/hooks";
 import ExternalLink from "metabase/core/components/ExternalLink";
 import type { DatabaseData } from "metabase-types/api";
 
@@ -8,14 +9,15 @@ const DatabaseSslKeyDescription = (): JSX.Element | null => {
   const { values } = useFormikContext<DatabaseData>();
   const { engine } = values;
 
-  if (engine !== "postgres") {
-    return null;
-  }
-
-  const docsUrl = MetabaseSettings.docsUrl(
+  // eslint-disable-next-line no-unconditional-metabase-links-render -- Admin settings
+  const { url: docsUrl } = useDocsUrl(
     "databases/connections/postgresql",
     "authenticate-client-certificate",
   );
+
+  if (engine !== "postgres") {
+    return null;
+  }
 
   return (
     <>

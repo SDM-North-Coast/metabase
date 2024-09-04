@@ -1,5 +1,6 @@
 import type * as React from "react";
-import type { IconName, IconProps } from "metabase/core/components/Icon";
+
+import type { IconName, IconProps } from "metabase/ui";
 
 export interface ITreeNodeItem {
   id: string | number;
@@ -19,5 +20,5 @@ export interface TreeNodeProps {
 }
 
 export type TreeNodeComponent = React.ComponentType<
-  TreeNodeProps & React.RefAttributes<HTMLLIElement>
+  React.PropsWithChildren<TreeNodeProps & React.RefAttributes<HTMLLIElement>>
 >;

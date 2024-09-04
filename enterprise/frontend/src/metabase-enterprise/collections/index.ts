@@ -1,24 +1,27 @@
 import { t } from "ttag";
+
 import {
   PLUGIN_COLLECTIONS,
   PLUGIN_COLLECTION_COMPONENTS,
 } from "metabase/plugins";
-import type { Collection } from "metabase-types/api";
 import { hasPremiumFeature } from "metabase-enterprise/settings";
+import type { Collection } from "metabase-types/api";
 
 import { CollectionAuthorityLevelIcon } from "./components/CollectionAuthorityLevelIcon";
-import { FormCollectionAuthorityLevel } from "./components/FormCollectionAuthorityLevel";
 import { CollectionInstanceAnalyticsIcon } from "./components/CollectionInstanceAnalyticsIcon";
+import { FormCollectionAuthorityLevel } from "./components/FormCollectionAuthorityLevel";
 import {
   AUTHORITY_LEVELS,
-  REGULAR_COLLECTION,
-  OFFICIAL_COLLECTION,
   CUSTOM_INSTANCE_ANALYTICS_COLLECTION_ENTITY_ID,
+  OFFICIAL_COLLECTION,
+  REGULAR_COLLECTION,
 } from "./constants";
+import { useGetDefaultCollectionId } from "./use-get-default-collection-id";
 import {
+  filterOutItemsFromInstanceAnalytics,
   getCollectionType,
+  getIcon,
   isRegularCollection,
-  getInstanceAnalyticsCustomCollection,
 } from "./utils";
 
 if (hasPremiumFeature("official_collections")) {
@@ -27,6 +30,8 @@ if (hasPremiumFeature("official_collections")) {
   PLUGIN_COLLECTIONS.REGULAR_COLLECTION = REGULAR_COLLECTION;
 
   PLUGIN_COLLECTIONS.AUTHORITY_LEVEL = AUTHORITY_LEVELS;
+
+  PLUGIN_COLLECTIONS.getIcon = getIcon;
 
   PLUGIN_COLLECTIONS.getAuthorityLevelMenuItems = (
     collection: Collection,
@@ -57,6 +62,9 @@ if (hasPremiumFeature("official_collections")) {
     }
   };
 
+  PLUGIN_COLLECTIONS.filterOutItemsFromInstanceAnalytics =
+    filterOutItemsFromInstanceAnalytics;
+
   PLUGIN_COLLECTION_COMPONENTS.FormCollectionAuthorityLevelPicker =
     FormCollectionAuthorityLevel;
 
@@ -69,8 +77,7 @@ if (hasPremiumFeature("audit_app")) {
     CollectionInstanceAnalyticsIcon;
 
   PLUGIN_COLLECTIONS.getCollectionType = getCollectionType;
-  PLUGIN_COLLECTIONS.getInstanceAnalyticsCustomCollection =
-    getInstanceAnalyticsCustomCollection;
+  PLUGIN_COLLECTIONS.useGetDefaultCollectionId = useGetDefaultCollectionId;
   PLUGIN_COLLECTIONS.CUSTOM_INSTANCE_ANALYTICS_COLLECTION_ENTITY_ID =
     CUSTOM_INSTANCE_ANALYTICS_COLLECTION_ENTITY_ID;
 

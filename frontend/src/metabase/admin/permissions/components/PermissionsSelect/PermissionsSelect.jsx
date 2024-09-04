@@ -1,28 +1,27 @@
-import { Fragment, useState, memo } from "react";
 import PropTypes from "prop-types";
+import { Fragment, memo, useState } from "react";
 
 import PopoverWithTrigger from "metabase/components/PopoverWithTrigger";
-import { lighten } from "metabase/lib/colors";
-import { Icon } from "metabase/core/components/Icon";
 import Toggle from "metabase/core/components/Toggle";
 import Tooltip from "metabase/core/components/Tooltip";
+import { lighten } from "metabase/lib/colors";
+import { Icon } from "metabase/ui";
 
+import {
+  ActionsList,
+  DisabledPermissionOption,
+  OptionsList,
+  OptionsListItem,
+  PermissionsSelectRoot,
+  SelectedOption,
+  ToggleContainer,
+  ToggleLabel,
+  WarningIcon,
+} from "./PermissionsSelect.styled";
 import {
   PermissionsSelectOption,
   optionShape,
 } from "./PermissionsSelectOption";
-
-import {
-  PermissionsSelectRoot,
-  OptionsList,
-  OptionsListItem,
-  ActionsList,
-  ToggleContainer,
-  ToggleLabel,
-  WarningIcon,
-  DisabledPermissionOption,
-  SelectedOption,
-} from "./PermissionsSelect.styled";
 
 const propTypes = {
   options: PropTypes.arrayOf(PropTypes.shape(optionShape)).isRequired,

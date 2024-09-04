@@ -4,14 +4,11 @@
    [medley.core :as m]
    [metabase.db :as mdb]
    [metabase.db.query :as mdb.query]
-   [metabase.models.action :as action]
-   [metabase.models.card :refer [Card]]
    [metabase.models.dashboard-card-series :refer [DashboardCardSeries]]
    [metabase.models.interface :as mi]
    [metabase.models.pulse-card :refer [PulseCard]]
    [metabase.models.serialization :as serdes]
    [metabase.util :as u]
-   [metabase.util.date-2 :as u.date]
    [metabase.util.honey-sql-2 :as h2x]
    [metabase.util.malli :as mu]
    [metabase.util.malli.schema :as ms]
@@ -37,9 +34,9 @@
    :visualization_settings mi/transform-visualization-settings})
 
 (t2/define-before-insert :model/DashboardCard
- [dashcard]
- (merge {:parameter_mappings     []
-         :visualization_settings {}} dashcard))
+  [dashcard]
+  (merge {:parameter_mappings     []
+          :visualization_settings {}} dashcard))
 
 (declare series)
 
@@ -48,7 +45,7 @@
 (defmethod mi/perms-objects-set :model/DashboardCard
   [dashcard read-or-write]
   (let [card   (or (:card dashcard)
-                   (t2/select-one [Card :dataset_query] :id (u/the-id (:card_id dashcard))))
+                   (t2/select-one [:model/Card :dataset_query] :id (u/the-id (:card_id dashcard))))
         series (or (:series dashcard)
                    (series dashcard))]
     (apply set/union (mi/perms-objects-set card read-or-write) (for [series-card series]
@@ -85,34 +82,28 @@
    :row :col
    :created_at])
 
-
 ;;; --------------------------------------------------- HYDRATION ----------------------------------------------------
 
 (mi/define-batched-hydration-method series
   :series
   "Return the `Cards` associated as additional series on this DashboardCard."
   [dashcards]
-  (let [dashcard-ids        (map :id dashcards)
-        dashcard-id->series (when (seq dashcard-ids)
-                              (as-> (t2/select
-                                     [:model/Card :id :name :description :display :dataset_query
-                                      :visualization_settings :collection_id :series.dashboardcard_id]
-                                     {:left-join [[:dashboardcard_series :series] [:= :report_card.id :series.card_id]]
-                                      :where     [:in :series.dashboardcard_id dashcard-ids]
-                                      :order-by  [[:series.position :asc]]}) series
-                               (group-by :dashboardcard_id series)
-                               (update-vals series #(map (fn [card] (dissoc card :dashboardcard_id)) %))))]
-    (map (fn [dashcard]
-           (assoc dashcard :series (get dashcard-id->series (:id dashcard) [])))
-         dashcards)))
+  (when (seq dashcards)
+    (let [dashcard-ids        (map :id dashcards)
+          dashcard-id->series (when (seq dashcard-ids)
+                                (as-> (t2/select
+                                       [:model/Card :id :name :description :display :dataset_query :type :database_id
+                                        :visualization_settings :collection_id :series.dashboardcard_id]
+                                       {:left-join [[:dashboardcard_series :series] [:= :report_card.id :series.card_id]]
+                                        :where     [:in :series.dashboardcard_id dashcard-ids]
+                                        :order-by  [[:series.position :asc]]}) series
+                                  (group-by :dashboardcard_id series)
+                                  (update-vals series #(map (fn [card] (dissoc card :dashboardcard_id)) %))))]
+      (map (fn [dashcard]
+             (assoc dashcard :series (get dashcard-id->series (:id dashcard) [])))
+           dashcards))))
 
 ;;; ---------------------------------------------------- CRUD FNS ----------------------------------------------------
-
-(defn dashcard->action
-  "Get the action associated with a dashcard if exists, return `nil` otherwise."
-  [dashcard-or-dashcard-id]
-  (some->> (t2/select-one-fn :action_id :model/DashboardCard :id (u/the-id dashcard-or-dashcard-id))
-           (action/select-action :id)))
 
 (mu/defn retrieve-dashboard-card
   "Fetch a single DashboardCard by its ID value."
@@ -121,17 +112,15 @@
       (t2/hydrate :series)))
 
 (defn dashcard->multi-cards
-  "Return the cards which are other cards with respect to this dashboard card
-  in multiple series display for dashboard
+  "Return the cards which have been added to this dashcard using the 'add series' dashboard feature.
 
-  Dashboard (and dashboard only) has this thing where you're displaying multiple cards entirely.
+  Dashboards allow Line, Area, and Bar dashcards to have other questions (series) added to them
+  so that several Questions are displayed in a single dashcard.
 
-  This is actually completely different from the combo display,
-  which is a visualization type in visualization option.
+  It's important to know that this is different from the combo display,
+  which is its own visualization type for Questions.
 
-  This is also actually completely different from having multiple series display
-  from the visualization with same type (line bar or whatever),
-  which is a separate option in line area or bar visualization"
+  This is also different from having multiple series displayed on Line, Area, or Bar Questions."
   [dashcard]
   (mdb.query/query {:select    [:newcard.*]
                     :from      [[:report_dashboardcard :dashcard]]
@@ -182,39 +171,35 @@
   "Updates an existing DashboardCard including all DashboardCardSeries.
    `old-dashboard-card` is provided to avoid an extra DB call if there are no changes.
    Returns nil."
-  [{:keys [id action_id] :as dashboard-card} :- DashboardCardUpdates
-   old-dashboard-card                        :- DashboardCardUpdates]
+  [{dashcard-id :id :keys [series] :as dashboard-card} :- DashboardCardUpdates
+   old-dashboard-card :- DashboardCardUpdates]
   (t2/with-transaction [_conn]
-   (let [update-ks (cond-> [:action_id :row :col :size_x :size_y
-                            :parameter_mappings :visualization_settings :dashboard_tab_id]
-                    ;; Allow changing card_id for action dashcards, but not for card dashcards.
-                    ;; This is to preserve the existing behavior of questions and card_id
-                    ;; I don't know why card_id couldn't be changed for cards though.
-                     action_id (conj :card_id))
-         updates (shallow-updates (select-keys dashboard-card update-ks)
-                                  (select-keys old-dashboard-card update-ks))]
-     (when (seq updates)
-       (t2/update! :model/DashboardCard id updates))
-     (when (not= (:series dashboard-card [])
-                 (:series old-dashboard-card []))
-       (update-dashboard-cards-series! {(:id dashboard-card) (:series dashboard-card)}))
-     nil)))
+    (let [update-ks [:action_id :card_id :row :col :size_x :size_y
+                     :parameter_mappings :visualization_settings :dashboard_tab_id]
+          updates   (shallow-updates (select-keys dashboard-card update-ks)
+                                     (select-keys old-dashboard-card update-ks))]
+      (when (seq updates)
+        (t2/update! :model/DashboardCard dashcard-id updates))
+      (when (not= (:series dashboard-card [])
+                  (:series old-dashboard-card []))
+        (update-dashboard-cards-series! {dashcard-id series}))
+      nil)))
 
 (def ParamMapping
   "Schema for a parameter mapping as it would appear in the DashboardCard `:parameter_mappings` column."
   [:and
    [:map-of :keyword :any]
    [:map
-    ;; TODO -- validate `:target` as well... breaks a few tests tho so those will have to be fixed
+    ;; TODO -- validate `:target` as well... breaks a few tests tho so those will have to be fixed (#40021)
     [:parameter_id ms/NonBlankString]
     #_[:target       :any]]])
 
 (def ^:private NewDashboardCard
-  ;; TODO - make the rest of the options explicit instead of just allowing whatever for other keys
+  ;; TODO - make the rest of the options explicit instead of just allowing whatever for other keys (#40021)
   [:map
    [:dashboard_id                            ms/PositiveInt]
    [:action_id              {:optional true} [:maybe ms/PositiveInt]]
-   ;; TODO - use ParamMapping. Breaks too many tests right now tho
+   ;; TODO - use ParamMapping. Breaks too many tests right now tho (#40021)
    [:parameter_mappings     {:optional true} [:maybe [:sequential map?]]]
    [:visualization_settings {:optional true} [:maybe map?]]
    [:series                 {:optional true} [:maybe [:sequential ms/PositiveInt]]]])
@@ -366,9 +351,7 @@
     (compare row-1 row-2)))
 
 ;;; ----------------------------------------------- SERIALIZATION ----------------------------------------------------
-;; DashboardCards are not serialized as their own, separate entities. They are inlined onto their parent Dashboards.
-;; If the parent dashboard has tabs, the dashcards are inlined under each DashboardTab, which are inlined on the Dashboard.
-;; However, we can reuse some of the serdes machinery (especially load-one!) by implementing a few serdes methods.
+
 (defmethod serdes/generate-path "DashboardCard" [_ dashcard]
   (remove nil?
           [(serdes/infer-self-path "Dashboard" (t2/select-one 'Dashboard :id (:dashboard_id dashcard)))
@@ -376,14 +359,19 @@
              (serdes/infer-self-path "DashboardTab" (t2/select-one :model/DashboardTab :id (:dashboard_tab_id dashcard))))
            (serdes/infer-self-path "DashboardCard" dashcard)]))
 
-(defmethod serdes/load-xform "DashboardCard"
-  [dashcard]
-  (-> dashcard
-      (dissoc :serdes/meta)
-      (update :card_id                serdes/*import-fk* 'Card)
-      (update :action_id              serdes/*import-fk* 'Action)
-      (update :dashboard_id           serdes/*import-fk* 'Dashboard)
-      (update :dashboard_tab_id       serdes/*import-fk* :model/DashboardTab)
-      (update :created_at             #(if (string? %) (u.date/parse %) %))
-      (update :parameter_mappings     serdes/import-parameter-mappings)
-      (update :visualization_settings serdes/import-visualization-settings)))
+(defmethod serdes/make-spec "DashboardCard" [_model-name opts]
+  {:copy      [:col :entity_id :row :size_x :size_y]
+   :skip      []
+   :transform {:created_at             (serdes/date)
+               :dashboard_id           (serdes/parent-ref)
+               :card_id                (serdes/fk :model/Card)
+               :action_id              (serdes/fk :model/Action)
+               :dashboard_tab_id       (serdes/fk :model/DashboardTab)
+               :parameter_mappings     {:export serdes/export-parameter-mappings
+                                        :import serdes/import-parameter-mappings}
+               :visualization_settings {:export serdes/export-visualization-settings
+                                        :import serdes/import-visualization-settings}
+               :series                 (serdes/nested :model/DashboardCardSeries :dashboardcard_id
+                                                      (assoc opts
+                                                             :sort-by :position
+                                                             :key-field :card_id))}})

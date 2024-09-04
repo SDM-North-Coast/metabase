@@ -1,5 +1,4 @@
 import styled from "@emotion/styled";
-import { color } from "metabase/lib/colors";
 
 export const ColumnGroupName = styled.div`
   margin: 1rem 0 0.5rem 0;
@@ -7,7 +6,7 @@ export const ColumnGroupName = styled.div`
   font-weight: 700;
   font-size: 0.75rem;
   padding: 0 0.5rem;
-  color: ${color("summarize")};
+  color: var(--mb-color-summarize);
 `;
 
 export const SearchContainer = styled.div`

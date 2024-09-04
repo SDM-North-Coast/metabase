@@ -1,4 +1,5 @@
 import styled from "@emotion/styled";
+
 import { color } from "metabase/lib/colors";
 
 interface ButtonRootProps {
@@ -10,6 +11,6 @@ export const ButtonRoot = styled.a<ButtonRootProps>`
   transition: color 0.3s linear;
 
   &:hover {
-    color: ${color("brand")};
+    color: var(--mb-color-brand);
   }
 `;

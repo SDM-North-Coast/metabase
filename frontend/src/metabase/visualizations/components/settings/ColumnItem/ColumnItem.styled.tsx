@@ -1,8 +1,8 @@
 import styled from "@emotion/styled";
-import { color } from "metabase/lib/colors";
 
-import { Icon } from "metabase/core/components/Icon";
 import Button from "metabase/core/components/Button";
+import { Icon } from "metabase/ui";
+
 import { ChartSettingColorPicker } from "../ChartSettingColorPicker";
 
 interface ColumnItemRootProps {
@@ -14,16 +14,16 @@ export const ColumnItemRoot = styled.div<ColumnItemRootProps>`
   overflow: hidden;
   display: flex;
   align-items: center;
-  border: 1px solid ${color("border")};
+  border: 1px solid var(--mb-color-border);
   border-radius: 0.5rem;
-  background: ${color("white")};
+  background: var(--mb-color-bg-white);
 
   &.dragging {
     cursor: grabbing;
     pointer-events: auto !important;
   }
 
-  color: ${color("text-medium")};
+  color: var(--mb-color-text-medium);
 
   ${props =>
     props.isDraggable &&
@@ -31,7 +31,7 @@ export const ColumnItemRoot = styled.div<ColumnItemRootProps>`
     cursor: grab;
     &:hover {
       ${ColumnItemDragHandle} {
-        color: ${color("brand")};
+        color: var(--mb-color-brand);
       }
     }
     `}

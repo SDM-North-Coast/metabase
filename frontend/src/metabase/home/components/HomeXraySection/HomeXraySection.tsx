@@ -1,37 +1,39 @@
 import type { ChangeEvent } from "react";
 import { useCallback, useMemo, useState } from "react";
-import _ from "underscore";
 import { t } from "ttag";
-import * as Urls from "metabase/lib/urls";
-import { isSyncCompleted } from "metabase/lib/syncing";
-import Select from "metabase/core/components/Select";
+import _ from "underscore";
+
+import { skipToken, useListDatabaseXraysQuery } from "metabase/api";
+import { useDatabaseListQuery } from "metabase/common/hooks";
 import LoadingAndErrorWrapper from "metabase/components/LoadingAndErrorWrapper";
-import {
-  useDatabaseCandidateListQuery,
-  useDatabaseListQuery,
-} from "metabase/common/hooks";
-import type { DatabaseCandidate } from "metabase-types/api";
-import type Database from "metabase-lib/metadata/Database";
+import Select from "metabase/core/components/Select";
+import { useSelector } from "metabase/lib/redux";
+import { isSyncCompleted } from "metabase/lib/syncing";
+import * as Urls from "metabase/lib/urls";
+import { getApplicationName } from "metabase/selectors/whitelabel";
+import type Database from "metabase-lib/v1/metadata/Database";
+import type { DatabaseXray } from "metabase-types/api";
+
 import { HomeCaption } from "../HomeCaption";
 import { HomeHelpCard } from "../HomeHelpCard";
 import { HomeXrayCard } from "../HomeXrayCard";
+
 import {
-  DatabaseLinkIcon,
   DatabaseLink,
+  DatabaseLinkIcon,
   DatabaseLinkText,
-  SectionBody,
   SchemaTrigger,
-  SchemaTriggerText,
   SchemaTriggerIcon,
+  SchemaTriggerText,
+  SectionBody,
 } from "./HomeXraySection.styled";
 
 export const HomeXraySection = () => {
   const databaseListState = useDatabaseListQuery();
   const database = getXrayDatabase(databaseListState.data);
-  const candidateListState = useDatabaseCandidateListQuery({
-    query: database ? { id: database.id } : undefined,
-    enabled: database != null,
-  });
+  const candidateListState = useListDatabaseXraysQuery(
+    database?.id ?? skipToken,
+  );
   const isLoading = databaseListState.isLoading || candidateListState.isLoading;
   const error = databaseListState.error ?? candidateListState.error;
 
@@ -50,7 +52,7 @@ export const HomeXraySection = () => {
 
 interface HomeXrayViewProps {
   database: Database;
-  candidates?: DatabaseCandidate[];
+  candidates?: DatabaseXray[];
 }
 
 const HomeXrayView = ({ database, candidates = [] }: HomeXrayViewProps) => {
@@ -61,12 +63,13 @@ const HomeXrayView = ({ database, candidates = [] }: HomeXrayViewProps) => {
   const tableCount = candidate ? candidate.tables.length : 0;
   const tableMessages = useMemo(() => getMessages(tableCount), [tableCount]);
   const canSelectSchema = schemas.length > 1;
+  const applicationName = useSelector(getApplicationName);
 
   return (
     <div>
       {isSample ? (
         <HomeCaption primary>
-          {t`Try out these sample x-rays to see what Metabase can do.`}
+          {t`Try out these sample x-rays to see what ${applicationName} can do.`}
         </HomeCaption>
       ) : canSelectSchema ? (
         <HomeCaption primary>

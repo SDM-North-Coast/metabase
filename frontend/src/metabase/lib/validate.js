@@ -1,5 +1,6 @@
 import { t } from "ttag";
-import { isEmail } from "metabase/lib/utils";
+
+import { isEmail } from "metabase/lib/email";
 import Settings from "metabase/lib/settings";
 
 // we need this to allow 0 as a valid form value

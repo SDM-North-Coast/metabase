@@ -1,6 +1,6 @@
 import { isReducedMotionPreferred } from "metabase/lib/dom";
+import { Icon } from "metabase/ui";
 
-import { Icon } from "metabase/core/components/Icon";
 import { SpinnerIcon, SpinnerRoot } from "./LoadingSpinner.styled";
 
 interface Props {
@@ -18,7 +18,7 @@ const BaseLoadingSpinner = ({
 }: Props) => (
   <SpinnerRoot
     className={className}
-    data-testid={dataTestId ?? "loading-spinner"}
+    data-testid={dataTestId ?? "loading-indicator"}
   >
     {isReducedMotionPreferred() ? (
       <Icon name="hourglass" size="24" />

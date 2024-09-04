@@ -1,11 +1,14 @@
 import * as ML from "cljs/metabase.lib.js";
 import type { DatasetColumn, RowValue } from "metabase-types/api";
+
 import type {
+  AggregationDrillDetails,
+  ClickObjectDataRow,
+  ClickObjectDimension,
   ColumnMetadata,
-  DataRow,
-  Dimension,
   DrillThru,
   FilterDrillDetails,
+  PivotType,
   Query,
 } from "./types";
 
@@ -14,10 +17,10 @@ import type {
 export function availableDrillThrus(
   query: Query,
   stageIndex: number,
-  column: ColumnMetadata | DatasetColumn | undefined,
+  column: DatasetColumn | undefined,
   value: RowValue | undefined,
-  row: DataRow | undefined,
-  dimensions: Dimension[] | undefined,
+  row: ClickObjectDataRow[] | undefined,
+  dimensions: ClickObjectDimension[] | undefined,
 ): DrillThru[] {
   return ML.available_drill_thrus(
     query,
@@ -34,11 +37,28 @@ export function drillThru(
   query: Query,
   stageIndex: number,
   drillThru: DrillThru,
-  ...args: any[]
+  ...args: unknown[]
 ): Query {
   return ML.drill_thru(query, stageIndex, drillThru, ...args);
 }
 
 export function filterDrillDetails(drillThru: DrillThru): FilterDrillDetails {
   return ML.filter_drill_details(drillThru);
+}
+
+export function aggregationDrillDetails(
+  drillThru: DrillThru,
+): AggregationDrillDetails {
+  return ML.aggregation_drill_details(drillThru);
+}
+
+export function pivotTypes(drillThru: DrillThru): PivotType[] {
+  return ML.pivot_types(drillThru);
+}
+
+export function pivotColumnsForType(
+  drillThru: DrillThru,
+  pivotType: PivotType,
+): ColumnMetadata[] {
+  return ML.pivot_columns_for_type(drillThru, pivotType);
 }

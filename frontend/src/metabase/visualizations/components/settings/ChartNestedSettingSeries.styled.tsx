@@ -1,15 +1,15 @@
 import styled from "@emotion/styled";
-import { color } from "metabase/lib/colors";
-import { Icon } from "metabase/core/components/Icon";
+
 import InputBlurChange from "metabase/components/InputBlurChange";
 import Input from "metabase/core/components/Input";
+import { Icon } from "metabase/ui";
 
 export const OptionsIcon = styled(Icon)`
-  color: ${color("text-medium")};
+  color: var(--mb-color-text-medium);
   cursor: pointer;
 
   &:hover {
-    color: ${color("brand")};
+    color: var(--mb-color-brand);
   }
 `;
 

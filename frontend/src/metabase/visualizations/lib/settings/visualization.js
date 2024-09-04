@@ -1,13 +1,15 @@
-import { t } from "ttag";
 import { assocIn } from "icepick";
+import { t } from "ttag";
+
+import { isVirtualDashCard } from "metabase/dashboard/utils";
 import { getVisualizationRaw } from "metabase/visualizations";
 import { trackCardSetToHideWhenNoResults } from "metabase/visualizations/lib/settings/analytics";
-import { isVirtualDashCard } from "metabase/dashboard/utils";
-import { normalizeFieldRef } from "metabase-lib/queries/utils/dataset";
+import { normalize } from "metabase-lib/v1/queries/utils/normalize";
+
 import {
   getComputedSettings,
-  getSettingsWidgets,
   getPersistableDefaultSettings,
+  getSettingsWidgets,
 } from "../settings";
 
 const COMMON_SETTINGS = {
@@ -65,7 +67,7 @@ function normalizeColumnSettings(columnSettings) {
     // if the key is a reference, normalize the mbql syntax
     const newColumnKey =
       refOrName === "ref"
-        ? JSON.stringify(["ref", normalizeFieldRef(fieldRef)])
+        ? JSON.stringify(["ref", normalize(fieldRef)])
         : oldColumnKey;
     newColumnSettings[newColumnKey] = columnSettings[oldColumnKey];
   }

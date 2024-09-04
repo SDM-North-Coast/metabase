@@ -1,20 +1,18 @@
 import { createAction } from "redux-actions";
 
-import * as MetabaseAnalytics from "metabase/lib/analytics";
-import { createThunkAction } from "metabase/lib/redux";
-
 import Questions from "metabase/entities/questions";
+import { createThunkAction } from "metabase/lib/redux";
+import { updateUserSetting } from "metabase/redux/settings";
 import { getMetadata } from "metabase/selectors/metadata";
-
+import type NativeQuery from "metabase-lib/v1/queries/NativeQuery";
 import type {
   CardId,
+  DatabaseId,
   NativeQuerySnippet,
   Parameter,
   TemplateTag,
 } from "metabase-types/api";
 import type { Dispatch, GetState } from "metabase-types/store";
-
-import type NativeQuery from "metabase-lib/queries/NativeQuery";
 
 import {
   getDataReferenceStack,
@@ -28,9 +26,7 @@ import { updateQuestion } from "./core";
 import { SET_UI_CONTROLS } from "./ui";
 
 export const TOGGLE_DATA_REFERENCE = "metabase/qb/TOGGLE_DATA_REFERENCE";
-export const toggleDataReference = createAction(TOGGLE_DATA_REFERENCE, () => {
-  MetabaseAnalytics.trackStructEvent("QueryBuilder", "Toggle Data Reference");
-});
+export const toggleDataReference = createAction(TOGGLE_DATA_REFERENCE);
 
 export const SET_DATA_REFERENCE_STACK = "metabase/qb/SET_DATA_REFERENCE_STACK";
 export const setDataReferenceStack = createAction(SET_DATA_REFERENCE_STACK);
@@ -81,12 +77,6 @@ export const TOGGLE_TEMPLATE_TAGS_EDITOR =
   "metabase/qb/TOGGLE_TEMPLATE_TAGS_EDITOR";
 export const toggleTemplateTagsEditor = createAction(
   TOGGLE_TEMPLATE_TAGS_EDITOR,
-  () => {
-    MetabaseAnalytics.trackStructEvent(
-      "QueryBuilder",
-      "Toggle Template Tags Editor",
-    );
-  },
 );
 
 export const SET_IS_SHOWING_TEMPLATE_TAGS_EDITOR =
@@ -99,9 +89,7 @@ export const setIsShowingTemplateTagsEditor = (
 });
 
 export const TOGGLE_SNIPPET_SIDEBAR = "metabase/qb/TOGGLE_SNIPPET_SIDEBAR";
-export const toggleSnippetSidebar = createAction(TOGGLE_SNIPPET_SIDEBAR, () => {
-  MetabaseAnalytics.trackStructEvent("QueryBuilder", "Toggle Snippet Sidebar");
-});
+export const toggleSnippetSidebar = createAction(TOGGLE_SNIPPET_SIDEBAR);
 
 export const SET_IS_SHOWING_SNIPPET_SIDEBAR =
   "metabase/qb/SET_IS_SHOWING_SNIPPET_SIDEBAR";
@@ -149,7 +137,7 @@ export const insertSnippet =
     if (!question) {
       return;
     }
-    const query = question.query() as NativeQuery;
+    const query = question.legacyQuery() as NativeQuery;
     const nativeEditorCursorOffset = getNativeEditorCursorOffset(getState());
     const nativeEditorSelectedText = getNativeEditorSelectedText(getState());
     const selectionStart =
@@ -174,7 +162,7 @@ export const setTemplateTag = createThunkAction(
       if (!question) {
         return;
       }
-      const query = question.query() as NativeQuery;
+      const query = question.legacyQuery() as NativeQuery;
       const newQuestion = query.setTemplateTag(tag.name, tag).question();
       dispatch(updateQuestion(newQuestion));
     };
@@ -190,9 +178,15 @@ export const setTemplateTagConfig = createThunkAction(
       if (!question) {
         return;
       }
-      const query = question.query() as NativeQuery;
+      const query = question.legacyQuery() as NativeQuery;
       const newQuestion = query.setTemplateTagConfig(tag, parameter).question();
       dispatch(updateQuestion(newQuestion));
     };
   },
 );
+
+export const rememberLastUsedDatabase = (id: DatabaseId) =>
+  updateUserSetting({
+    key: "last-used-native-database-id",
+    value: id,
+  });

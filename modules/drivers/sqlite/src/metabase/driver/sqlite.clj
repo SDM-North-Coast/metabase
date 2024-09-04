@@ -1,14 +1,15 @@
 (ns metabase.driver.sqlite
   (:require
    [clojure.java.io :as io]
+   [clojure.set :as set]
    [clojure.string :as str]
    [java-time.api :as t]
-   [metabase.config :as config]
    [metabase.driver :as driver]
    [metabase.driver.sql :as driver.sql]
    [metabase.driver.sql-jdbc.connection :as sql-jdbc.conn]
    [metabase.driver.sql-jdbc.execute :as sql-jdbc.execute]
    [metabase.driver.sql-jdbc.sync :as sql-jdbc.sync]
+   [metabase.driver.sql-jdbc.sync.describe-table :as sql-jdbc.describe-table]
    [metabase.driver.sql.parameters.substitution
     :as sql.params.substitution]
    [metabase.driver.sql.query-processor :as sql.qp]
@@ -16,7 +17,7 @@
    [metabase.util.date-2 :as u.date]
    [metabase.util.honey-sql-2 :as h2x]
    [metabase.util.i18n :refer [tru]]
-   [schema.core :as s])
+   [metabase.util.malli :as mu])
   (:import
    (java.sql Connection ResultSet Types)
    (java.time LocalDate LocalDateTime LocalTime OffsetDateTime OffsetTime ZonedDateTime)
@@ -25,10 +26,6 @@
 (set! *warn-on-reflection* true)
 
 (driver/register! :sqlite, :parent :sql-jdbc)
-
-(defmethod sql.qp/honey-sql-version :sqlite
-  [_driver]
-  2)
 
 ;; SQLite does not support a lot of features, so do not show the options in the interface
 (doseq [[feature supported?] {:right-join                             false
@@ -40,14 +37,12 @@
                               :schemas                                false
                               :datetime-diff                          true
                               :now                                    true
+                              :identifiers-with-spaces                true
                               ;; SQLite `LIKE` clauses are case-insensitive by default, and thus cannot be made case-sensitive. So let people know
                               ;; we have this 'feature' so the frontend doesn't try to present the option to you.
-                              :case-sensitivity-string-filter-options false}]
+                              :case-sensitivity-string-filter-options false
+                              :index-info                             true}]
   (defmethod driver/database-supports? [:sqlite feature] [_driver _feature _db] supported?))
-
-;; HACK SQLite doesn't support ALTER TABLE ADD CONSTRAINT FOREIGN KEY and I don't have all day to work around this so
-;; for now we'll just skip the foreign key stuff in the tests.
-(defmethod driver/database-supports? [:sqlite :foreign-keys] [_driver _feature _db] (not config/is-test?))
 
 ;; Every SQLite3 file starts with "SQLite Format 3"
 ;; or "** This file contains an SQLite
@@ -80,6 +75,19 @@
          ;; disallow "FDW" (connecting to other SQLite databases on the local filesystem) -- see https://github.com/metabase/metaboat/issues/152
          {:limit_attached 0}))
 
+(defmethod driver/describe-table-indexes :sqlite
+  [driver database table]
+  (let [pk (first (sql-jdbc.execute/do-with-connection-with-options
+                   driver database nil
+                   (fn [conn]
+                     (sql-jdbc.describe-table/get-table-pks :sqlite conn nil table))))]
+    ;; In sqlite a PK will implicitly have a UNIQUE INDEX, but if the PK is integer the getIndexInfo method from
+    ;; jdbc doesn't return it as indexed. so we need to manually get mark the pk as indexed here
+    (cond-> ((get-method driver/describe-table-indexes :sql-jdbc) driver database table)
+      (some? pk)
+      (set/union #{{:type :normal-column-index
+                    :value pk}}))))
+
 ;; We'll do regex pattern matching here for determining Field types because SQLite types can have optional lengths,
 ;; e.g. NVARCHAR(100) or NUMERIC(10,5) See also http://www.sqlite.org/datatype3.html
 (def ^:private database-type->base-type
@@ -109,9 +117,9 @@
 ;; The normal SELECT * FROM table WHERE 1 <> 1 LIMIT 0 query doesn't return any information for SQLite views -- it
 ;; seems to be the case that the query has to return at least one row
 (defmethod sql-jdbc.sync/fallback-metadata-query :sqlite
-  [driver schema table]
+  [driver _db-name-or-nil _schema-name table-name]
   (sql.qp/format-honeysql driver {:select [:*]
-                                  :from   [[(h2x/identifier :table schema table)]]
+                                  :from   [[(h2x/identifier :table table-name)]]
                                   :limit  1}))
 
 (defn- ->date [& args]
@@ -214,12 +222,12 @@
 (defmethod sql.qp/date [:sqlite :quarter]
   [_driver _ expr]
   (->date
-    (->date expr (h2x/literal "start of month"))
-    [:||
-     (h2x/literal "-")
-     (h2x/mod (h2x/dec (strftime "%m" expr))
-              3)
-     (h2x/literal " months")]))
+   (->date expr (h2x/literal "start of month"))
+   [:||
+    (h2x/literal "-")
+    (h2x/mod (h2x/dec (strftime "%m" expr))
+             3)
+    (h2x/literal " months")]))
 
 ;; q = (m + 2) / 3
 (defmethod sql.qp/date [:sqlite :quarter-of-year]
@@ -273,7 +281,7 @@
 ;;
 ;; TIMESTAMP FIXME — this doesn't seem like the correct thing to do for non-Dates. I think params only support dates
 ;; rn however
-(s/defmethod driver.sql/->prepared-substitution [:sqlite Temporal] :- driver.sql/PreparedStatementSubstitution
+(mu/defmethod driver.sql/->prepared-substitution [:sqlite Temporal] :- driver.sql/PreparedStatementSubstitution
   [_driver date]
   ;; for anything that's a Temporal value convert it to a yyyy-MM-dd formatted date literal
   ;; string For whatever reason the SQL generated from parameters ends up looking like `WHERE date(some_field) = ?`
@@ -381,12 +389,12 @@
           ;; total-month-diff counts month boundaries not whole months, so we need to adjust
           ;; if x<y but x>y in the month calendar then subtract one month
           ;; if x>y but x<y in the month calendar then add one month
-          [:case
-           [:and [:< x y] [:> (extract :day-of-month x) (extract :day-of-month y)]]
-           -1
-           [:and [:> x y] [:< (extract :day-of-month x) (extract :day-of-month y)]]
-           1
-           :else 0])))
+           [:case
+            [:and [:< x y] [:> (extract :day-of-month x) (extract :day-of-month y)]]
+            -1
+            [:and [:> x y] [:< (extract :day-of-month x) (extract :day-of-month y)]]
+            1
+            :else 0])))
 
 (defmethod sql.qp/datetime-diff [:sqlite :week]
   [driver _unit x y]
@@ -395,8 +403,8 @@
 (defmethod sql.qp/datetime-diff [:sqlite :day]
   [_driver _unit x y]
   (h2x/->integer
-    (h2x/- [:julianday y (h2x/literal "start of day")]
-           [:julianday x (h2x/literal "start of day")])))
+   (h2x/- [:julianday y (h2x/literal "start of day")]
+          [:julianday x (h2x/literal "start of day")])))
 
 (defmethod sql.qp/datetime-diff [:sqlite :hour]
   [driver _unit x y]

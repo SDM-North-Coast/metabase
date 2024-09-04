@@ -1,11 +1,12 @@
 import { t } from "ttag";
-import { isNotNull } from "metabase/lib/types";
+
+import { PLUGIN_COLLECTIONS } from "metabase/plugins";
 import type {
   Collection,
+  CollectionEssentials,
   CollectionId,
   CollectionItem,
 } from "metabase-types/api";
-import { PLUGIN_COLLECTIONS } from "metabase/plugins";
 
 export function nonPersonalOrArchivedCollection(
   collection: Collection,
@@ -26,26 +27,41 @@ export function isPersonalCollection(
   return collection.is_personal;
 }
 
+export function isRootTrashCollection(
+  collection?: Pick<Collection, "type">,
+): boolean {
+  return collection?.type === "trash";
+}
+
+export function isTrashedCollection(
+  collection: Pick<Collection, "type" | "archived">,
+): boolean {
+  return isRootTrashCollection(collection) || collection.archived;
+}
+
 export function isPublicCollection(
   collection: Pick<Collection, "is_personal">,
 ) {
   return !isPersonalCollection(collection);
 }
 
-export function isInstanceAnalyticsCollection(
-  collection: Partial<Collection>,
-): boolean {
+export function isEditableCollection(collection: Collection) {
   return (
-    collection &&
-    PLUGIN_COLLECTIONS.getCollectionType(collection).type ===
-      "instance-analytics"
+    collection.can_write &&
+    !isRootCollection(collection) &&
+    !isRootPersonalCollection(collection) &&
+    !isTrashedCollection(collection)
   );
 }
 
-export function getInstanceAnalyticsCustomCollection(
-  collections: Collection[],
-): Collection | null {
-  return PLUGIN_COLLECTIONS.getInstanceAnalyticsCustomCollection(collections);
+export function isInstanceAnalyticsCollection(
+  collection?: Pick<Collection, "type">,
+): boolean {
+  return (
+    !!collection &&
+    PLUGIN_COLLECTIONS.getCollectionType(collection).type ===
+      "instance-analytics"
+  );
 }
 
 export function isInstanceAnalyticsCustomCollection(
@@ -125,43 +141,63 @@ export function isItemModel(item: CollectionItem) {
   return item.model === "dataset";
 }
 
+export function isItemMetric(item: CollectionItem) {
+  return item.model === "metric";
+}
+
 export function isItemCollection(item: CollectionItem) {
   return item.model === "collection";
 }
 
-export function canPinItem(item: CollectionItem, collection: Collection) {
-  return collection.can_write && item.setPinned != null;
+export function isReadOnlyCollection(collection: CollectionItem) {
+  return isItemCollection(collection) && !collection.can_write;
 }
 
-export function canPreviewItem(item: CollectionItem, collection: Collection) {
-  return collection.can_write && isItemPinned(item) && isItemQuestion(item);
+export function canPinItem(item: CollectionItem, collection?: Collection) {
+  return collection?.can_write && item.setPinned != null && !item.archived;
 }
 
-export function canMoveItem(item: CollectionItem, collection: Collection) {
+export function canPreviewItem(item: CollectionItem, collection?: Collection) {
   return (
-    collection.can_write &&
+    collection?.can_write &&
+    isItemPinned(item) &&
+    (isItemQuestion(item) || isItemMetric(item)) &&
+    !item.archived
+  );
+}
+
+export function canMoveItem(item: CollectionItem, collection?: Collection) {
+  return (
+    collection?.can_write &&
+    !isReadOnlyCollection(item) &&
     item.setCollection != null &&
     !(isItemCollection(item) && isRootPersonalCollection(item))
   );
 }
 
-export function canArchiveItem(item: CollectionItem, collection: Collection) {
+export function canArchiveItem(item: CollectionItem, collection?: Collection) {
   return (
-    collection.can_write &&
-    !(isItemCollection(item) && isRootPersonalCollection(item))
+    collection?.can_write &&
+    !isReadOnlyCollection(item) &&
+    !(isItemCollection(item) && isRootPersonalCollection(item)) &&
+    !item.archived
   );
 }
 
+export function canCopyItem(item: CollectionItem) {
+  return item.copy && !item.archived;
+}
+
 export function isPreviewShown(item: CollectionItem) {
-  return isPreviewEnabled(item) && isFullyParametrized(item);
+  return isPreviewEnabled(item) && isFullyParameterized(item);
 }
 
 export function isPreviewEnabled(item: CollectionItem) {
   return item.collection_preview ?? true;
 }
 
-export function isFullyParametrized(item: CollectionItem) {
-  return item.fully_parametrized ?? true;
+export function isFullyParameterized(item: CollectionItem) {
+  return item.fully_parameterized ?? true;
 }
 
 export function coerceCollectionId(
@@ -189,37 +225,41 @@ export function canonicalCollectionId(
 }
 
 export function isValidCollectionId(
-  collectionId: string | number | null | undefined,
-): boolean {
+  collectionId: unknown,
+): collectionId is CollectionId {
+  if (
+    typeof collectionId !== "string" &&
+    typeof collectionId !== "number" &&
+    collectionId !== null &&
+    collectionId !== undefined
+  ) {
+    return false;
+  }
   const id = canonicalCollectionId(collectionId);
   return id === null || typeof id === "number";
 }
 
-function isPersonalOrPersonalChild(
-  collection: Collection,
-  collections: Collection[],
-) {
-  if (!collection) {
-    return false;
+export const getCollectionName = (
+  collection: Pick<Collection, "id" | "name">,
+) => {
+  if (isRootCollection(collection)) {
+    return t`Our analytics`;
   }
-  return (
-    isRootPersonalCollection(collection) ||
-    isPersonalCollectionChild(collection, collections)
-  );
-}
+  return collection?.name || t`Untitled collection`;
+};
 
-export function canManageCollectionAuthorityLevel(
-  collection: Partial<Collection>,
-  collectionMap: Partial<Record<CollectionId, Collection>>,
-) {
-  if (isRootPersonalCollection(collection)) {
-    return false;
-  }
-  const parentId = coerceCollectionId(collection.parent_id);
-  const parentCollection = collectionMap[parentId];
-  const collections = Object.values(collectionMap).filter(isNotNull);
-  return (
-    parentCollection &&
-    !isPersonalOrPersonalChild(parentCollection, collections)
-  );
-}
+export const getCollectionPath = (collection: CollectionEssentials) => {
+  const ancestors: CollectionEssentials[] =
+    collection.effective_ancestors || [];
+  const collections = ancestors.concat(collection);
+  return collections;
+};
+
+export const getCollectionPathAsString = (collection: CollectionEssentials) => {
+  const collections = getCollectionPath(collection);
+  return collections
+    .map(coll => getCollectionName(coll))
+    .join(` ${collectionPathSeparator} `);
+};
+
+export const collectionPathSeparator = "/";

@@ -1,12 +1,13 @@
 import { createMockMetadata } from "__support__/metadata";
 import { checkNotNull } from "metabase/lib/types";
+import { createMockUiParameter } from "metabase-lib/v1/parameters/mock";
 import { createMockField } from "metabase-types/api/mocks";
 import {
-  createSampleDatabase,
-  PRODUCTS,
   ORDERS,
+  PRODUCTS,
+  createSampleDatabase,
 } from "metabase-types/api/mocks/presets";
-import { createMockUiParameter } from "metabase-lib/parameters/mock";
+
 import { formatParameterValue } from "./formatting";
 
 const REMAPPED_FIELD_ID = 100;
@@ -58,7 +59,7 @@ describe("metabase/parameters/utils/formatting", () => {
       {
         type: "date/relative",
         value: "past30days",
-        expected: "Past 30 Days",
+        expected: "Previous 30 Days",
       },
       {
         type: "date/month-year",

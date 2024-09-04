@@ -1,8 +1,7 @@
 import styled from "@emotion/styled";
 
-import { color } from "metabase/lib/colors";
 import { space } from "metabase/styled-components/theme";
-import { Icon } from "metabase/core/components/Icon";
+import { Icon } from "metabase/ui";
 
 export const Container = styled.div`
   display: flex;
@@ -14,7 +13,7 @@ export const Anchor = styled.a`
   padding: ${space(2)};
 
   &:hover {
-    background-color: ${color("bg-medium")};
+    background-color: var(--mb-color-bg-medium);
   }
 `;
 

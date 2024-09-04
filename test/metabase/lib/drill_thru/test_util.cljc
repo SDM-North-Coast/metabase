@@ -1,7 +1,9 @@
 (ns metabase.lib.drill-thru.test-util
   "Adapted from frontend/src/metabase-lib/drills.unit.spec.ts"
   (:require
+   #?@(:cljs ([metabase.test-runner.assert-exprs.approximately-equal]))
    [clojure.test :refer [is testing]]
+   [clojure.walk :as walk]
    [medley.core :as m]
    [metabase.lib.core :as lib]
    [metabase.lib.schema :as lib.schema]
@@ -9,8 +11,7 @@
    [metabase.lib.test-metadata :as meta]
    [metabase.lib.util :as lib.util]
    [metabase.util :as u]
-   [metabase.util.malli :as mu]
-   #?@(:cljs ([metabase.test-runner.assert-exprs.approximately-equal]))))
+   [metabase.util.malli :as mu]))
 
 #?(:cljs (comment metabase.test-runner.assert-exprs.approximately-equal/keep-me))
 
@@ -52,7 +53,11 @@
              "VENDOR"     "Murray, Watsica and Wunsch"
              "PRICE"      35.38
              "RATING"     4
-             "CREATED_AT" "2024-09-08T22:03:20.239+03:00"}}}})
+             "CREATED_AT" "2024-09-08T22:03:20.239+03:00"}}
+    :aggregated
+    {:query (-> (lib/query meta/metadata-provider (meta/table-metadata :products))
+                (lib/aggregate (lib/count)))
+     :row   {"count" 200}}}})
 
 (def ^:private Row
   [:map-of :string :any])
@@ -204,6 +209,10 @@
     [:expected-query :map]
     [:drill-args {:optional true} [:maybe [:sequential :any]]]]])
 
+(defn- drop-uuids [form]
+  (walk/postwalk #(cond-> % (map? %) (dissoc :lib/uuid))
+                 form))
+
 (mu/defn test-drill-application
   "Test that a certain drill gets returned, AND when applied to a query returns the expected query."
   [{:keys [expected-query drill-args], :as test-case} :- DrillApplicationTestCase]
@@ -213,5 +222,5 @@
                     "\nQuery = \n" (u/pprint-to-str query)
                     "\nDrill = \n" (u/pprint-to-str drill))
         (let [query' (apply lib/drill-thru query -1 drill drill-args)]
-          (is (=? expected-query
+          (is (=? (drop-uuids expected-query)
                   query')))))))

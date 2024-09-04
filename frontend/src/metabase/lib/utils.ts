@@ -1,39 +1,7 @@
 import { t } from "ttag";
 import _ from "underscore";
 
-const LAYOUT_PROPS = [
-  "m",
-  "ml",
-  "mr",
-  "mt",
-  "mb",
-  "mx",
-  "my",
-  "p",
-  "pl",
-  "pr",
-  "pt",
-  "pb",
-  "px",
-  "py",
-  "bg",
-  "color",
-  "hover",
-  "bordered",
-];
-
-const EMAIL_REGEX =
-  /^(([^<>()[\]\\.,;:\s@\"]+(\.[^<>()[\]\\.,;:\s@\"]+)*)|(\".+\"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
-
-export function stripLayoutProps(props: unknown) {
-  return _.omit(props, LAYOUT_PROPS);
-}
-
-function s4() {
-  return Math.floor((1 + Math.random()) * 0x10000)
-    .toString(16)
-    .substring(1);
-}
+import { PLUGIN_IS_EE_BUILD } from "metabase/plugins";
 
 export function isEmpty(str: string | null) {
   if (str != null) {
@@ -64,47 +32,11 @@ export function numberToWord(num: number) {
   }
 }
 
-export function uuid() {
-  return (
-    s4() +
-    s4() +
-    "-" +
-    s4() +
-    "-" +
-    s4() +
-    "-" +
-    s4() +
-    "-" +
-    s4() +
-    s4() +
-    s4()
-  );
-}
-
-export function isUUID(uuid: unknown) {
-  return (
-    typeof uuid === "string" &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(uuid)
-  );
-}
-
 export function isJWT(string: unknown) {
   return (
     typeof string === "string" &&
     /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(string)
   );
-}
-
-export function isEmail(email: string | undefined | null) {
-  if (email === null || email === undefined) {
-    return false;
-  }
-  return EMAIL_REGEX.test(email);
-}
-
-export function getEmailDomain(email: string) {
-  const match = EMAIL_REGEX.exec(email);
-  return match && match[5];
 }
 
 export function equals(a: unknown, b: unknown) {
@@ -205,3 +137,5 @@ export function compareVersions(
   }
   return 0;
 }
+
+export const isEEBuild = () => PLUGIN_IS_EE_BUILD.isEEBuild();

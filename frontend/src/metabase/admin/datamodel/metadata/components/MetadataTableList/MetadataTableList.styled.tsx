@@ -1,7 +1,8 @@
-import styled from "@emotion/styled";
 import { css } from "@emotion/react";
-import { color } from "metabase/lib/colors";
+import styled from "@emotion/styled";
+
 import IconButtonWrapper from "metabase/components/IconButtonWrapper";
+import { color } from "metabase/lib/colors";
 
 interface AdminListItemProps {
   disabled?: boolean;
@@ -17,7 +18,7 @@ export const AdminListItem = styled.a<AdminListItemProps>`
 `;
 
 export const BackIconContainer = styled.span`
-  color: ${color("brand")};
+  color: var(--mb-color-brand);
   cursor: pointer;
 `;
 

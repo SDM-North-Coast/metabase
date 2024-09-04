@@ -1,22 +1,28 @@
 import type {
-  ModerationReview,
   Card,
-  UnsavedCard,
-  VisualizationSettings,
-  SeriesOrderSetting,
-  StructuredDatasetQuery,
+  CardQueryMetadata,
+  ModerationReview,
   NativeDatasetQuery,
   PublicCard,
+  SeriesOrderSetting,
+  StructuredDatasetQuery,
   TableColumnOrderSetting,
+  UnsavedCard,
+  VisualizationSettings,
 } from "metabase-types/api";
 
+import { createMockEntityId } from "./entity-id";
 import {
   createMockNativeDatasetQuery,
   createMockStructuredDatasetQuery,
 } from "./query";
 
+const MOCK_CARD_ENTITY_ID = createMockEntityId();
 export const createMockCard = (opts?: Partial<Card>): Card => ({
   id: 1,
+  entity_id: MOCK_CARD_ENTITY_ID,
+  created_at: "2024-01-01T00:00:00Z",
+  updated_at: "2024-01-01T00:00:00Z",
   name: "Question",
   description: null,
   display: "table",
@@ -24,14 +30,21 @@ export const createMockCard = (opts?: Partial<Card>): Card => ({
   dataset_query: createMockStructuredDatasetQuery(),
   visualization_settings: createMockVisualizationSettings(),
   result_metadata: [],
-  dataset: false,
+  type: "question",
   can_write: true,
+  can_restore: false,
+  can_delete: false,
   cache_ttl: null,
   collection: null,
   collection_id: null,
+  collection_position: null,
   last_query_start: null,
   average_query_time: null,
+  based_on_upload: null,
   archived: false,
+  enable_embedding: false,
+  embedding_params: null,
+  initially_published_at: null,
   ...opts,
 });
 
@@ -67,6 +80,15 @@ export const createMockUnsavedCard = (
   display: "table",
   dataset_query: createMockStructuredDatasetQuery(),
   visualization_settings: createMockVisualizationSettings(),
+  ...opts,
+});
+
+export const createMockCardQueryMetadata = (
+  opts?: Partial<CardQueryMetadata>,
+): CardQueryMetadata => ({
+  databases: [],
+  tables: [],
+  fields: [],
   ...opts,
 });
 

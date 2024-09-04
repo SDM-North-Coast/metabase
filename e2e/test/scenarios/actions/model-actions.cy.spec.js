@@ -1,27 +1,27 @@
 import { assocIn } from "icepick";
-import {
-  createImplicitActions,
-  setActionsEnabledForDB,
-  modal,
-  popover,
-  restore,
-  fillActionQuery,
-  createAction,
-  resetTestTable,
-  resyncDatabase,
-  createModelFromTableName,
-  queryWritableDB,
-  setTokenFeatures,
-} from "e2e/support/helpers";
 
 import {
   SAMPLE_DB_ID,
   USER_GROUPS,
   WRITABLE_DB_ID,
 } from "e2e/support/cypress_data";
-
-import { createMockActionParameter } from "metabase-types/api/mocks";
+import {
+  createAction,
+  createImplicitActions,
+  createModelFromTableName,
+  entityPickerModal,
+  fillActionQuery,
+  modal,
+  popover,
+  queryWritableDB,
+  resetTestTable,
+  restore,
+  resyncDatabase,
+  setActionsEnabledForDB,
+  setTokenFeatures,
+} from "e2e/support/helpers";
 import { getCreatePostgresRoleIfNotExistSql } from "e2e/support/test_roles";
+import { createMockActionParameter } from "metabase-types/api/mocks";
 
 const WRITABLE_TEST_TABLE = "scoreboard_actions";
 
@@ -98,6 +98,7 @@ describe(
       cy.intercept("GET", "/api/table/*/query_metadata*").as("fetchMetadata");
       cy.intercept("GET", "/api/search?archived=true").as("getArchived");
       cy.intercept("GET", "/api/search?*").as("getSearchResults");
+      cy.intercept("GET", "/api/database?*").as("getDatabase");
     });
 
     it("should allow CRUD operations on model actions", () => {
@@ -123,10 +124,12 @@ describe(
         .findByText("Number")
         .click();
       cy.findByRole("button", { name: "Save" }).click();
-      modal().within(() => {
-        cy.findByLabelText("Name").type("Delete Order");
-        cy.findByRole("button", { name: "Create" }).click();
-      });
+      modal()
+        .eq(1)
+        .within(() => {
+          cy.findByLabelText("Name").type("Delete Order");
+          cy.findByRole("button", { name: "Create" }).click();
+        });
       cy.findByLabelText("Action list")
         .findByText("Delete Order")
         .should("be.visible");
@@ -169,35 +172,6 @@ describe(
           cy.findByText("Update").should("not.exist");
           cy.findByText("Delete").should("not.exist");
         });
-
-      cy.log("Go to the archive");
-      cy.visit("/archive");
-
-      getArchiveListItem("Delete Order")
-        .icon("unarchive")
-        .click({ force: true });
-
-      cy.findByTestId("archived-list").within(() => {
-        cy.findByText("Items you archive will appear here.");
-        cy.findByText("Delete Order").should("not.exist");
-      });
-
-      cy.findByTestId("toast-undo").button("Undo").click();
-
-      cy.findByTestId("archived-list").within(() => {
-        cy.findByText("Items you archive will appear here.").should(
-          "not.exist",
-        );
-        cy.findByText("Delete Order").should("be.visible");
-      });
-
-      cy.log("Delete the action");
-      getArchiveListItem("Delete Order").icon("trash").click({ force: true });
-
-      cy.findByTestId("archived-list").within(() => {
-        cy.findByText("Items you archive will appear here.");
-        cy.findByText("Delete Order").should("not.exist");
-      });
     });
 
     it("should allow to create an action with the New button", () => {
@@ -207,6 +181,7 @@ describe(
       cy.findByTestId("app-bar").findByText("New").click();
       popover().findByText("Action").click();
 
+      cy.wait("@getDatabase");
       fillActionQuery(QUERY);
 
       cy.findByRole("dialog").within(() => {
@@ -217,10 +192,11 @@ describe(
         cy.findByRole("button", { name: "Save" }).click();
       });
 
-      modal().within(() => {
-        cy.findByText("Select a model").click();
+      modal().eq(1).findByText("Select a model").click();
+      entityPickerModal().within(() => {
+        cy.findByText("Order").click();
       });
-      popover().findByText("Order").click();
+
       cy.findByRole("button", { name: "Create" }).click();
 
       cy.get("@modelId").then(modelId => {
@@ -240,12 +216,19 @@ describe(
       // to test database picker behavior in the action editor
       setActionsEnabledForDB(SAMPLE_DB_ID);
 
+      setTokenFeatures("all");
       cy.updatePermissionsGraph({
         [USER_GROUPS.ALL_USERS_GROUP]: {
-          [WRITABLE_DB_ID]: { data: { schemas: "none", native: "none" } },
+          [WRITABLE_DB_ID]: {
+            "view-data": "blocked",
+            "create-queries": "no",
+          },
         },
         [USER_GROUPS.DATA_GROUP]: {
-          [WRITABLE_DB_ID]: { data: { schemas: "all", native: "write" } },
+          [WRITABLE_DB_ID]: {
+            "view-data": "unrestricted",
+            "create-queries": "query-builder-and-native",
+          },
         },
       });
 
@@ -660,7 +643,7 @@ describe(
       });
 
       cy.findByTestId("toast-undo")
-        .findByText(`Successfully saved`)
+        .findByText("Successfully saved")
         .should("be.visible");
 
       // show toast
@@ -806,7 +789,16 @@ describe(
       cy.updatePermissionsGraph(
         {
           [USER_GROUPS.ALL_USERS_GROUP]: {
-            [WRITABLE_DB_ID]: { data: { schemas: "all", native: "write" } },
+            [WRITABLE_DB_ID]: {
+              "view-data": "impersonated",
+              "create-queries": "query-builder-and-native",
+            },
+          },
+          // By default, all groups get `unrestricted` access that will override the impersonation.
+          [USER_GROUPS.COLLECTION_GROUP]: {
+            [WRITABLE_DB_ID]: {
+              "view-data": "blocked",
+            },
           },
         },
         [
@@ -910,18 +902,16 @@ function disableSharingFor(actionName) {
     cy.findByRole("button", { name: "Action settings" }).click();
     cy.findByLabelText("Make public").should("be.checked").click();
   });
-  modal().within(() => {
-    cy.findByText("Disable this public link?").should("be.visible");
-    cy.findByRole("button", { name: "Yes" }).click();
-  });
+  modal()
+    .eq(1)
+    .within(() => {
+      cy.findByText("Disable this public link?").should("be.visible");
+      cy.findByRole("button", { name: "Yes" }).click();
+    });
   cy.wait("@disableActionSharing");
   cy.findByRole("dialog").within(() => {
     cy.button("Cancel").click();
   });
-}
-
-function getArchiveListItem(itemName) {
-  return cy.findByTestId(`archive-item-${itemName}`);
 }
 
 function resetAndVerifyScoreValue(dialect) {

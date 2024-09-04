@@ -1,17 +1,18 @@
+import cx from "classnames";
 import { getIn } from "icepick";
 import { Component } from "react";
 import { t } from "ttag";
 
-import type {
-  Card,
-  CardId,
-  DashCardId,
-  DashboardCard,
-  Dataset,
-} from "metabase-types/api";
-import * as MetabaseAnalytics from "metabase/lib/analytics";
+import ButtonsS from "metabase/css/components/buttons.module.css";
+import CS from "metabase/css/core/index.css";
 import { color } from "metabase/lib/colors";
 import Visualization from "metabase/visualizations/components/Visualization";
+import type {
+  Card,
+  DashCardDataMap,
+  DashCardId,
+  QuestionDashboardCard,
+} from "metabase-types/api";
 
 import { QuestionList } from "./QuestionList";
 
@@ -23,11 +24,11 @@ import { QuestionList } from "./QuestionList";
 const CAN_REMOVE_SERIES = (seriesIndex: number) => seriesIndex > 0;
 
 export interface Props {
-  dashcard: DashboardCard;
-  dashcardData: Record<DashCardId, Record<CardId, Dataset>>;
+  dashcard: QuestionDashboardCard;
+  dashcardData: DashCardDataMap;
   fetchCardData: (
     card: Card,
-    dashcard: DashboardCard,
+    dashcard: QuestionDashboardCard,
     options: {
       clearCache?: boolean;
       ignoreCache?: boolean;
@@ -36,7 +37,7 @@ export interface Props {
   ) => Promise<unknown>;
   setDashCardAttributes: (options: {
     id: DashCardId;
-    attributes: Partial<DashboardCard>;
+    attributes: Partial<QuestionDashboardCard>;
   }) => void;
   onClose: () => void;
 }
@@ -44,7 +45,7 @@ export interface Props {
 interface State {
   error: unknown;
   isLoading: boolean;
-  series: NonNullable<DashboardCard["series"]>;
+  series: NonNullable<QuestionDashboardCard["series"]>;
 }
 
 export class AddSeriesModal extends Component<Props, State> {
@@ -68,7 +69,6 @@ export class AddSeriesModal extends Component<Props, State> {
         series: this.state.series.filter(c => c.id !== card.id),
       });
 
-      MetabaseAnalytics.trackStructEvent("Dashboard", "Remove Series");
       return;
     }
 
@@ -84,12 +84,6 @@ export class AddSeriesModal extends Component<Props, State> {
       isLoading: false,
       series: this.state.series.concat(card),
     });
-
-    MetabaseAnalytics.trackStructEvent(
-      "Dashboard",
-      "Add Series",
-      card.display + ", success",
-    );
   };
 
   handleRemoveSeries = (_event: MouseEvent, removedIndex: number) => {
@@ -107,7 +101,6 @@ export class AddSeriesModal extends Component<Props, State> {
         ...this.state.series.slice(actualRemovedIndex + 1),
       ],
     });
-    MetabaseAnalytics.trackStructEvent("Dashboard", "Remove Series");
   };
 
   handleDone = () => {
@@ -116,11 +109,6 @@ export class AddSeriesModal extends Component<Props, State> {
       attributes: { series: this.state.series },
     });
     this.props.onClose();
-    MetabaseAnalytics.trackStructEvent(
-      "Dashboard",
-      "Edit Series Modal",
-      "done",
-    );
   };
 
   render() {
@@ -135,15 +123,24 @@ export class AddSeriesModal extends Component<Props, State> {
       .filter(s => !!s.data);
 
     return (
-      <div className="spread flex">
-        <div className="flex flex-column flex-full">
-          <div className="flex-no-shrink h3 pl4 pt4 pb2 text-bold">
+      <div className={cx(CS.spread, CS.flex)}>
+        <div className={cx(CS.flex, CS.flexColumn, CS.flexFull)}>
+          <div
+            className={cx(
+              CS.flexNoShrink,
+              CS.h3,
+              CS.pl4,
+              CS.pt4,
+              CS.pb2,
+              CS.textBold,
+            )}
+          >
             Edit data
           </div>
-          <div className="flex-full ml2 mr1 relative">
+          <div className={cx(CS.flexFull, CS.ml2, CS.mr1, CS.relative)}>
             <Visualization
               canRemoveSeries={CAN_REMOVE_SERIES}
-              className="spread"
+              className={CS.spread}
               errorMessageOverride={
                 series.length > 1
                   ? t`Unable to combine these questions`
@@ -152,30 +149,38 @@ export class AddSeriesModal extends Component<Props, State> {
               rawSeries={series}
               showTitle
               isDashboard
-              isMultiseries
+              showAllLegendItems
               onRemoveSeries={this.handleRemoveSeries}
             />
             {this.state.isLoading && (
               <div
-                className="spred flex layout-centered"
+                className={cx(CS.spread, CS.flex, CS.layoutCentered)}
                 style={{ backgroundColor: color("bg-white") }}
               >
-                <div className="h3 rounded bordered p3 bg-white shadowed">
+                <div
+                  className={cx(
+                    CS.h3,
+                    CS.rounded,
+                    CS.bordered,
+                    CS.p3,
+                    CS.bgWhite,
+                    CS.shadowed,
+                  )}
+                >
                   {t`Applying Question`}
                 </div>
               </div>
             )}
           </div>
-          <div className="flex-no-shrink pl4 pb4 pt1">
+          <div className={cx(CS.flexNoShrink, CS.pl4, CS.pb4, CS.pt1)}>
             <button
-              className="Button Button--primary"
+              className={cx(ButtonsS.Button, ButtonsS.ButtonPrimary)}
               onClick={this.handleDone}
             >
               {t`Done`}
             </button>
             <button
-              data-metabase-event="Dashboard;Edit Series Modal;cancel"
-              className="Button ml2"
+              className={cx(ButtonsS.Button, CS.ml2)}
               onClick={this.props.onClose}
             >
               {t`Cancel`}
@@ -183,7 +188,7 @@ export class AddSeriesModal extends Component<Props, State> {
           </div>
         </div>
         <div
-          className="border-left flex flex-column"
+          className={cx(CS.borderLeft, CS.flex, CS.flexColumn)}
           style={{
             width: 370,
             backgroundColor: color("bg-light"),

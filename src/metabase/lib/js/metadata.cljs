@@ -5,12 +5,14 @@
    [clojure.walk :as walk]
    [goog]
    [goog.object :as gobject]
+   [medley.core :as m]
+   [metabase.lib.cache :as lib.cache]
    [metabase.lib.metadata.protocols :as lib.metadata.protocols]
    [metabase.lib.util :as lib.util]
    [metabase.util :as u]
    [metabase.util.log :as log]))
 
-;;; metabase-lib/metadata/Metadata comes in a class like
+;;; metabase-lib/metadata/Metadata comes in an object like
 ;;;
 ;;;    {
 ;;;      databases: {},
@@ -114,20 +116,28 @@
        (map (fn [[k v]]
               [k (parse-field k v)]))))))
 
+(defmulti ^:private parse-object-fn*
+  {:arglists '([object-type opts])}
+  (fn
+    [object-type _opts]
+    object-type))
+
 (defn- parse-object-fn
-  ([object-type]
-   (parse-object-fn object-type {}))
-  ([object-type opts]
-   (let [xform         (parse-object-xform object-type)
-         lib-type-name (lib-type object-type)]
-     (fn [object]
-       (try
-         (let [parsed (assoc (obj->clj xform object opts) :lib/type lib-type-name)]
-           (log/debugf "Parsed metadata %s %s\n%s" object-type (:id parsed) (u/pprint-to-str parsed))
-           parsed)
-         (catch js/Error e
-           (log/errorf e "Error parsing %s %s: %s" object-type (pr-str object) (ex-message e))
-           nil))))))
+  ([object-type]      (parse-object-fn* object-type {}))
+  ([object-type opts] (parse-object-fn* object-type opts)))
+
+(defmethod parse-object-fn* :default
+  [object-type opts]
+  (let [xform         (parse-object-xform object-type)
+        lib-type-name (lib-type object-type)]
+    (fn [object]
+      (try
+        (let [parsed (assoc (obj->clj xform object opts) :lib/type lib-type-name)]
+          (log/debugf "Parsed metadata %s %s\n%s" object-type (:id parsed) (u/pprint-to-str parsed))
+          parsed)
+        (catch js/Error e
+          (log/errorf e "Error parsing %s %s: %s" object-type (pr-str object) (ex-message e))
+          nil)))))
 
 (defmulti ^:private parse-objects
   {:arglists '([object-type metadata])}
@@ -205,7 +215,6 @@
     :database
     :default-dimension-option
     :dimension-options
-    :dimensions
     :metrics
     :table})
 
@@ -214,7 +223,9 @@
   {:source          :lib/source
    :unit            :metabase.lib.field/temporal-unit
    :expression-name :lib/expression-name
-   :binning-info    :metabase.lib.field/binning})
+   :binning-info    :metabase.lib.field/binning
+   :dimensions      ::dimension
+   :values          ::field-values})
 
 (defn- parse-field-id
   [id]
@@ -237,6 +248,33 @@
             [k v])))
    m))
 
+(defn- parse-field-values [field-values]
+  (when (= (object-get field-values "type") "full")
+    {:values                (js->clj (object-get field-values "values"))
+     :human-readable-values (js->clj (object-get field-values "human_readable_values"))}))
+
+(defn- parse-dimension
+  "`:dimensions` comes in as an array for historical reasons, even tho a Field can only have one. So it should never
+  have more than one element. See #27054. Anyways just to be safe let's make sure it's either `:external` or
+  `:internal`."
+  [dimensions]
+  (when-let [dimension (m/find-first (fn [dimension]
+                                       (#{"external" "internal"} (get dimension "type")))
+                                     dimensions)]
+    (let [dimension-type (keyword (get dimension "type"))]
+      (merge
+       {:id   (get dimension "id")
+        :name (get dimension "name")}
+       (case dimension-type
+         ;; external = mapped to a different column
+         :external
+         {:lib/type :metadata.column.remapping/external
+          :field-id (get dimension "human_readable_field_id")}
+
+         ;; internal = mapped to FieldValues
+         :internal
+         {:lib/type :metadata.column.remapping/internal})))))
+
 (defmethod parse-field-fn :field
   [_object-type]
   (fn [k v]
@@ -248,6 +286,17 @@
                                           (walk/keywordize-keys v)
                                           (js->clj v :keywordize-keys true))
       :has-field-values                 (keyword v)
+
+      ;; Field refs are JS arrays, which we do not alter but do need to clone.
+      ;; Why? Come sit by the fire, it's story time:
+      ;; Sometimes in the FE the input `DatasetColumn` object is coming from the Redux store, where it has been deeply
+      ;; frozen (Object.freeze()) by the immer library.
+      ;; `:metadata/column` values (which contain such a :field-ref) are sometimes used as a map key, which calls
+      ;; [[cljs.core/hash]], which for a vanilla JS array uses goog.getUid() to mutate a uid number onto the array with
+      ;; a key like `closure_uid_123456789` (the number is randomized at load time).
+      ;; If the array has been frozen, that mutation will throw. So we clone the `:field-ref` array on its way into CLJS
+      ;; land, and avoid the issue.
+      :field-ref                        (to-array v)
       :lib/source                       (case v
                                           "aggregation" :source/aggregations
                                           "breakout"    :source/breakouts
@@ -257,11 +306,28 @@
       :visibility-type                  (keyword v)
       :id                               (parse-field-id v)
       :metabase.lib.field/binning       (parse-binning-info v)
+      ::field-values                    (parse-field-values v)
+      ::dimension                       (parse-dimension v)
       v)))
+
+(defmethod parse-object-fn* :field
+  [object-type opts]
+  (let [f ((get-method parse-object-fn* :default) object-type opts)]
+    (fn [unparsed]
+      (let [{{dimension-type :lib/type, :as dimension} ::dimension, ::keys [field-values], :as parsed} (f unparsed)]
+        (-> (case dimension-type
+              :metadata.column.remapping/external
+              (assoc parsed :lib/external-remap dimension)
+
+              :metadata.column.remapping/internal
+              (assoc parsed :lib/internal-remap (merge dimension field-values))
+
+              parsed)
+            (dissoc ::dimension ::field-values))))))
 
 (defmethod parse-objects :field
   [object-type metadata]
-  (let [parse-object (parse-object-fn object-type)
+  (let [parse-object    (parse-object-fn object-type)
         unparsed-fields (object-get metadata "fields")]
     (obj->clj (keep (fn [[k v]]
                       ;; Sometimes fields coming from saved questions are only present with their ID
@@ -307,7 +373,7 @@
       :fields          (parse-fields v)
       :visibility-type (keyword v)
       :dataset-query   (js->clj v :keywordize-keys true)
-      :dataset         v
+      :type            (keyword v)
       ;; this is not complete, add more stuff as needed.
       v)))
 
@@ -392,76 +458,103 @@
         (log/errorf e "Error parsing %s objects: %s" object-type (ex-message e))
         nil))))
 
+(defn- card->metric-card
+  [card]
+  (-> card
+      (select-keys [:id :table-id :name :description :archived :dataset-query :source-card-id])
+      (assoc :lib/type :metadata/metric)))
+
+(defn- metric-cards
+  [delayed-cards]
+  (when-let [cards @delayed-cards]
+    (into {}
+          (keep (fn [[id card]]
+                  (when (and card (= (:type @card) :metric) (not (:archived @card)))
+                    (let [card @card]
+                      [id (-> card card->metric-card delay)]))))
+          cards)))
+
 (defn- parse-metadata [metadata]
-  {:databases (parse-objects-delay :database metadata)
-   :tables    (parse-objects-delay :table    metadata)
-   :fields    (parse-objects-delay :field    metadata)
-   :cards     (parse-objects-delay :card     metadata)
-   :metrics   (parse-objects-delay :metric   metadata)
-   :segments  (parse-objects-delay :segment  metadata)})
+  (let [delayed-cards (parse-objects-delay :card metadata)]
+    {:databases (parse-objects-delay :database metadata)
+     :tables    (parse-objects-delay :table    metadata)
+     :fields    (parse-objects-delay :field    metadata)
+     :cards     delayed-cards
+     :metrics   (delay (metric-cards delayed-cards))
+     :segments  (parse-objects-delay :segment  metadata)}))
 
 (defn- database [metadata database-id]
   (some-> metadata :databases deref (get database-id) deref))
 
-(defn- table [metadata table-id]
-  (some-> metadata :tables deref (get table-id) deref))
-
-(defn- field [metadata field-id]
-  (some-> metadata :fields deref (get field-id) deref))
-
-(defn- card [metadata card-id]
-  (some-> metadata :cards deref (get card-id) deref))
-
-(defn- metric [metadata metric-id]
-  (some-> metadata :metrics deref (get metric-id) deref))
-
-(defn- segment [metadata segment-id]
-  (some-> metadata :segments deref (get segment-id) deref))
+(defn- metadatas [metadata metadata-type ids]
+  (let [k          (case metadata-type
+                     :metadata/table         :tables
+                     :metadata/column        :fields
+                     :metadata/card          :cards
+                     :metadata/segment       :segments)
+        metadatas* (some-> metadata k deref)]
+    (into []
+          (keep (fn [id]
+                  (some-> metadatas* (get id) deref)))
+          ids)))
 
 (defn- tables [metadata database-id]
-  (for [[_id table-delay] (some-> metadata :tables deref)
-        :let              [a-table (some-> table-delay deref)]
-        :when             (and a-table (= (:db-id a-table) database-id))]
-    a-table))
+  (into []
+        (keep (fn [[_id dlay]]
+                (when-let [table (some-> dlay deref)]
+                  (when (= (:db-id table) database-id)
+                    table))))
+        (some-> metadata :tables deref)))
 
-(defn- fields [metadata table-id]
-  (for [[_id field-delay] (some-> metadata :fields deref)
-        :let              [a-field (some-> field-delay deref)]
-        :when             (and a-field (= (:table-id a-field) table-id))]
-    a-field))
+(defn- metadatas-for-table
+  [metadata metadata-type table-id]
+  (let [k (case metadata-type
+            :metadata/column        :fields
+            :metadata/metric        :metrics
+            :metadata/segment       :segments)]
+    (into []
+          (keep (fn [[_id dlay]]
+                  (when-let [object (some-> dlay deref)]
+                    (when (and (= (:table-id object) table-id)
+                               (or (not= metadata-type :metadata/metric)
+                                   (nil? (:source-card-id object))))
+                      object))))
+          (some-> metadata k deref))))
 
-(defn- metrics [metadata table-id]
-  (for [[_id metric-delay] (some-> metadata :metrics deref)
-        :let               [a-metric (some-> metric-delay deref)]
-        :when              (and a-metric (= (:table-id a-metric) table-id))]
-    a-metric))
+(defn- metadatas-for-card
+  [metadata metadata-type card-id]
+  (let [k (case metadata-type
+            :metadata/metric :metrics)]
+    (into []
+          (keep (fn [[_id dlay]]
+                  (when-let [object (some-> dlay deref)]
+                    (when (= (:source-card-id object) card-id)
+                      object))))
+          (some-> metadata k deref))))
 
-(defn- segments [metadata table-id]
-  (for [[_id segment-delay] (some-> metadata :segments deref)
-        :let               [a-segment (some-> segment-delay deref)]
-        :when              (and a-segment (= (:table-id a-segment) table-id))]
-    a-segment))
+(defn- setting [^js unparsed-metadata setting-key]
+  (-> unparsed-metadata
+      (object-get "settings")
+      (object-get (name setting-key))))
 
-(defn- setting [setting-key]
-  (.get js/__metabaseSettings (name setting-key)))
-
-(defn metadata-provider
-  "Use a `metabase-lib/metadata/Metadata` as a [[metabase.lib.metadata.protocols/MetadataProvider]]."
+(defn- metadata-provider*
+  "Inner implementation for [[metadata-provider]], which wraps this with a cache."
   [database-id unparsed-metadata]
   (let [metadata (parse-metadata unparsed-metadata)]
     (log/debug "Created metadata provider for metadata")
     (reify lib.metadata.protocols/MetadataProvider
-      (database [_this]             (database metadata database-id))
-      (table    [_this table-id]    (table    metadata table-id))
-      (field    [_this field-id]    (field    metadata field-id))
-      (metric   [_this metric-id]   (metric   metadata metric-id))
-      (segment  [_this segment-id]  (segment  metadata segment-id))
-      (card     [_this card-id]     (card     metadata card-id))
-      (tables   [_this]             (tables   metadata database-id))
-      (fields   [_this table-id]    (fields   metadata table-id))
-      (metrics  [_this table-id]    (metrics  metadata table-id))
-      (segments [_this table-id]    (segments metadata table-id))
-      (setting  [_this setting-key] (setting  setting-key))
+      (database [_this]
+        (database metadata database-id))
+      (metadatas [_this metadata-type ids]
+        (metadatas metadata metadata-type ids))
+      (tables [_this]
+        (tables metadata database-id))
+      (metadatas-for-table [_this metadata-type table-id]
+        (metadatas-for-table metadata metadata-type table-id))
+      (metadatas-for-card [_this metadata-type card-id]
+        (metadatas-for-card metadata metadata-type card-id))
+      (setting [_this setting-key]
+        (setting unparsed-metadata setting-key))
 
       ;; for debugging: call [[clojure.datafy/datafy]] on one of these to parse all of our metadata and see the whole
       ;; thing at once.
@@ -473,6 +566,13 @@
              (deref form)
              form))
          metadata)))))
+
+(defn metadata-provider
+  "Use a `metabase-lib/metadata/Metadata` as a [[metabase.lib.metadata.protocols/MetadataProvider]]."
+  [database-id unparsed-metadata]
+  (lib.cache/side-channel-cache (str database-id) unparsed-metadata
+                                (partial metadata-provider* database-id)
+                                true #_force?))
 
 (def parse-column
   "Parses a JS column provided by the FE into a :metadata/column value for use in MLv2."

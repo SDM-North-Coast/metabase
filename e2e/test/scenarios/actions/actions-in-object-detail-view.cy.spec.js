@@ -1,17 +1,16 @@
-// eslint-disable-next-line no-restricted-imports -- deprecated usage
-import moment from "moment-timezone";
+import moment from "moment-timezone"; // eslint-disable-line no-restricted-imports -- deprecated usage
 
-import { WRITABLE_DB_ID } from "e2e/support/cypress_data";
+import { USER_GROUPS, WRITABLE_DB_ID } from "e2e/support/cypress_data";
 import {
+  createImplicitActions,
+  createModelFromTableName,
   popover,
   resetTestTable,
   restore,
   resyncDatabase,
-  undoToast,
+  undoToastList,
   visitDashboard,
   visitModel,
-  createModelFromTableName,
-  createImplicitActions,
 } from "e2e/support/helpers";
 
 const WRITABLE_TEST_TABLE = "scoreboard_actions";
@@ -19,6 +18,8 @@ const FIRST_SCORE_ROW_ID = 11;
 const SECOND_SCORE_ROW_ID = 12;
 const UPDATED_SCORE = 987654321;
 const UPDATED_SCORE_FORMATTED = "987,654,321";
+
+const { ALL_USERS_GROUP } = USER_GROUPS;
 
 const DASHBOARD = {
   name: "Test dashboard",
@@ -39,6 +40,15 @@ describe(
       resetTestTable({ type: "postgres", table: WRITABLE_TEST_TABLE });
       restore("postgres-writable");
       asAdmin(() => {
+        cy.updatePermissionsGraph({
+          [ALL_USERS_GROUP]: {
+            [WRITABLE_DB_ID]: {
+              "view-data": "unrestricted",
+              "create-queries": "query-builder-and-native",
+            },
+          },
+        });
+
         resyncDatabase({
           dbId: WRITABLE_DB_ID,
           tableName: WRITABLE_TEST_TABLE,
@@ -76,9 +86,7 @@ describe(
 
       it("does not show model actions in model visualization on a dashboard", () => {
         asAdmin(() => {
-          cy.get("@dashboardId").then(dashboardId => {
-            visitDashboard(dashboardId);
-          });
+          visitDashboard("@dashboardId");
 
           cy.findByTestId("dashcard").within(() => {
             assertActionsDropdownNotExists();
@@ -303,14 +311,20 @@ function assertUpdatedScoreNotInTable() {
 
 function assertSuccessfullUpdateToast() {
   cy.log("it shows a toast informing the update was successful");
-  undoToast().should("have.attr", "color", "success");
-  undoToast().findByText("Successfully updated").should("be.visible");
+  undoToastList()
+    .last()
+    .should("be.visible")
+    .should("have.attr", "color", "success")
+    .should("contain.text", "Successfully updated");
 }
 
 function assertSuccessfullDeleteToast() {
   cy.log("it shows a toast informing the delete was successful");
-  undoToast().should("have.attr", "color", "success");
-  undoToast().findByText("Successfully deleted").should("be.visible");
+  undoToastList()
+    .last()
+    .should("be.visible")
+    .should("have.attr", "color", "success")
+    .should("contain.text", "Successfully deleted");
 }
 
 function actionForm() {

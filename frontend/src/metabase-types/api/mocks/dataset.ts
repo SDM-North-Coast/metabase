@@ -40,6 +40,7 @@ export const createMockDatasetData = ({
   cols,
   rows_truncated: 0,
   results_metadata: createMockResultsMetadata(cols),
+  native_form: { query: "" },
   ...opts,
 });
 
@@ -51,6 +52,7 @@ export const createMockDataset = ({
   data = {},
   ...opts
 }: MockDatasetOpts = {}) => ({
+  type: "model",
   data: createMockDatasetData(data),
   database_id: 1,
   row_count: 0,
@@ -71,7 +73,7 @@ export const createMockEmbedDatasetData = ({
   rows: [],
   cols,
   rows_truncated: 0,
-  insights: null,
+  insights: undefined,
   ...opts,
 });
 

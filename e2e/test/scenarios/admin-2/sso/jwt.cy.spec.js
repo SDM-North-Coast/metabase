@@ -1,16 +1,18 @@
 import {
-  restore,
   describeEE,
-  typeAndBlurUsingLabel,
   modal,
   popover,
+  restore,
   setTokenFeatures,
+  typeAndBlurUsingLabel,
 } from "e2e/support/helpers";
+import { setupJwt } from "e2e/support/helpers/e2e-jwt-helpers";
 
 import {
-  crudGroupMappingsWidget,
   checkGroupConsistencyAfterDeletingMappings,
+  crudGroupMappingsWidget,
 } from "./shared/group-mappings-widget";
+import { getSuccessUi, getUserProvisioningInput } from "./shared/helpers";
 
 describeEE("scenarios > admin > settings > SSO > JWT", () => {
   beforeEach(() => {
@@ -45,6 +47,17 @@ describeEE("scenarios > admin > settings > SSO > JWT", () => {
     popover().findByText("Resume").click();
     cy.wait("@updateSetting");
     getJwtCard().findByText("Active").should("exist");
+  });
+
+  it("should allow the user to enable/disable user provisioning", () => {
+    setupJwt();
+    cy.visit("/admin/settings/authentication/jwt");
+
+    getUserProvisioningInput().label.click();
+    cy.button("Save changes").click();
+    cy.wait("@updateSettings");
+
+    getSuccessUi().should("exist");
   });
 
   it("should allow to reset jwt settings", () => {
@@ -100,14 +113,6 @@ describeEE("scenarios > admin > settings > SSO > JWT", () => {
 
 const getJwtCard = () => {
   return cy.findByText("JWT").parent().parent();
-};
-
-const setupJwt = () => {
-  cy.request("PUT", "/api/setting", {
-    "jwt-enabled": true,
-    "jwt-identity-provider-uri": "https://example.text",
-    "jwt-shared-secret": "0".repeat(64),
-  });
 };
 
 const enterJwtSettings = () => {

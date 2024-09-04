@@ -1,10 +1,15 @@
 import {
-  isRootPersonalCollection,
   canonicalCollectionId,
+  getCollectionPathAsString,
+  isItemCollection,
+  isReadOnlyCollection,
   isRootCollection,
+  isRootPersonalCollection,
 } from "metabase/collections/utils";
-
-import { createMockCollection } from "metabase-types/api/mocks";
+import {
+  createMockCollection,
+  createMockCollectionItem,
+} from "metabase-types/api/mocks";
 
 describe("Collections > utils", () => {
   describe("isRootPersonalCollection", () => {
@@ -68,6 +73,83 @@ describe("Collections > utils", () => {
       expect(isRootCollection(createMockCollection({ id: "foobar" }))).toBe(
         false,
       );
+    });
+  });
+
+  describe("isItemCollection", () => {
+    it("returns true if the item is a collection", () => {
+      expect(
+        isItemCollection(createMockCollectionItem({ model: "collection" })),
+      ).toBe(true);
+    });
+
+    it("returns false if the item is not a collection", () => {
+      expect(
+        isItemCollection(createMockCollectionItem({ model: "dashboard" })),
+      ).toBe(false);
+      expect(
+        isItemCollection(createMockCollectionItem({ model: "card" })),
+      ).toBe(false);
+      expect(
+        isItemCollection(createMockCollectionItem({ model: "dataset" })),
+      ).toBe(false);
+    });
+  });
+
+  describe("isReadOnlyCollection", () => {
+    it("returns true if the collection is read only", () => {
+      expect(
+        isReadOnlyCollection(
+          createMockCollectionItem({ model: "collection", can_write: false }),
+        ),
+      ).toBe(true);
+    });
+
+    it("returns false if the collection is not read only", () => {
+      expect(
+        isReadOnlyCollection(
+          createMockCollectionItem({ model: "collection", can_write: true }),
+        ),
+      ).toBe(false);
+    });
+
+    it("returns false if the item is not a collection", () => {
+      expect(
+        isReadOnlyCollection(
+          createMockCollectionItem({ model: "card", can_write: true }),
+        ),
+      ).toBe(false);
+      expect(
+        isReadOnlyCollection(
+          createMockCollectionItem({ model: "card", can_write: false }),
+        ),
+      ).toBe(false);
+    });
+  });
+
+  describe("getCollectionPathAsString", () => {
+    it("should return path for collection without ancestors", () => {
+      const collection = createMockCollection({
+        id: 0,
+        name: "Documents",
+        effective_ancestors: [],
+      });
+      const pathString = getCollectionPathAsString(collection);
+      expect(pathString).toBe("Documents");
+    });
+
+    it("should return path for collection with multiple ancestors", () => {
+      const ancestors = [
+        createMockCollection({ name: "Home" }),
+        createMockCollection({ name: "User" }),
+        createMockCollection({ name: "Files" }),
+      ];
+      const collection = createMockCollection({
+        name: "Documents",
+        effective_ancestors: ancestors,
+      });
+      const pathString = getCollectionPathAsString(collection);
+      expect(pathString).toBe("Home / User / Files / Documents");
     });
   });
 });

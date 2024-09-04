@@ -1,17 +1,18 @@
 import styled from "@emotion/styled";
-import { Icon } from "metabase/core/components/Icon";
+
 import Link from "metabase/core/components/Link";
-import { space } from "metabase/styled-components/theme";
 import { color } from "metabase/lib/colors";
+import { space } from "metabase/styled-components/theme";
+import { Icon } from "metabase/ui";
 
 export const ItemLink = styled(Link)`
   display: block;
-  background-color: ${color("bg-medium")};
-  color: ${color("text-medium")};
+  background-color: var(--mb-color-bg-medium);
+  color: var(--mb-color-text-medium);
   border-radius: 8px;
 
   &:hover {
-    color: ${color("brand")};
+    color: var(--mb-color-brand);
   }
 `;
 
@@ -22,7 +23,8 @@ export const IconContainer = styled.div`
   flex-shrink: 0;
   height: 42px;
   width: 42px;
-  background-color: ${props => color(props.color || "bg-dark")};
+  background-color: ${props =>
+    props.color ? color(props.color) : "var(--mb-color-bg-dark)"};
   margin-right: ${space(1)};
   border-radius: 6px;
 `;
@@ -34,5 +36,5 @@ export const CardContent = styled.div`
 `;
 
 export const CollectionIcon = styled(Icon)`
-  color: ${color("white")};
+  color: var(--mb-color-text-white);
 `;

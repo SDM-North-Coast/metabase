@@ -8,11 +8,13 @@
    [metabase.driver.common.parameters.values :as params.values]
    [metabase.driver.ddl.interface :as ddl.i]
    [metabase.driver.sql-jdbc.connection :as sql-jdbc.conn]
+   [metabase.lib.core :as lib]
    [metabase.lib.metadata :as lib.metadata]
    [metabase.lib.test-metadata :as meta]
    [metabase.lib.test-util :as lib.tu]
    [metabase.lib.test-util.macros :as lib.tu.macros]
    [metabase.models :refer [Card Collection NativeQuerySnippet]]
+   [metabase.models.data-permissions :as data-perms]
    [metabase.models.permissions :as perms]
    [metabase.models.permissions-group :as perms-group]
    [metabase.public-settings :as public-settings]
@@ -364,8 +366,7 @@
                                 "\"PUBLIC\".\"VENUES\".\"LONGITUDE\" AS \"LONGITUDE\", "
                                 "\"PUBLIC\".\"VENUES\".\"PRICE\" AS \"PRICE\" "
                                 "FROM \"PUBLIC\".\"VENUES\" "
-                                "WHERE \"PUBLIC\".\"VENUES\".\"PRICE\" < 3 "
-                                "LIMIT 1048575")]
+                                "WHERE \"PUBLIC\".\"VENUES\".\"PRICE\" < 3")]
           (qp.store/with-metadata-provider (lib.tu/metadata-provider-with-cards-for-queries
                                             meta/metadata-provider
                                             [mbql-query])
@@ -382,10 +383,10 @@
     (testing "Persisted Models are substituted"
       (mt/test-driver :postgres
         (mt/dataset test-data
-          (mt/with-persistence-enabled [persist-models!]
+          (mt/with-persistence-enabled! [persist-models!]
             (let [mbql-query (mt/mbql-query categories)]
               (mt/with-temp [Card model {:name "model"
-                                         :dataset true
+                                         :type :model
                                          :dataset_query mbql-query
                                          :database_id (mt/id)}]
                 (persist-models!)
@@ -476,25 +477,27 @@
   (testing "We should be able to run a query referenced via a template tag if we have perms for the Card in question (#12354)"
     (mt/with-non-admin-groups-no-root-collection-perms
       (mt/with-temp-copy-of-db
-        (perms/revoke-data-perms! (perms-group/all-users) (mt/id))
-        (mt/with-temp [Collection collection {}
-                       Card       {card-1-id :id} {:collection_id (u/the-id collection)
-                                                   :dataset_query (mt/mbql-query venues
-                                                                                 {:order-by [[:asc $id]] :limit 2})}
-                       Card       card-2 {:collection_id (u/the-id collection)
-                                          :dataset_query (mt/native-query
-                                                          {:query         "SELECT * FROM {{card}}"
-                                                           :template-tags {"card" {:name         "card"
-                                                                                   :display-name "card"
-                                                                                   :type         :card
-                                                                                   :card-id      card-1-id}}})}]
-          (perms/grant-collection-read-permissions! (perms-group/all-users) collection)
-          (mt/with-test-user :rasta
-            (binding [qp.perms/*card-id* (u/the-id card-2)]
-              (is (= [[1 "Red Medicine"           4 10.0646 -165.374 3]
-                      [2 "Stout Burgers & Beers" 11 34.0996 -118.329 2]]
-                     (mt/rows
-                      (qp/process-query (:dataset_query card-2))))))))))))
+        (mt/with-no-data-perms-for-all-users!
+          (data-perms/set-database-permission! (perms-group/all-users) (mt/id) :perms/view-data :unrestricted)
+          (data-perms/set-database-permission! (perms-group/all-users) (mt/id) :perms/create-queries :no)
+          (mt/with-temp [Collection collection {}
+                         Card       {card-1-id :id} {:collection_id (u/the-id collection)
+                                                     :dataset_query (mt/mbql-query venues
+                                                                      {:order-by [[:asc $id]] :limit 2})}
+                         Card       card-2 {:collection_id (u/the-id collection)
+                                            :dataset_query (mt/native-query
+                                                             {:query         "SELECT * FROM {{card}}"
+                                                              :template-tags {"card" {:name         "card"
+                                                                                      :display-name "card"
+                                                                                      :type         :card
+                                                                                      :card-id      card-1-id}}})}]
+            (perms/grant-collection-read-permissions! (perms-group/all-users) collection)
+            (mt/with-test-user :rasta
+              (binding [qp.perms/*card-id* (u/the-id card-2)]
+                (is (= [[1 "Red Medicine"           4 10.0646 -165.374 3]
+                        [2 "Stout Burgers & Beers" 11 34.0996 -118.329 2]]
+                       (mt/rows
+                        (qp/process-query (:dataset_query card-2)))))))))))))
 
 (deftest ^:parallel card-query-errors-test
   (testing "error conditions for :card parameters"
@@ -602,7 +605,7 @@
 
 (deftest ^:parallel no-value-template-tag-defaults-test
   (testing "should throw an Exception if no :value is specified for a required parameter, even if defaults are provided"
-    (mt/dataset sample-dataset
+    (mt/dataset test-data
       (testing "Field filters"
         (is (thrown-with-msg?
              clojure.lang.ExceptionInfo
@@ -643,7 +646,7 @@
 
 (deftest ^:parallel nil-value-parameter-template-tag-default-test
   (testing "Default values passed in as part of the request should not apply when the value is nil"
-    (mt/dataset sample-dataset
+    (mt/dataset test-data
       (testing "Field filters"
         (is (=? {"filter" {:value ::params/no-value}}
                 (query->params-map
@@ -695,7 +698,7 @@
 
 (deftest ^:parallel use-parameter-defaults-test
   (testing "If parameter specifies a default value (but tag does not), don't use the default when the value is nil"
-    (mt/dataset sample-dataset
+    (mt/dataset test-data
       (testing "Field filters"
         (is (=? {"filter" {:value ::params/no-value}}
                 (query->params-map
@@ -740,7 +743,7 @@
 
 (deftest ^:parallel handle-referenced-card-parameter-mixed-with-other-parameters-test
   (testing "Should be able to handle for Card ref params regardless of whether other params are passed in (#21246)\n"
-    (mt/dataset sample-dataset
+    (mt/dataset test-data
       (qp.store/with-metadata-provider (lib.tu/metadata-provider-with-cards-for-queries
                                         meta/metadata-provider
                                         [(lib.tu.macros/mbql-query products)])
@@ -760,3 +763,99 @@
               (is (=? {param-name ReferencedCardQuery}
                       (query->params-map {:template-tags template-tags
                                           :parameters    parameters}))))))))))
+
+(deftest ^:parallel handle-dashboard-parameters-without-values-test
+  (testing "dash params for a template tag may have no :value or :default (#38012)"
+    (mt/dataset test-data
+      (qp.store/with-metadata-provider (lib.tu/metadata-provider-with-cards-for-queries
+                                        meta/metadata-provider
+                                        [(lib.tu.macros/mbql-query orders)
+                                         (lib/with-template-tags
+                                           (lib/native-query meta/metadata-provider
+                                                             "SELECT * FROM Orders WHERE {{createdAt}}")
+                                           {"createdAt"
+                                            {:type         :dimension
+                                             :dimension    #_[:field (meta/id :orders :created-at)]
+                                             (lib/ref (meta/field-metadata :orders :created-at))
+                                             :name         "createdAt"
+                                             :id           "4636d745-1467-4a70-ba20-2a08069d77ff"
+                                             :display-name "CreatedAt"
+                                             :widget-type  :date/all-options}})])
+        (let [template-tags {"createdAt" {:type         :dimension
+                                          :dimension    [:field (meta/id :orders :created-at) {}]
+                                          :name         "createdAt"
+                                          :id           "4636d745-1467-4a70-ba20-2a08069d77ff"
+                                          :display-name "CreatedAt"
+                                          :widget-type  :date/all-options}}]
+
+          (testing "with no parameters given, no value"
+            (is (=? {"createdAt" {:field {:lib/type :metadata/column}
+                                  :value params/no-value}}
+                    (query->params-map {:template-tags template-tags}))))
+          (testing "with parameters given but blank, no value"
+            (is (=? {"createdAt" {:field {:lib/type :metadata/column}
+                                  :value params/no-value}}
+                    (query->params-map {:template-tags template-tags
+                                        :parameters    [{:type   :date/relative
+                                                         :value  nil
+                                                         :target [:dimension [:template-tag "createdAt"]]}
+                                                        {:type   :date/month-year
+                                                         :value  nil
+                                                         :target [:dimension [:template-tag "createdAt"]]}]}))))
+          (testing "with only the relative date parameter set, use it"
+            (is (=? {"createdAt" {:field {:lib/type :metadata/column}
+                                  :value {:type  :date/relative
+                                          :value "past30days"}}}
+                    (query->params-map {:template-tags template-tags
+                                        :parameters    [{:type   :date/relative
+                                                         :value  "past30days"
+                                                         :target [:dimension [:template-tag "createdAt"]]}
+                                                        {:type   :date/month-year
+                                                         :value  nil
+                                                         :target [:dimension [:template-tag "createdAt"]]}]}))))
+          (testing "with only the month-year parameter set, use it"
+            (is (=? {"createdAt" {:field {:lib/type :metadata/column}
+                                  :value {:type  :date/month-year
+                                          :value "2023-01"}}}
+                    (query->params-map {:template-tags template-tags
+                                        :parameters    [{:type   :date/relative
+                                                         :value  nil
+                                                         :target [:dimension [:template-tag "createdAt"]]}
+                                                        {:type   :date/month-year
+                                                         :value  "2023-01"
+                                                         :target [:dimension [:template-tag "createdAt"]]}]}))))
+          (testing "with both parameters set, use both"
+            (is (=? {"createdAt" {:field {:lib/type :metadata/column}
+                                  :value [{:type  :date/relative
+                                           :value "past30days"}
+                                          {:type  :date/month-year
+                                           :value "2023-01"}]}}
+                    (query->params-map {:template-tags template-tags
+                                        :parameters    [{:type   :date/relative
+                                                         :value  "past30days"
+                                                         :target [:dimension [:template-tag "createdAt"]]}
+                                                        {:type   :date/month-year
+                                                         :value  "2023-01"
+                                                         :target [:dimension [:template-tag "createdAt"]]}]})))))))))
+
+(deftest ^:parallel referenced-card-ids-test
+  (mt/with-temp [:model/Card {card-1-id :id} {:collection_id nil
+                                              :dataset_query (mt/mbql-query venues {:limit 2})}
+                 :model/Card {card-2-id :id} {:collection_id nil
+                                              :dataset_query (mt/native-query
+                                                               {:query         "SELECT * FROM {{card}}"
+                                                                :template-tags {"card" {:name         "card"
+                                                                                        :display-name "card"
+                                                                                        :type         :card
+                                                                                        :card-id      card-1-id}}})}]
+    ;; even tho Card 2 references Card 1, we don't want to include it in the set of referenced Card IDs, since you
+    ;; should only need permissions for Card 2 to be able to run the query (see #15131)
+    (testing (format "Card 1 ID = %d, Card 2 ID = %d" card-1-id card-2-id)
+      (mt/with-metadata-provider (mt/id)
+        (is (=? #{card-2-id}
+                (params.values/referenced-card-ids (params.values/query->params-map
+                                                    {:query         "SELECT * FROM {{card}}"
+                                                     :template-tags {"card" {:name         "card"
+                                                                             :display-name "card"
+                                                                             :type         :card
+                                                                             :card-id      card-2-id}}}))))))))

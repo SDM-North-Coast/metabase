@@ -1,36 +1,37 @@
 import { jt, t } from "ttag";
-import { useSelector } from "metabase/lib/redux";
-import { getDocsUrl, getSetting } from "metabase/selectors/settings";
-import { Box, Center, Stack, Text } from "metabase/ui";
+
+import { useSetting } from "metabase/common/hooks";
 import ExternalLink from "metabase/core/components/ExternalLink";
-import { isEmpty } from "metabase/lib/utils";
 import { isSameOrigin } from "metabase/lib/dom";
+import { useSelector } from "metabase/lib/redux";
+import { isEmpty } from "metabase/lib/utils";
+import { getDocsUrl } from "metabase/selectors/settings";
+import { Box, Center, Stack, Text } from "metabase/ui";
+
 import { SameSiteAlert } from "./EmbeddingAppSameSiteCookieDescription.styled";
 
 export const EmbeddingAppSameSiteCookieDescription = () => {
   const docsUrl = useSelector(state =>
+    // eslint-disable-next-line no-unconditional-metabase-links-render -- Admin settings
     getDocsUrl(state, {
-      page: "embedding/interactive-embedding#embedding-metabase-in-a-different-domain",
+      page: "embedding/interactive-embedding",
+      anchor: "embedding-metabase-in-a-different-domain",
     }),
   );
 
-  const embeddingSameSiteCookieSetting = useSelector(state =>
-    getSetting(state, "session-cookie-samesite"),
-  );
-  const embeddingAuthorizedOrigins = useSelector(state =>
-    getSetting(state, "embedding-app-origin"),
-  );
+  const embeddingSameSiteCookieSetting = useSetting("session-cookie-samesite");
+  const embeddingAuthorizedOrigins = useSetting("embedding-app-origin");
 
   const shouldDisplayNote =
     embeddingSameSiteCookieSetting !== "none" &&
     authorizedOriginsContainsNonInstanceDomain(embeddingAuthorizedOrigins);
 
   return (
-    <Stack mb="1rem" spacing="sm">
-      <Text fw="bold">{t`SameSite cookie setting`}</Text>
+    <Stack spacing="sm">
       {shouldDisplayNote && <AuthorizedOriginsNote />}
+      {/* eslint-disable-next-line no-literal-metabase-strings -- Metabase settings */}
       <Text>{t`Determines whether or not cookies are allowed to be sent on cross-site requests. You’ll likely need to change this to None if your embedding application is hosted under a different domain than Metabase. Otherwise, leave it set to Lax, as it's more secure.`}</Text>
-      <Text>{jt`If you set this to None, you'll have to use HTTPS (unless you're just embedding locally), or browsers will reject the request. ${(
+      <Text>{jt`If you set this to None, you'll have to use HTTPS, or browsers will reject the request. ${(
         <ExternalLink key="learn-more" href={docsUrl}>
           {t`Learn more`}
         </ExternalLink>
@@ -45,7 +46,7 @@ function AuthorizedOriginsNote() {
       <SameSiteAlert variant="warning" hasBorder>
         <Center>
           <Text>{jt`You should probably change this setting to ${(
-            <Text span fw="bold">
+            <Text key="inner" span fw="bold">
               {t`None`}
             </Text>
           )}.`}</Text>
@@ -58,6 +59,11 @@ function AuthorizedOriginsNote() {
 function authorizedOriginsContainsNonInstanceDomain(
   authorizedOriginsString: string,
 ): boolean {
+  // temporarily disabled because it suggest wrong SameSite value
+  // for local development, where the origin is localhost and when the protocol is not specified
+  // metabase#43523
+  return false;
+
   if (isEmpty(authorizedOriginsString)) {
     return false;
   }

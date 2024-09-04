@@ -1,12 +1,11 @@
-import {
-  restore,
-  popover,
-  visitQuestionAdhoc,
-  openNativeEditor,
-} from "e2e/support/helpers";
-
 import { SAMPLE_DB_ID } from "e2e/support/cypress_data";
 import { SAMPLE_DATABASE } from "e2e/support/cypress_sample_database";
+import {
+  openNativeEditor,
+  popover,
+  restore,
+  visitQuestionAdhoc,
+} from "e2e/support/helpers";
 
 const { PEOPLE, PEOPLE_ID } = SAMPLE_DATABASE;
 
@@ -77,9 +76,7 @@ describe("scenarios > visualizations > maps", () => {
       { visitQuestion: true },
     );
 
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("Visualization").closest(".Button").as("vizButton");
-    cy.get("@vizButton").click();
+    cy.button("Visualization").click();
     cy.findByTestId("display-options-sensible").as("sensibleOptions");
 
     cy.get("@sensibleOptions").within(() => {
@@ -108,10 +105,9 @@ describe("scenarios > visualizations > maps", () => {
 
     cy.wait("@geojson");
 
-    cy.get(".CardVisualization svg path")
-      .should("be.visible")
-      .eq(22)
-      .as("texas");
+    cy.get(".CardVisualization svg path").eq(22).as("texas");
+
+    cy.get("@texas").should("be.visible");
 
     // hover to see the tooltip
     cy.get("@texas").trigger("mousemove");
@@ -219,5 +215,42 @@ describe("scenarios > visualizations > maps", () => {
       "data-is-sensible",
       "true",
     );
+  });
+
+  it("should apply brush filters by dragging map", () => {
+    cy.viewport(1280, 800);
+
+    visitQuestionAdhoc({
+      dataset_query: {
+        type: "query",
+        database: SAMPLE_DB_ID,
+        query: {
+          "source-table": PEOPLE_ID,
+        },
+      },
+      display: "map",
+      visualization_settings: {
+        "map.region": "us_states",
+        "map.type": "pin",
+        "map.latitude_column": "LATITUDE",
+        "map.longitude_column": "LONGITUDE",
+      },
+    });
+
+    cy.get(".CardVisualization").realHover();
+    cy.findByTestId("visualization-root")
+      .findByText("Draw box to filter")
+      .click();
+
+    cy.findByTestId("visualization-root")
+      .realMouseDown(500, 500)
+      .realMouseMove(600, 600)
+      .realMouseUp(600, 600);
+
+    cy.wait("@dataset");
+
+    cy.get(".CardVisualization").should("exist");
+    // selecting area at the map provides different filter values, so the simplified assertion is used
+    cy.findByTestId("filter-pill").should("have.length", 1);
   });
 });

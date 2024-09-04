@@ -1,27 +1,54 @@
+import moment from "moment-timezone"; // eslint-disable-line no-restricted-imports -- deprecated usage
 import { t } from "ttag";
-// eslint-disable-next-line no-restricted-imports -- deprecated usage
-import moment from "moment-timezone";
 import _ from "underscore";
 
-import ChartNestedSettingColumns from "metabase/visualizations/components/settings/ChartNestedSettingColumns";
-import { ChartSettingTableColumns } from "metabase/visualizations/components/settings/ChartSettingTableColumns";
-
-// HACK: cyclical dependency causing errors in unit tests
-// import { getVisualizationRaw } from "metabase/visualizations";
-function getVisualizationRaw(...args) {
-  return require("metabase/visualizations").getVisualizationRaw(...args);
-}
-
+import { currency } from "cljs/metabase.shared.util.currency";
 import {
   formatColumn,
-  numberFormatterForOptions,
   getCurrencySymbol,
   getDateFormatFromStyle,
+  numberFormatterForOptions,
 } from "metabase/lib/formatting";
-
 import { hasHour } from "metabase/lib/formatting/datetime-utils";
+import MetabaseSettings from "metabase/lib/settings";
+import { getVisualizationRaw } from "metabase/visualizations";
+import ChartNestedSettingColumns from "metabase/visualizations/components/settings/ChartNestedSettingColumns";
+import { ChartSettingTableColumns } from "metabase/visualizations/components/settings/ChartSettingTableColumns";
+import {
+  getDefaultCurrency,
+  getDefaultCurrencyInHeader,
+  getDefaultCurrencyStyle,
+  getDefaultNumberSeparators,
+  getDefaultNumberStyle,
+} from "metabase/visualizations/shared/settings/column";
+import {
+  getColumnKey,
+  getObjectColumnSettings,
+} from "metabase-lib/v1/queries/utils/column-key";
+import {
+  findColumnIndexesForColumnSettings,
+  findColumnSettingIndexesForColumns,
+} from "metabase-lib/v1/queries/utils/dataset";
+import {
+  isCoordinate,
+  isCurrency,
+  isDate,
+  isDateWithoutTime,
+  isNumber,
+} from "metabase-lib/v1/types/utils/isa";
 
-import { currency } from "cljs/metabase.shared.util.currency";
+import { nestedSettings } from "./nested";
+
+function getCurrency(currency, currencyStyle) {
+  return (0)
+    .toLocaleString("en", {
+      style: "currency",
+      currency: currency,
+      currencyDisplay: currencyStyle,
+    })
+    .replace(/0([.,]0+)?/, "")
+    .trim(); // strip off actual number
+}
 
 const DEFAULT_GET_COLUMNS = (series, vizSettings) =>
   [].concat(...series.map(s => (s.data && s.data.cols) || []));
@@ -36,6 +63,7 @@ export function columnSettings({
     objectName: "column",
     getObjects: getColumns,
     getObjectKey: getColumnKey,
+    getObjectSettings: getObjectColumnSettings,
     getSettingDefinitionsForObject: getSettingDefinitionsForColumn,
     component: ChartNestedSettingColumns,
     getInheritedSettingsForObject: getInhertiedSettingsForColumn,
@@ -44,19 +72,6 @@ export function columnSettings({
     ...def,
   });
 }
-
-import MetabaseSettings from "metabase/lib/settings";
-import {
-  isDate,
-  isNumber,
-  isCoordinate,
-  isCurrency,
-  isDateWithoutTime,
-  isPercentage,
-} from "metabase-lib/types/utils/isa";
-import { findColumnIndexForColumnSetting } from "metabase-lib/queries/utils/dataset";
-import { getColumnKey } from "metabase-lib/queries/utils/get-column-key";
-import { nestedSettings } from "./nested";
 
 export function getGlobalSettingsForColumn(column) {
   const columnSettings = {};
@@ -243,17 +258,6 @@ export const DATE_COLUMN_SETTINGS = {
   },
 };
 
-function getCurrency(currency, currencyStyle) {
-  return (0)
-    .toLocaleString("en", {
-      style: "currency",
-      currency: currency,
-      currencyDisplay: currencyStyle,
-    })
-    .replace(/0([.,]0+)?/, "")
-    .trim(); // strip off actual number
-}
-
 export const NUMBER_COLUMN_SETTINGS = {
   number_style: {
     title: t`Style`,
@@ -266,17 +270,7 @@ export const NUMBER_COLUMN_SETTINGS = {
         { name: t`Currency`, value: "currency" },
       ],
     },
-    getDefault: (column, settings) => {
-      if (isCurrency(column) && settings["currency"]) {
-        return "currency";
-      }
-
-      if (isPercentage(column)) {
-        return "percent";
-      }
-
-      return "decimal";
-    },
+    getDefault: getDefaultNumberStyle,
     // hide this for currency
     getHidden: (column, settings) =>
       isCurrency(column) && settings["number_style"] === "currency",
@@ -294,7 +288,7 @@ export const NUMBER_COLUMN_SETTINGS = {
       searchProp: "name",
       searchCaseSensitive: false,
     },
-    default: "USD",
+    getDefault: getDefaultCurrency,
     getHidden: (column, settings) => settings["number_style"] !== "currency",
   },
   currency_style: {
@@ -326,12 +320,7 @@ export const NUMBER_COLUMN_SETTINGS = {
         ],
       };
     },
-    getDefault: (column, settings) => {
-      const c = settings["currency"] || "USD";
-      return getCurrencySymbol(c) !== getCurrency(c, "code")
-        ? "symbol"
-        : "code";
-    },
+    getDefault: getDefaultCurrencyStyle,
     getHidden: (column, settings) => settings["number_style"] !== "currency",
     readDependencies: ["number_style"],
   },
@@ -344,10 +333,17 @@ export const NUMBER_COLUMN_SETTINGS = {
         { name: t`In every table cell`, value: false },
       ],
     },
-    default: true,
-    getHidden: (column, settings, { series }) =>
-      settings["number_style"] !== "currency" ||
-      series[0].card.display !== "table",
+    getDefault: getDefaultCurrencyInHeader,
+    getHidden: (_column, settings, { series, forAdminSettings }) => {
+      if (forAdminSettings === true) {
+        return false;
+      } else {
+        return (
+          settings["number_style"] !== "currency" ||
+          series[0].card.display !== "table"
+        );
+      }
+    },
     readDependencies: ["number_style"],
   },
   number_separators: {
@@ -363,7 +359,7 @@ export const NUMBER_COLUMN_SETTINGS = {
         { name: "100’000.00", value: ".’" },
       ],
     },
-    default: ".,",
+    getDefault: getDefaultNumberSeparators,
   },
   decimals: {
     title: t`Minimum number of decimal places`,
@@ -511,9 +507,7 @@ export const getTitleForColumn = (column, series, settings) => {
   }
 };
 
-export const buildTableColumnSettings = ({
-  getIsColumnVisible = col => col.visibility_type !== "details-only",
-} = {}) => ({
+export const tableColumnSettings = {
   // NOTE: table column settings may be identified by fieldRef (possible not normalized) or column name:
   //   { name: "COLUMN_NAME", enabled: true }
   //   { fieldRef: ["field", 2, {"source-field": 1}], enabled: true }
@@ -522,25 +516,26 @@ export const buildTableColumnSettings = ({
     // title: t`Columns`,
     widget: ChartSettingTableColumns,
     getHidden: (series, vizSettings) => vizSettings["table.pivot"],
-    isValid: ([{ card, data }]) => {
-      const columns = card.visualization_settings["table.columns"];
-      const enabledColumns = columns.filter(column => column.enabled);
-      return _.all(
-        enabledColumns,
-        columnSetting =>
-          findColumnIndexForColumnSetting(data.cols, columnSetting) >= 0,
-      );
+    getValue: ([{ data }], vizSettings) => {
+      const { cols } = data;
+      const settings = vizSettings["table.columns"] ?? [];
+      const columnIndexes = findColumnIndexesForColumnSettings(cols, settings);
+      const settingIndexes = findColumnSettingIndexesForColumns(cols, settings);
+
+      return [
+        // retain settings with matching columns only
+        ...settings.filter(
+          (_, settingIndex) => columnIndexes[settingIndex] >= 0,
+        ),
+        // add columns that do not have matching settings to the end
+        ...cols
+          .filter((_, columnIndex) => settingIndexes[columnIndex] < 0)
+          .map(column => ({
+            name: column.name,
+            enabled: true,
+          })),
+      ];
     },
-    getDefault: ([
-      {
-        data: { cols },
-      },
-    ]) =>
-      cols.map(col => ({
-        name: col.name,
-        fieldRef: col.field_ref,
-        enabled: getIsColumnVisible(col),
-      })),
     getProps: (series, settings) => {
       const [
         {
@@ -554,4 +549,4 @@ export const buildTableColumnSettings = ({
       };
     },
   },
-});
+};

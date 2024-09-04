@@ -1,5 +1,5 @@
-import { getSize, rem } from "@mantine/core";
 import type { InputStylesParams, MantineThemeOverride } from "@mantine/core";
+import { getSize, rem } from "@mantine/core";
 
 const SIZES = {
   xs: rem(32),
@@ -16,31 +16,41 @@ export const getInputOverrides = (): MantineThemeOverride["components"] => ({
     defaultProps: {
       size: "md",
     },
-    styles: (theme, { multiline }: InputStylesParams, { size = "md" }) => ({
+    styles: (
+      theme,
+      { multiline, radius }: InputStylesParams,
+      { size = "md" },
+    ) => ({
       input: {
-        color: theme.colors.text[2],
-        borderRadius: theme.radius.xs,
+        color: theme.fn.themeColor("text-dark"),
+        borderRadius: radius ?? theme.radius.xs,
         height: multiline ? "auto" : getSize({ size, sizes: SIZES }),
         minHeight: getSize({ size, sizes: SIZES }),
+        background: theme.fn.themeColor("bg-white"),
         "&::placeholder": {
-          color: theme.colors.text[0],
+          color: theme.fn.themeColor("text-light"),
         },
         "&:disabled": {
-          backgroundColor: theme.colors.bg[0],
+          backgroundColor: theme.fn.themeColor("bg-light"),
         },
         "&[data-invalid]": {
-          color: theme.colors.error[0],
-          borderColor: theme.colors.error[0],
+          color: theme.fn.themeColor("error"),
+          borderColor: theme.fn.themeColor("error"),
           "&::placeholder": {
-            color: theme.colors.error[0],
+            color: theme.fn.themeColor("error"),
           },
         },
       },
+      label: {
+        color: theme.fn.themeColor("text-medium"),
+        fontSize: getSize({ size, sizes: theme.fontSizes }),
+        marginBottom: theme.spacing.xs,
+      },
       icon: {
-        color: theme.colors.text[2],
+        color: theme.fn.themeColor("text-dark"),
       },
       rightSection: {
-        color: theme.colors.text[0],
+        color: theme.fn.themeColor("text-light"),
       },
     }),
     sizes: {
@@ -69,9 +79,9 @@ export const getInputOverrides = (): MantineThemeOverride["components"] => ({
               ? rem(rightSectionWidth - BORDER_WIDTH)
               : `calc(${rightSectionWidth} - ${BORDER_WIDTH}px)`
             : rem(PADDING - BORDER_WIDTH),
-          borderColor: theme.colors.border[0],
+          borderColor: theme.fn.themeColor("border"),
           "&:focus": {
-            borderColor: theme.colors.brand[1],
+            borderColor: theme.fn.themeColor("brand"),
           },
           "&[data-with-icon]": {
             paddingLeft: rem(DEFAULT_ICON_WIDTH - BORDER_WIDTH),
@@ -113,23 +123,23 @@ export const getInputOverrides = (): MantineThemeOverride["components"] => ({
     },
     styles: theme => ({
       label: {
-        color: theme.colors.text[2],
+        color: theme.fn.themeColor("text-dark"),
         fontSize: theme.fontSizes.sm,
         fontWeight: "bold",
         lineHeight: theme.lineHeight,
       },
       description: {
-        color: theme.colors.text[2],
+        color: theme.fn.themeColor("text-dark"),
         fontSize: theme.fontSizes.xs,
         lineHeight: theme.lineHeight,
       },
       error: {
-        color: theme.colors.error[0],
+        color: theme.fn.themeColor("error"),
         fontSize: theme.fontSizes.xs,
         lineHeight: theme.lineHeight,
       },
       required: {
-        color: theme.colors.error[0],
+        color: theme.fn.themeColor("error"),
       },
     }),
   },

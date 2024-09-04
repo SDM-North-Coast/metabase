@@ -1,12 +1,20 @@
+import { SAMPLE_DATABASE } from "e2e/support/cypress_sample_database";
 import {
+  assertDashboardFixedWidth,
+  assertDashboardFullWidth,
+  createPublicDashboardLink,
+  dashboardParametersContainer,
+  describeEE,
+  filterWidget,
+  goToTab,
+  openNewPublicLinkDropdown,
+  openSharingMenu,
+  popover,
   restore,
+  setTokenFeatures,
   visitDashboard,
   visitPublicDashboard,
-  filterWidget,
-  popover,
 } from "e2e/support/helpers";
-
-import { SAMPLE_DATABASE } from "e2e/support/cypress_sample_database";
 
 const { PRODUCTS } = SAMPLE_DATABASE;
 
@@ -29,16 +37,35 @@ const questionDetails = {
   display: "scalar",
 };
 
-const filter = {
+const textFilter = {
+  id: "1",
+  type: "string/=",
   name: "Text",
   slug: "text",
-  id: "4f37fd0d",
-  type: "string/=",
   sectionId: "string",
 };
 
+const unusedFilter = {
+  id: "2",
+  type: "number/=",
+  name: "Number",
+  slug: "number",
+  sectionId: "number",
+};
+
+const tab1 = {
+  id: 1,
+  name: "Tab 1",
+};
+
+const tab2 = {
+  id: 2,
+  name: "Tab 2",
+};
+
 const dashboardDetails = {
-  parameters: [filter],
+  parameters: [textFilter, unusedFilter],
+  tabs: [tab1, tab2],
 };
 
 const PUBLIC_DASHBOARD_REGEX =
@@ -53,25 +80,27 @@ const USERS = {
   "anonymous user": () => cy.signOut(),
 };
 
-describe("scenarios > public > dashboard", () => {
-  beforeEach(() => {
-    restore();
-    cy.signInAsAdmin();
+const prepareDashboard = () => {
+  cy.request("PUT", "/api/setting/enable-public-sharing", { value: true });
 
-    cy.request("PUT", "/api/setting/enable-public-sharing", { value: true });
+  cy.intercept("/api/dashboard/*/public_link").as("publicLink");
 
-    cy.intercept("/api/dashboard/*/public_link").as("publicLink");
-
-    cy.createNativeQuestionAndDashboard({
-      questionDetails,
-      dashboardDetails,
-    }).then(({ body: { id, card_id, dashboard_id } }) => {
+  cy.createNativeQuestionAndDashboard({
+    questionDetails,
+    dashboardDetails,
+  }).then(
+    ({
+      body: { id, card_id, dashboard_id, dashboard_tab_id },
+      dashboardTabs,
+    }) => {
       cy.wrap(dashboard_id).as("dashboardId");
       // Connect filter to the card
       cy.request("PUT", `/api/dashboard/${dashboard_id}`, {
+        tabs: dashboardTabs,
         dashcards: [
           {
             id,
+            dashboard_tab_id,
             card_id,
             row: 0,
             col: 0,
@@ -79,7 +108,7 @@ describe("scenarios > public > dashboard", () => {
             size_y: 6,
             parameter_mappings: [
               {
-                parameter_id: filter.id,
+                parameter_id: textFilter.id,
                 card_id,
                 target: ["dimension", ["template-tag", "c"]],
               },
@@ -87,43 +116,56 @@ describe("scenarios > public > dashboard", () => {
           },
         ],
       });
-    });
+    },
+  );
+};
+
+describe("scenarios > public > dashboard", () => {
+  beforeEach(() => {
+    restore();
+    cy.signInAsAdmin();
+
+    prepareDashboard();
   });
 
   it("should allow users to create public dashboards", () => {
-    cy.get("@dashboardId").then(id => {
-      visitDashboard(id);
-    });
+    visitDashboard("@dashboardId");
 
-    cy.icon("share").click();
-
-    cy.findByRole("heading", { name: "Enable sharing" })
-      .parent()
-      .findByRole("switch")
-      .check();
+    openNewPublicLinkDropdown("dashboard");
 
     cy.wait("@publicLink").then(({ response }) => {
       expect(response.body.uuid).not.to.be.null;
 
-      cy.findByRole("heading", { name: "Public link" })
-        // This click doesn't have any meaning in the context of the correctness of this test!
-        // It's simply here to prevent test flakiness, which happens because the Modal overlay
-        // is animating (disappearing) and we need to wait for it to stop the transition.
-        // Cypress will retry clicking this text until the DOM element is "actionable", or in
-        // our case - until there's no element on top of it blocking it. That's also when we
-        // expect this input field to be populated with the actual value.
-        .click()
-        .parent()
-        .findByDisplayValue(/^http/)
-        .then($input => {
-          expect($input.val()).to.match(PUBLIC_DASHBOARD_REGEX);
-        });
+      cy.findByTestId("public-link-input").should("be.visible");
+      cy.findByTestId("public-link-input").then($input => {
+        expect($input.val()).to.match(PUBLIC_DASHBOARD_REGEX);
+      });
+    });
+  });
+
+  it("should only allow non-admin users to see a public link if one has already been created", () => {
+    cy.get("@dashboardId").then(id => {
+      createPublicDashboardLink(id);
+      cy.signOut();
+    });
+
+    cy.signInAsNormalUser().then(() => {
+      visitDashboard("@dashboardId");
+      openSharingMenu("Public link");
+
+      cy.findByTestId("public-link-popover-content").within(() => {
+        cy.findByText("Public link").should("be.visible");
+        cy.findByTestId("public-link-input").then($input =>
+          expect($input.val()).to.match(PUBLIC_DASHBOARD_REGEX),
+        );
+        cy.findByText("Remove public URL").should("not.exist");
+      });
     });
   });
 
   Object.entries(USERS).map(([userType, setUser]) =>
     describe(`${userType}`, () => {
-      it(`should be able to view public dashboards`, () => {
+      it("should be able to view public dashboards", () => {
         cy.get("@dashboardId").then(id => {
           cy.request("POST", `/api/dashboard/${id}/public_link`).then(
             ({ body: { uuid } }) => {
@@ -133,7 +175,7 @@ describe("scenarios > public > dashboard", () => {
           );
         });
 
-        cy.get(".ScalarValue").should("have.text", COUNT_ALL);
+        cy.findByTestId("scalar-value").should("have.text", COUNT_ALL);
 
         filterWidget().click();
         popover().within(() => {
@@ -141,7 +183,7 @@ describe("scenarios > public > dashboard", () => {
           cy.button("Add filter").click();
         });
 
-        cy.get(".ScalarValue").should("have.text", COUNT_DOOHICKEY);
+        cy.findByTestId("scalar-value").should("have.text", COUNT_DOOHICKEY);
       });
     }),
   );
@@ -155,7 +197,7 @@ describe("scenarios > public > dashboard", () => {
       visitPublicDashboard(id);
     });
 
-    cy.get(".ScalarValue").should("have.text", COUNT_ALL);
+    cy.findByTestId("scalar-value").should("have.text", COUNT_ALL);
     cy.button("Apply").should("not.exist");
 
     filterWidget().click();
@@ -164,10 +206,96 @@ describe("scenarios > public > dashboard", () => {
       cy.button("Add filter").click();
     });
 
-    cy.get(".ScalarValue").should("have.text", COUNT_ALL);
+    cy.findByTestId("scalar-value").should("have.text", COUNT_ALL);
 
     cy.button("Apply").should("be.visible").click();
     cy.button("Apply").should("not.exist");
-    cy.get(".ScalarValue").should("have.text", COUNT_DOOHICKEY);
+    cy.findByTestId("scalar-value").should("have.text", COUNT_DOOHICKEY);
+  });
+
+  it("should only display filters mapped to cards on the selected tab", () => {
+    cy.get("@dashboardId").then(id => {
+      visitPublicDashboard(id);
+    });
+
+    dashboardParametersContainer().within(() => {
+      cy.findByText(textFilter.name).should("be.visible");
+      cy.findByText(unusedFilter.name).should("not.exist");
+    });
+
+    goToTab(tab2.name);
+
+    dashboardParametersContainer().should("not.exist");
+    cy.findByTestId("embed-frame").within(() => {
+      cy.findByText(textFilter.name).should("not.exist");
+      cy.findByText(unusedFilter.name).should("not.exist");
+    });
+  });
+
+  it("should respect dashboard width setting in a public dashboard", () => {
+    cy.get("@dashboardId").then(id => {
+      visitPublicDashboard(id);
+    });
+
+    // new dashboards should default to 'fixed' width
+    assertDashboardFixedWidth();
+
+    // toggle full-width
+    cy.get("@dashboardId").then(id => {
+      cy.signInAsAdmin();
+      cy.request("PUT", `/api/dashboard/${id}`, {
+        width: "full",
+      });
+      visitPublicDashboard(id);
+    });
+
+    assertDashboardFullWidth();
+  });
+
+  it("should render when a filter passed with value starting from '0' (metabase#41483)", () => {
+    cy.get("@dashboardId").then(id => {
+      visitPublicDashboard(id, {
+        params: { text: "002" },
+      });
+    });
+
+    cy.url().should("include", "text=002");
+
+    filterWidget().findByText("002").should("be.visible");
+  });
+
+  it("should allow to set locale from the `locale` query parameter", () => {
+    cy.get("@dashboardId").then(id => {
+      visitPublicDashboard(id, {
+        params: { locale: "de" },
+      });
+    });
+
+    // eslint-disable-next-line no-unscoped-text-selectors -- we don't care where the text is
+    cy.findByText("Registerkarte als PDF exportieren").should("be.visible");
+    cy.url().should("include", "locale=de");
+  });
+});
+
+describeEE("scenarios [EE] > public > dashboard", () => {
+  beforeEach(() => {
+    restore();
+    cy.signInAsAdmin();
+
+    prepareDashboard();
+
+    setTokenFeatures("all");
+  });
+
+  it("should set the window title to `{dashboard name} · {application name}`", () => {
+    cy.request("PUT", "/api/setting/application-name", {
+      value: "Custom Application Name",
+    });
+
+    cy.get("@dashboardId").then(id => {
+      visitPublicDashboard(id);
+
+      cy.title().should("eq", "Test Dashboard · Custom Application Name");
+    });
   });
 });

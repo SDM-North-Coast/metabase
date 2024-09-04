@@ -1,7 +1,10 @@
 import type { ComponentStory } from "@storybook/react";
+import cx from "classnames";
 
-import { Icon } from "metabase/core/components/Icon";
-import { TokenFieldItem, TokenFieldAddon } from "./TokenFieldItem.styled";
+import CS from "metabase/css/core/index.css";
+import { Icon } from "metabase/ui";
+
+import { TokenFieldAddon, TokenFieldItem } from "./TokenFieldItem.styled";
 
 export default {
   title: "Core/TokenFieldItem",
@@ -40,7 +43,11 @@ const AddonTemplate: ComponentStory<typeof TokenFieldItem> = args => {
       <TokenFieldItem isValid={args.isValid}>
         {args.children}
         <TokenFieldAddon isValid={args.isValid}>
-          <Icon name="close" className="flex align-center" size={12} />
+          <Icon
+            name="close"
+            className={cx(CS.flex, CS.alignCenter)}
+            size={12}
+          />
         </TokenFieldAddon>
       </TokenFieldItem>
     </Wrapper>

@@ -1,15 +1,15 @@
 import { createMockMetadata } from "__support__/metadata";
 import { renderWithProviders, screen } from "__support__/ui";
-import {
-  createSampleDatabase,
-  ORDERS_ID,
-  SAMPLE_DB_ID,
-} from "metabase-types/api/mocks/presets";
 import ChartSettings from "metabase/visualizations/components/ChartSettings";
 import registerVisualizations from "metabase/visualizations/register";
-import { createMockColumn, createMockDataset } from "metabase-types/api/mocks";
+import Question from "metabase-lib/v1/Question";
 import type { Series } from "metabase-types/api";
-import Question from "metabase-lib/Question";
+import { createMockColumn, createMockDataset } from "metabase-types/api/mocks";
+import {
+  ORDERS_ID,
+  SAMPLE_DB_ID,
+  createSampleDatabase,
+} from "metabase-types/api/mocks/presets";
 
 registerVisualizations();
 
@@ -26,22 +26,22 @@ const setup = ({ series, question }: SetupProps) => {
   renderWithProviders(
     <ChartSettings
       series={series}
-      quesiton={question}
+      question={question}
       initial={{ section: "Data" }}
       noPreview
     />,
   );
 };
 
-describe("barchart", () => {
-  it("should not error when rendering for a question with new breakouts", () => {
+describe("BarChart", () => {
+  it("should not error when rendering for a question without breakouts", () => {
     const question = new Question(
       {
         dataset_query: {
           type: "query",
           query: {
             "source-table": ORDERS_ID,
-            aggregrations: [["count"]],
+            aggregation: [["count"]],
           },
           database: SAMPLE_DB_ID,
         },
@@ -69,6 +69,7 @@ describe("barchart", () => {
         }),
       },
     ];
+
     setup({ question, series });
 
     expect(screen.getByText("X-axis")).toBeInTheDocument();

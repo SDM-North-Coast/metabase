@@ -1,16 +1,16 @@
+import userEvent from "@testing-library/user-event";
 import fetchMock from "fetch-mock";
 
-import userEvent from "@testing-library/user-event";
-import { renderWithProviders, screen, waitFor } from "__support__/ui";
-import { mockSettings } from "__support__/settings";
 import { setupEnterprisePlugins } from "__support__/enterprise";
-
+import { mockSettings } from "__support__/settings";
+import { renderWithProviders, screen, waitFor } from "__support__/ui";
 import {
   createMockGroup,
   createMockTokenFeatures,
   createMockUser,
 } from "metabase-types/api/mocks";
 import { createMockState } from "metabase-types/store/mocks";
+
 import { UserForm } from "./UserForm";
 
 const GROUPS = [
@@ -86,14 +86,14 @@ describe("UserForm", () => {
     it("should allow you to add groups", async () => {
       const { onSubmit } = setup();
 
-      userEvent.click(await screen.findByText("foo"));
-      userEvent.click(await screen.findByText("Administrators"));
+      await userEvent.click(await screen.findByText("foo"));
+      await userEvent.click(await screen.findByText("Administrators"));
 
       expect(
         await screen.findByRole("generic", { name: "group-summary" }),
       ).toHaveTextContent("Admin and 1 other group");
 
-      userEvent.click(await screen.findByText("bar"));
+      await userEvent.click(await screen.findByText("bar"));
 
       expect(
         await screen.findByRole("generic", { name: "group-summary" }),
@@ -103,7 +103,9 @@ describe("UserForm", () => {
         await screen.findByRole("button", { name: "Update" }),
       ).toBeEnabled();
 
-      userEvent.click(await screen.findByRole("button", { name: "Update" }));
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Update" }),
+      );
 
       await waitFor(() => {
         expect(onSubmit).toHaveBeenCalledWith(
@@ -136,14 +138,18 @@ describe("UserForm", () => {
     it("should allow you to remove a group", async () => {
       const { onSubmit } = setup();
 
-      userEvent.click(await screen.findByText("foo"));
-      userEvent.click(await screen.findByRole("listitem", { name: "foo" }));
+      await userEvent.click(await screen.findByText("foo"));
+      await userEvent.click(
+        await screen.findByRole("listitem", { name: "foo" }),
+      );
 
       expect(
         await screen.findByRole("generic", { name: "group-summary" }),
       ).toHaveTextContent("Default");
 
-      userEvent.click(await screen.findByRole("button", { name: "Update" }));
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Update" }),
+      );
 
       await waitFor(() => {
         expect(onSubmit).toHaveBeenCalledWith(
@@ -186,15 +192,24 @@ describe("UserForm", () => {
         initialValues: eeUser,
       });
 
-      userEvent.click(await screen.findByText("Add an attribute"));
+      await userEvent.click(await screen.findByText("Add an attribute"));
 
-      userEvent.type((await screen.findAllByPlaceholderText("Key"))[1], "exp");
-      userEvent.type(
-        (await screen.findAllByPlaceholderText("Value"))[1],
+      await userEvent.type(
+        (
+          await screen.findAllByPlaceholderText("Key")
+        )[1],
+        "exp",
+      );
+      await userEvent.type(
+        (
+          await screen.findAllByPlaceholderText("Value")
+        )[1],
         "1234",
       );
 
-      userEvent.click(await screen.findByRole("button", { name: "Update" }));
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Update" }),
+      );
 
       await waitFor(() => {
         expect(onSubmit).toHaveBeenCalledWith(
@@ -216,9 +231,11 @@ describe("UserForm", () => {
         initialValues: eeUser,
       });
 
-      userEvent.click(await screen.findByTestId("remove-mapping"));
+      await userEvent.click(await screen.findByTestId("remove-mapping"));
 
-      userEvent.click(await screen.findByRole("button", { name: "Update" }));
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Update" }),
+      );
 
       await waitFor(() => {
         expect(onSubmit).toHaveBeenCalledWith(
@@ -229,6 +246,57 @@ describe("UserForm", () => {
           expect.anything(),
         );
       });
+    });
+
+    it("should should not change the order of the inputs when working with numbers (#35316)", async () => {
+      setup({
+        hasEnterprisePlugins: true,
+        initialValues: eeUser,
+      });
+
+      await userEvent.click(await screen.findByText("Add an attribute"));
+
+      await userEvent.type(
+        (
+          await screen.findAllByPlaceholderText("Key")
+        )[1],
+        "1",
+      );
+
+      expect((await screen.findAllByPlaceholderText("Key"))[1]).toHaveValue(
+        "1",
+      );
+    });
+
+    it("should show errors messages and disable form submit when 2 login attributes have the same key (#30196)", async () => {
+      setup({
+        hasEnterprisePlugins: true,
+        initialValues: eeUser,
+      });
+
+      await userEvent.click(await screen.findByText("Add an attribute"));
+
+      // We need a delay in typing into the form so that the error
+      // state is handled apropriately. Formik clears errors when you call
+      // setValue, so we need to ensure that no other setValue calls are in
+      // flight before typing the letter can causes the error.
+      await userEvent.type(
+        (
+          await screen.findAllByPlaceholderText("Key")
+        )[1],
+        "team",
+        { delay: 100 },
+      );
+
+      expect(
+        await screen.findAllByText("Attribute keys can't have the same name"),
+      ).toHaveLength(2);
+
+      await waitFor(async () =>
+        expect(
+          await screen.findByRole("button", { name: "Update" }),
+        ).toBeDisabled(),
+      );
     });
   });
 });

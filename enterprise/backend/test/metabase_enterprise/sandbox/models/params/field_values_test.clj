@@ -1,7 +1,7 @@
 (ns metabase-enterprise.sandbox.models.params.field-values-test
   (:require
    [clojure.test :refer :all]
-   [java-time :as t]
+   [java-time.api :as t]
    [metabase-enterprise.sandbox.models.group-table-access-policy
     :refer [GroupTableAccessPolicy]]
    [metabase-enterprise.sandbox.models.params.field-values
@@ -16,8 +16,6 @@
             User]]
    [metabase.models.field-values :as field-values]
    [metabase.models.params.field-values :as params.field-values]
-   [metabase.public-settings.premium-features-test
-    :as premium-features-test]
    [metabase.server.middleware.session :as mw.session]
    [metabase.test :as mt]
    [toucan2.core :as t2]))
@@ -27,9 +25,9 @@
 (deftest get-or-create-advanced-field-values!-test
   (doseq [fv-type [:sandbox :linked-filter]]
     (testing "create a new field values and fix up the human readable values"
-      (met/with-gtaps {:gtaps {:categories {:query (mt/mbql-query categories {:filter [:and
-                                                                                       [:> $id 3]
-                                                                                       [:< $id 6]]})}}}
+      (met/with-gtaps! {:gtaps {:categories {:query (mt/mbql-query categories {:filter [:and
+                                                                                        [:> $id 3]
+                                                                                        [:< $id 6]]})}}}
         ;; the categories-id doesn't have a field values, we fake it with a full fieldvalues to make it easier to test
         (t2/insert! FieldValues {:type                  :full
                                  :field_id              (mt/id :categories :id)
@@ -55,7 +53,7 @@
 
           (testing "after changing the question, should create new FieldValues"
             (let [new-query (mt/mbql-query categories
-                                           {:filter [:and [:> $id 1] [:< $id 4]]})]
+                              {:filter [:and [:> $id 1] [:< $id 4]]})]
               (Thread/sleep 1)
               (t2/update! Card card-id {:dataset_query new-query
                                         :updated_at    (t/local-date-time)}))
@@ -69,9 +67,9 @@
                                      {:order-by [:id]})))))))
 
     (testing "make sure the Fieldvalues respect [field-values/*total-max-length*]"
-      (met/with-gtaps {:gtaps {:categories {:query (mt/mbql-query categories {:filter [:and
-                                                                                       [:> $id 3]
-                                                                                       [:< $id 6]]})}}}
+      (met/with-gtaps! {:gtaps {:categories {:query (mt/mbql-query categories {:filter [:and
+                                                                                        [:> $id 3]
+                                                                                        [:< $id 6]]})}}}
         (binding [field-values/*total-max-length* 5]
           (is (= ["Asian"]
                  (:values (params.field-values/get-or-create-advanced-field-values!
@@ -79,12 +77,12 @@
                            (t2/select-one Field :id (mt/id :categories :name)))))))))))
 
 (deftest advanced-field-values-hash-test
-  (premium-features-test/with-premium-features #{:sandboxes}
-    ;; copy at top level so that `with-gtaps-for-user` does not have to create a new copy every time it gets called
+  (mt/with-premium-features #{:sandboxes}
+    ;; copy at top level so that `with-gtaps-for-user!` does not have to create a new copy every time it gets called
     (mt/with-temp-copy-of-db
       (testing "gtap with remappings"
         (letfn [(hash-for-user-id [user-id login-attributes field-id]
-                  (met/with-gtaps-for-user user-id
+                  (met/with-gtaps-for-user! user-id
                     {:gtaps      {:categories {:remappings {"State" [:dimension [:field (mt/id :categories :name) nil]]}}}
                      :attributes login-attributes}
                     (ee-params.field-values/hash-key-for-sandbox field-id)))]

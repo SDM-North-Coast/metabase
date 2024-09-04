@@ -1,12 +1,12 @@
-import type { Theme } from "@emotion/react";
 import { css } from "@emotion/react";
 import styled from "@emotion/styled";
+
+import { APP_BAR_HEIGHT } from "metabase/nav/constants";
 import {
   breakpointMaxSmall,
   breakpointMinSmall,
 } from "metabase/styled-components/theme";
-import { APP_BAR_HEIGHT } from "metabase/nav/constants";
-import type { PaperProps, GroupProps } from "metabase/ui";
+import type { GroupProps, PaperProps } from "metabase/ui";
 import { Group, Paper } from "metabase/ui";
 
 export const SearchResultsContainer = styled(Paper)<PaperProps>`
@@ -22,9 +22,9 @@ export const SearchResultsContainer = styled(Paper)<PaperProps>`
   }
 `;
 
-const selectedStyles = ({ theme }: { theme: Theme }) => css`
-  color: ${theme.colors.brand[1]};
-  background-color: ${theme.colors.brand[0]};
+const selectedStyles = css`
+  color: var(--mb-color-brand);
+  background-color: var(--mb-color-brand-lighter);
   cursor: pointer;
   transition: all 0.2s ease-in-out;
 `;
@@ -32,10 +32,10 @@ const selectedStyles = ({ theme }: { theme: Theme }) => css`
 export const SearchDropdownFooter = styled(Group, {
   shouldForwardProp: propName => propName !== "isSelected",
 })<{ isSelected?: boolean } & GroupProps>`
-  border-top: 1px solid ${({ theme }) => theme.colors.border[0]};
+  border-top: 1px solid var(--mb-color-border);
 
-  ${({ theme, isSelected }) => isSelected && selectedStyles({ theme })}
+  ${({ isSelected }) => isSelected && selectedStyles}
   &:hover {
-    ${({ theme }) => selectedStyles({ theme })}
+    ${selectedStyles}
   }
 `;

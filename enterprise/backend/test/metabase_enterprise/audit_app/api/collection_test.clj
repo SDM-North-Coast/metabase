@@ -3,12 +3,10 @@
    [clojure.test :refer :all]
    [clojure.walk :as walk]
    [medley.core :as m]
-   [metabase-enterprise.audit-db-test :as audit-db-test]
+   [metabase-enterprise.audit-app.audit-test :as audit-test]
    [metabase.config :as config]
    [metabase.models :refer [Collection]]
    [metabase.models.collection :as collection]
-   [metabase.public-settings.premium-features-test
-    :as premium-features-test]
    [metabase.test :as mt]
    [metabase.test.data.users :as test.users]
    [metabase.util :as u]
@@ -16,8 +14,8 @@
    [toucan2.tools.with-temp :as t2.with-temp]))
 
 (deftest list-collections-instance-analytics-test
-  (premium-features-test/with-premium-features #{:audit-app}
-    (audit-db-test/with-audit-db-restoration
+  (mt/with-premium-features #{:audit-app}
+    (audit-test/with-audit-db-restoration
       (t2.with-temp/with-temp [Collection _ {:name "Zippy"}]
         (testing "Instance Analytics Collection should be the last collection."
           (testing "GET /api/collection"
@@ -30,17 +28,17 @@
                    (->> (mt/user-http-request :crowberto :get 200 "collection/tree")
                         last
                         :type))))))))
-  (premium-features-test/with-premium-features #{}
-    (audit-db-test/with-audit-db-restoration
+  (mt/with-premium-features #{}
+    (audit-test/with-audit-db-restoration
       (t2.with-temp/with-temp [Collection _ {:name "Zippy"}]
         (testing "Instance Analytics Collection should not show up when audit-app isn't enabled."
           (testing "GET /api/collection"
             (is (nil?
-                   (->> (mt/user-http-request :crowberto :get 200 "collection")
-                        last
-                        :type))))
+                 (->> (mt/user-http-request :crowberto :get 200 "collection")
+                      last
+                      :type))))
           (testing "GET /api/collection/test"
-            (is (= nil
+            (is (= collection/trash-collection-type
                    (->> (mt/user-http-request :crowberto :get 200 "collection/tree")
                         last
                         :type)))))))))
@@ -50,7 +48,11 @@
   []
   (if-not config/ee-available?
     #{}
-    (let [colls (mapv #(select-keys % [:id :name :location :type]) (t2/select Collection :archived false))
+    (let [colls (->> (t2/select Collection :archived false)
+                     (sort-by (fn [{coll-type :type coll-name :name coll-id :id}]
+                                [coll-type ((fnil u/lower-case-en "") coll-name) coll-id]))
+                     (mapv #(select-keys % [:id :name :location :type])))
+
           id->coll (m/index-by :id colls)
           collection-tree (collection/collections->tree {} colls)]
       (->> (loop [[tree & coll-tree] collection-tree
@@ -69,8 +71,8 @@
   (testing "GET /api/collection"
     (testing "You should only see your collection and public collections"
       ;; Set audit-app feature so that we can assert that audit collections are also visible when running EE
-      (premium-features-test/with-premium-features #{:audit-app}
-        (audit-db-test/with-audit-db-restoration
+      (mt/with-premium-features #{:audit-app}
+        (audit-test/with-audit-db-restoration
           (let [admin-user-id  (u/the-id (test.users/fetch-user :crowberto))
                 crowberto-root (t2/select-one Collection :personal_owner_id admin-user-id)]
             (t2.with-temp/with-temp [Collection collection          {}

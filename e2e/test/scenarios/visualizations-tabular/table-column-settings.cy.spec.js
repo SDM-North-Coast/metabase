@@ -1,7 +1,13 @@
 import _ from "underscore";
 
-import { openNotebook, popover, restore, visualize } from "e2e/support/helpers";
 import { SAMPLE_DATABASE } from "e2e/support/cypress_sample_database";
+import {
+  openNotebook,
+  popover,
+  restore,
+  tableHeaderClick,
+  visualize,
+} from "e2e/support/helpers";
 
 const { ORDERS_ID, ORDERS, PRODUCTS_ID, PRODUCTS } = SAMPLE_DATABASE;
 
@@ -243,7 +249,7 @@ describe("scenarios > visualizations > table column settings", () => {
     visualization().findByText(columnName).should("not.exist");
 
     cy.findByRole("button", { name: /Add or remove columns/ }).click();
-    cy.findByRole("list", { name: `${table}-table-columns` })
+    cy.findByTestId(`${table}-table-columns`)
       .findByLabelText(column)
       .should("be.checked");
     cy.findByRole("button", { name: /Done picking columns/ }).click();
@@ -279,11 +285,10 @@ describe("scenarios > visualizations > table column settings", () => {
   }) => {
     cy.log("remove the column");
     cy.findByRole("button", { name: /Add or remove columns/ }).click();
-    cy.findByRole("list", { name: `${table}-table-columns` })
+    cy.findByTestId(`${table}-table-columns`)
       .findByLabelText(column)
       .should("be.checked")
       .click();
-    runQuery();
     cy.wait("@dataset");
     cy.findByText("Doing science...").should("not.exist");
     if (needsScroll) {
@@ -310,7 +315,7 @@ describe("scenarios > visualizations > table column settings", () => {
   }) => {
     cy.log("add the column");
     cy.findByRole("button", { name: /Add or remove columns/ }).click();
-    cy.findByRole("list", { name: `${table}-table-columns` })
+    cy.findByTestId(`${table}-table-columns`)
       .findByLabelText(column)
       .should("not.be.checked")
       .click();
@@ -351,9 +356,7 @@ describe("scenarios > visualizations > table column settings", () => {
     it("should be able to rename table columns via popover", () => {
       cy.createQuestion(tableQuestion, { visitQuestion: true });
 
-      cy.findByTestId("TableInteractive-root").within(() => {
-        cy.findByText("Product ID").click();
-      });
+      tableHeaderClick("Product ID");
 
       popover().within(() => {
         cy.icon("gear").click();
@@ -391,17 +394,16 @@ describe("scenarios > visualizations > table column settings", () => {
 
       cy.findByRole("button", { name: /Add or remove columns/ }).click();
 
-      cy.findByRole("list", { name: "products-table-columns" })
+      cy.findByTestId("products-table-columns")
         .findByLabelText("Remove all")
         .click();
 
-      runQuery();
       cy.wait("@dataset");
       cy.findByTestId("query-builder-main")
         .findByText("Doing science...")
         .should("not.exist");
 
-      cy.findByRole("list", { name: "products-table-columns" }).within(() => {
+      cy.findByTestId("products-table-columns").within(() => {
         //Check a few columns as a sanity check
         cy.findByLabelText("Title").should("not.be.checked");
         cy.findByLabelText("Category").should("not.be.checked");
@@ -416,7 +418,7 @@ describe("scenarios > visualizations > table column settings", () => {
         .findByText("Doing science...")
         .should("not.exist");
 
-      cy.findByRole("list", { name: "products-table-columns" }).within(() => {
+      cy.findByTestId("products-table-columns").within(() => {
         //Check a few columns as a sanity check
         cy.findByLabelText("Title").should("be.checked");
         cy.findByLabelText("Category").should("be.checked");
@@ -498,8 +500,6 @@ describe("scenarios > visualizations > table column settings", () => {
 
       _hideColumn(testData);
       _showColumn(testData);
-      _removeColumn(testData);
-      _addColumn(testData);
     });
 
     it("should be able to show and hide custom expressions for a table with selected fields", () => {
@@ -517,8 +517,6 @@ describe("scenarios > visualizations > table column settings", () => {
 
       _hideColumn(testData);
       _showColumn(testData);
-      _removeColumn(testData);
-      _addColumn(testData);
     });
 
     it("should be able to show and hide columns from aggregations", () => {
@@ -602,8 +600,8 @@ describe("scenarios > visualizations > table column settings", () => {
       openSettings();
 
       const testData = {
-        column: "Products → Ean",
-        columnName: "Products → Ean",
+        column: "Products → Category",
+        columnName: "Products → Category",
         table: "test question",
       };
 
@@ -613,8 +611,6 @@ describe("scenarios > visualizations > table column settings", () => {
       _addColumn(testData);
     });
 
-    // TODO: This is currently broken by some subtleties of `:lib/source` in MLv2.
-    // This is still better than it used to be, so skip this test and fix it later. See #32373.
     it("should be able to show and hide fields from a nested query with joins and fields (metabase#32373)", () => {
       cy.createQuestion(tableQuestionWithJoinAndFields).then(
         ({ body: card }) => {
@@ -627,12 +623,14 @@ describe("scenarios > visualizations > table column settings", () => {
         column: "Products → Category",
         columnName: "Products → Category",
         table: "test question",
+        scrollTimes: 3,
       };
 
       const testData2 = {
         column: "Ean",
         columnName: "Product → Ean",
         table: "product",
+        scrollTimes: 3,
       };
 
       _hideColumn(testData);
@@ -640,14 +638,7 @@ describe("scenarios > visualizations > table column settings", () => {
 
       _addColumn(testData2);
 
-      // // TODO: Once #33972 is fixed in the QP, this test will start failing.
-      // // The correct display name is "Products -> Category", but the QP is incorrectly marking this column as coming
-      // // from the implicit join (so it's using PRODUCT_ID -> "Product", not the table name "Products").
-      _addColumn({
-        ...testData,
-        column: "Products → Category",
-        columnName: "Product → Category",
-      });
+      _addColumn(testData);
     });
 
     it("should be able to show and hide implicitly joinable fields for a nested query with joins and fields", () => {
@@ -742,7 +733,7 @@ describe("scenarios > visualizations > table column settings", () => {
         const taxColumn = {
           column: "Tax",
           columnName: `Question ${card.id} → Tax`,
-          table: `test question 2`,
+          table: "test question 2",
           scrollTimes: 3,
         };
 
@@ -764,7 +755,7 @@ describe("scenarios > visualizations > table column settings", () => {
         const mathColumn = {
           column: "Math",
           columnName: `Question ${card.id} → Math`,
-          table: `test question`,
+          table: "test question",
           needsScroll: false,
         };
 
@@ -818,10 +809,6 @@ describe("scenarios > visualizations > table column settings", () => {
   });
 });
 
-const runQuery = () => {
-  cy.findByTestId("query-builder-main").icon("play").click();
-};
-
 const showColumn = column => {
   cy.findByTestId(`${column}-show-button`).click();
 };
@@ -839,7 +826,7 @@ const visualization = () => {
 };
 
 const scrollVisualization = (position = "right") => {
-  cy.get(".TableInteractive-header.scroll-hide-all").scrollTo(position, {
+  cy.get("#main-data-grid").scrollTo(position, {
     force: true,
   });
 };

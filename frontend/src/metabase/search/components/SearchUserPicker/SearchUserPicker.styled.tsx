@@ -1,8 +1,9 @@
-import styled from "@emotion/styled";
 import { css } from "@emotion/react";
+import styled from "@emotion/styled";
 import type { HTMLAttributes } from "react";
+
 import type { ButtonProps } from "metabase/ui";
-import { Stack, Button, Group, TextInput } from "metabase/ui";
+import { Button, Group, Stack, TextInput } from "metabase/ui";
 
 export const SearchUserPickerContainer = styled(Stack)`
   overflow: hidden;
@@ -22,7 +23,7 @@ export const SearchUserPickerContent = styled(Stack)`
 `;
 
 export const SearchUserSelectBox = styled(Stack)`
-  border: ${({ theme }) => theme.colors.border[0]} 1px solid;
+  border: 1px solid var(--mb-color-border);
   border-radius: ${({ theme }) => theme.radius.md};
 `;
 
@@ -30,7 +31,7 @@ export const SelectedUserButton = styled(Button)<
   ButtonProps & HTMLAttributes<HTMLButtonElement>
 >`
   ${({ theme }) => {
-    const primaryColor = theme.colors.brand[1];
+    const primaryColor = theme.fn.themeColor("brand");
     const backgroundColor = theme.fn.lighten(primaryColor, 0.8);
     const hoverBackgroundColor = theme.fn.lighten(primaryColor, 0.6);
 

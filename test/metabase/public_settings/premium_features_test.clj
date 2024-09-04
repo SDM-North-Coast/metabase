@@ -3,8 +3,8 @@
    [cheshire.core :as json]
    [clj-http.client :as http]
    [clj-http.fake :as http-fake]
-   [clojure.set :as set]
    [clojure.test :refer :all]
+   [mb.hawk.parallel]
    [metabase.config :as config]
    [metabase.db.connection :as mdb.connection]
    [metabase.models.user :refer [User]]
@@ -15,38 +15,6 @@
    [metabase.test :as mt]
    [toucan2.core :as t2]
    [toucan2.tools.with-temp :as t2.with-temp]))
-
-(defn do-with-premium-features [features f]
-  (let [features (set (map name features))]
-    (testing (format "\nWith premium token features = %s" (pr-str features))
-      (with-redefs [premium-features/token-features (constantly features)]
-        (f)))))
-
-;; TODO -- move this to a shared `metabase-enterprise.test` namespace. Consider adding logic that will alias stuff in
-;; `metabase-enterprise.test` in `metabase.test` as well *if* EE code is available
-(defmacro with-premium-features
-  "Execute `body` with the allowed premium features for the Premium-Features token set to `features`. Intended for use testing
-  feature-flagging.
-
-    (with-premium-features #{:audit-app}
-      ;; audit app will be enabled for body, but no other premium features
-      ...)"
-  {:style/indent 1}
-  [features & body]
-  `(do-with-premium-features ~features (fn [] ~@body)))
-
-(defmacro with-additional-premium-features
-  "Execute `body` with the allowed premium features for the Premium-Features token set to the union of `features` and
-  the current feature set. Intended for use testing feature-flagging, if you don't want to override other features
-  that are already enabled.
-
-    (with-additional-premium-features #{:audit-app}
-      ;; audit app will be enabled for body, as well as any that are already enabled
-      ...)"
-  {:style/indent 1}
-  [features & body]
-  `(do-with-premium-features (set/union (premium-features/token-features) ~features)
-                             (fn [] ~@body)))
 
 (defn- token-status-response
   [token premium-features-response]
@@ -71,56 +39,60 @@
   (let [alphabet (into [] (concat (range 0 10) (map char (range (int \a) (int \g)))))]
     (apply str (repeatedly 64 #(rand-nth alphabet)))))
 
-(deftest fetch-token-status-test
-  (t2.with-temp/with-temp [User _user {:email "admin@example.com"}]
-    (let [print-token "d7ad...c611"]
-      (testing "Do not log the token (#18249)"
-        (let [logs        (mt/with-log-messages-for-level :info
-                            (#'premium-features/fetch-token-status* random-fake-token))
-              pr-str-logs (mapv pr-str logs)]
-          (is (every? (complement #(re-find (re-pattern random-fake-token) %)) pr-str-logs))
-          (is (= 1 (count (filter #(re-find (re-pattern print-token) %) pr-str-logs))))))
+(deftest ^:parallel fetch-token-status-test
+  (let [print-token "d7ad...c611"]
+    (testing "Do not log the token (#18249)"
+      (mt/with-log-messages-for-level [messages :info]
+        (#'premium-features/fetch-token-status* random-fake-token)
+        (let [logs (mapv :message (messages))]
+          (is (every? (complement #(re-find (re-pattern random-fake-token) %)) logs))
+          (is (= 1 (count (filter #(re-find (re-pattern print-token) %) logs)))))))))
 
-      (testing "With the backend unavailable"
-        (let [result (token-status-response random-fake-token {:status 500})]
-          (is (false? (:valid result)))))
-      (testing "On other errors"
-        (binding [http/request (fn [& _]
-                                 ;; note originally the code caught clojure.lang.ExceptionInfo so don't
-                                 ;; throw an ex-info here
-                                 (throw (Exception. "network issues")))]
-          (is (= {:valid         false
-                  :status        "Unable to validate token"
-                  :error-details "network issues"}
-                 (premium-features/fetch-token-status (apply str (repeat 64 "b")))))))
-      (testing "Only attempt the token twice (default and fallback URLs)"
-        (let [call-count (atom 0)
-              token      (random-token)]
-          (binding [http/request (fn [& _]
-                                   (swap! call-count inc)
-                                   (throw (Exception. "no internet")))]
+(deftest ^:parallel fetch-token-status-test-2
+  (testing "With the backend unavailable"
+    (let [result (token-status-response random-fake-token {:status 500})]
+      (is (false? (:valid result))))))
 
-            (mt/with-temporary-raw-setting-values [:premium-embedding-token token]
-              (testing "Sanity check"
-                (is (= token
-                       (premium-features/premium-embedding-token)))
-                (is (= #{}
-                       (#'premium-features/token-features))))
-              (doseq [has-feature? [#'premium-features/hide-embed-branding?
-                                    #'premium-features/enable-whitelabeling?
-                                    #'premium-features/enable-audit-app?
-                                    #'premium-features/enable-sandboxes?
-                                    #'premium-features/enable-serialization?]]
-                (testing (format "\n%s is false" (:name (meta has-feature?)))
-                  (is (not (has-feature?)))))
-              (is (= 2
-                     @call-count))))))
+(deftest ^:parallel fetch-token-status-test-3
+  (testing "On other errors"
+    (binding [http/request (fn [& _]
+                             ;; note originally the code caught clojure.lang.ExceptionInfo so don't
+                             ;; throw an ex-info here
+                             (throw (Exception. "network issues")))]
+      (is (= {:valid         false
+              :status        "Unable to validate token"
+              :error-details "network issues"}
+             (premium-features/fetch-token-status (apply str (repeat 64 "b"))))))))
 
-      (testing "With a valid token"
-        (let [result (token-status-response random-fake-token {:status 200
-                                                               :body   token-response-fixture})]
-          (is (:valid result))
-          (is (contains? (set (:features result)) "test")))))))
+(deftest fetch-token-status-test-4
+  (testing "Only attempt the token twice (default and fallback URLs)"
+    (let [call-count (atom 0)
+          token      (random-token)]
+      (binding [http/request (fn [& _]
+                               (swap! call-count inc)
+                               (throw (Exception. "no internet")))]
+        (mt/with-temporary-raw-setting-values [:premium-embedding-token token]
+          (testing "Sanity check"
+            (is (= token
+                   (premium-features/premium-embedding-token)))
+            (is (= #{}
+                   (premium-features/*token-features*))))
+          (doseq [has-feature? [#'premium-features/hide-embed-branding?
+                                #'premium-features/enable-whitelabeling?
+                                #'premium-features/enable-audit-app?
+                                #'premium-features/enable-sandboxes?
+                                #'premium-features/enable-serialization?]]
+            (testing (format "\n%s is false" (:name (meta has-feature?)))
+              (is (not (has-feature?)))))
+          (is (= 2
+                 @call-count)))))))
+
+(deftest ^:parallel fetch-token-status-test-5
+  (testing "With a valid token"
+    (let [result (token-status-response random-fake-token {:status 200
+                                                           :body   token-response-fixture})]
+      (is (:valid result))
+      (is (contains? (set (:features result)) "test")))))
 
 (deftest not-found-test
   (mt/with-log-level :fatal
@@ -129,7 +101,6 @@
     ;; for bug reports to come in
     (is (partial= {:valid false, :status "Token does not exist."}
                   (#'premium-features/fetch-token-status* random-fake-token)))))
-
 
 ;;; +----------------------------------------------------------------------------------------------------------------+
 ;;; |                                          Defenterprise Macro Tests                                             |
@@ -155,9 +126,9 @@
 
 (deftest defenterprise-test
   (when-not config/ee-available?
-   (testing "When EE code is not available, a call to a defenterprise function calls the OSS version"
-     (is (= "Hi rasta, you're an OSS customer!"
-            (greeting :rasta)))))
+    (testing "When EE code is not available, a call to a defenterprise function calls the OSS version"
+      (is (= "Hi rasta, you're an OSS customer!"
+             (greeting :rasta)))))
 
   (when config/ee-available?
     (testing "When EE code is available"
@@ -166,20 +137,20 @@
                (greeting :rasta))))
 
       (testing "if a specific premium feature is required, it will check for it, and fall back to the OSS version by default"
-        (with-premium-features #{:special-greeting}
+        (mt/with-premium-features #{:special-greeting}
           (is (= "Hi rasta, you're an extra special EE customer!"
                  (special-greeting :rasta))))
 
-        (with-premium-features #{}
+        (mt/with-premium-features #{}
           (is (= "Hi rasta, you're not extra special :("
                  (special-greeting :rasta)))))
 
       (testing "when :fallback is a function, it is run when the required token is not present"
-        (with-premium-features #{:special-greeting}
+        (mt/with-premium-features #{:special-greeting}
           (is (= "Hi rasta, you're an extra special EE customer!"
                  (special-greeting-or-custom :rasta))))
 
-        (with-premium-features #{}
+        (mt/with-premium-features #{}
           (is (= "Hi rasta, you're an EE customer but not extra special."
                  (special-greeting-or-custom :rasta))))))))
 
@@ -213,12 +184,12 @@
       (is (= "Hi rasta, the argument was valid" (greeting-with-schema :rasta)))
 
       (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                            #"Invalid input: \[\"should be a keyword\"\]"
+                            #"Invalid input: \[\"should be a keyword, got: \\\"rasta\\\".*"
                             (greeting-with-schema "rasta"))))
 
-   (testing "Return schemas are validated for OSS implementations"
+    (testing "Return schemas are validated for OSS implementations"
       (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                            #"Invalid output: \[\"should be a keyword\"\]"
+                            #"Invalid output: \[\"should be a keyword, got: \\\"Hi rasta.*"
                             (greeting-with-invalid-oss-return-schema :rasta)))))
 
   (when config/ee-available?
@@ -227,16 +198,15 @@
              (greeting-with-schema :rasta)))
 
       (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                            #"Invalid input: \[\"should be a keyword\"\]"
+                            #"Invalid input: \[\"should be a keyword, got: \\\"rasta\\\".*"
                             (greeting-with-schema "rasta"))))
-
     (testing "Only EE schema is validated if EE implementation is called"
       (is (= "Hi rasta, the schema was valid, and you're running the Enterprise Edition of Metabase!"
              (greeting-with-invalid-oss-return-schema :rasta)))
 
-      (with-premium-features #{:custom-feature}
+      (mt/with-premium-features #{:custom-feature}
         (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                              #"Invalid output: \[\"should be a keyword\"\]"
+                              #"Invalid output: \[\"should be a keyword, got: \\\"Hi rasta, the schema was valid.*"
                               (greeting-with-invalid-ee-return-schema :rasta)))))
 
     (testing "EE schema is not validated if OSS fallback is called"

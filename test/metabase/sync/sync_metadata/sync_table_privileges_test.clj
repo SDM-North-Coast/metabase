@@ -17,7 +17,8 @@
     (testing "`TablePrivileges` should store the correct data for current_user and role privileges for databases with schemas"
       (mt/with-empty-db
         (let [conn-spec (sql-jdbc.conn/db->pooled-connection-spec (mt/db))]
-          (jdbc/execute! conn-spec (str "CREATE SCHEMA foo; "
+          (jdbc/execute! conn-spec (str "DROP SCHEMA IF EXISTS foo; "
+                                        "CREATE SCHEMA foo; "
                                         "CREATE TABLE foo.baz (id INTEGER);"))
           (sync-tables/sync-tables-and-database! (mt/db))
           (sync-table-privileges/sync-table-privileges! (mt/db))

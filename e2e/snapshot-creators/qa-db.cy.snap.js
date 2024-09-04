@@ -1,10 +1,10 @@
 import {
-  restore,
-  snapshot,
-  addPostgresDatabase,
   addMongoDatabase,
   addMySQLDatabase,
+  addPostgresDatabase,
+  restore,
   setupWritableDB,
+  snapshot,
 } from "e2e/support/helpers";
 
 describe("qa databases snapshots", { tags: "@external" }, () => {
@@ -15,7 +15,7 @@ describe("qa databases snapshots", { tags: "@external" }, () => {
   it("creates snapshots for supported qa databases", () => {
     if (Cypress.env("QA_DB_MONGO") === true) {
       addMongoDatabase();
-      snapshot("mongo-4");
+      snapshot("mongo-5");
       deleteDatabase("mongoID");
 
       restoreAndAuthenticate();

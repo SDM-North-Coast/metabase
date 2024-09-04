@@ -1,12 +1,14 @@
 import userEvent from "@testing-library/user-event";
+
 import { getIcon, queryIcon, screen } from "__support__/ui";
 import type { CollectionType } from "metabase-types/api";
+
 import { setup } from "./setup";
 
 describe("Instance Analytics Collection Header", () => {
   const defaultOptions = {
     collection: {
-      name: "Instance Analytics",
+      name: "Metabase Analytics",
       type: "instance-analytics" as CollectionType,
       can_write: false,
     },
@@ -72,18 +74,20 @@ describe("instance analytics custom reports collection", () => {
     isAdmin: true,
   };
 
-  it("should not show move button", () => {
+  it("should not show move button", async () => {
     setup(defaultOptions);
-    userEvent.click(getIcon("ellipsis"));
+    await userEvent.click(getIcon("ellipsis"));
+    await screen.findByRole("dialog");
 
     expect(getIcon("lock")).toBeInTheDocument();
     expect(queryIcon("move")).not.toBeInTheDocument();
     expect(screen.queryByText("Move")).not.toBeInTheDocument();
   });
 
-  it("should not show archive button", () => {
+  it("should not show archive button", async () => {
     setup(defaultOptions);
-    userEvent.click(getIcon("ellipsis"));
+    await userEvent.click(getIcon("ellipsis"));
+    await screen.findByRole("dialog");
 
     expect(getIcon("lock")).toBeInTheDocument();
     expect(queryIcon("archive")).not.toBeInTheDocument();
@@ -105,7 +109,7 @@ describe("Official Collections Header", () => {
 
   it("should allow admin users to designate official collections", async () => {
     setup(officialCollectionOptions);
-    userEvent.click(getIcon("ellipsis"));
+    await userEvent.click(getIcon("ellipsis"));
     expect(
       await screen.findByText("Make collection official"),
     ).toBeInTheDocument();
@@ -117,7 +121,7 @@ describe("Official Collections Header", () => {
       ...officialCollectionOptions,
       isAdmin: false,
     });
-    userEvent.click(getIcon("ellipsis"));
+    await userEvent.click(getIcon("ellipsis"));
     expect(
       screen.queryByText("Make collection official"),
     ).not.toBeInTheDocument();
@@ -132,7 +136,7 @@ describe("Official Collections Header", () => {
         can_write: false,
       },
     });
-    userEvent.click(getIcon("ellipsis"));
+    await userEvent.click(getIcon("ellipsis"));
     expect(
       screen.queryByText("Make collection official"),
     ).not.toBeInTheDocument();

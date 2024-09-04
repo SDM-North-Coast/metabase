@@ -1,10 +1,9 @@
-import { hasPremiumFeature } from "metabase-enterprise/settings";
+import { DATA_PERMISSIONS_TOOLBAR_CONTENT } from "metabase/admin/permissions/pages/DataPermissionsPage/DataPermissionsPage";
 import {
   PLUGIN_ADMIN_ALLOWED_PATH_GETTERS,
   PLUGIN_FEATURE_LEVEL_PERMISSIONS,
 } from "metabase/plugins";
-
-import { DATA_PERMISSIONS_TOOLBAR_CONTENT } from "metabase/admin/permissions/pages/DataPermissionsPage/DataPermissionsPage";
+import { hasPremiumFeature } from "metabase-enterprise/settings";
 
 import { getFeatureLevelDataPermissions } from "./permission-management";
 import {
@@ -12,8 +11,8 @@ import {
   getDownloadWidgetMessageOverride,
 } from "./query-downloads";
 import {
-  databaseManagementPermissionAllowedPathGetter,
   dataModelPermissionAllowedPathGetter,
+  databaseManagementPermissionAllowedPathGetter,
   getDataColumns,
 } from "./utils";
 

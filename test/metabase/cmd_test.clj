@@ -32,8 +32,8 @@
        (is (= '(metabase-enterprise.serialization.cmd/v2-load! "/path/" {})
               (cmd/import "/path/"))))
      (testing "with options"
-       (is (= '(metabase-enterprise.serialization.cmd/v2-load! "/path/" {:abort-on-error true})
-              (cmd/import "/path/" "--abort-on-error")))))))
+       (is (= '(metabase-enterprise.serialization.cmd/v2-load! "/path/" {:continue-on-error true})
+              (cmd/import "/path/" "--continue-on-error")))))))
 
 (deftest dump-command-test
   (do-with-captured-call-enterprise-calls!
@@ -56,8 +56,8 @@
        ["--collection" "123"]
        {:collection-ids [123]}
 
-       ["-c" "123, 456"]
-       {:collection-ids [123 456]}
+       ["-c" "123, 456, eid:qj0jT7SXwEUezz1wSjTAZ, nicht"]
+       {:collection-ids [123 456 "eid:qj0jT7SXwEUezz1wSjTAZ" nil]}
 
        ["-c" "123,456,789"]
        {:collection-ids [123 456 789]}
@@ -72,4 +72,10 @@
        {:no-settings true}
 
        ["--no-data-model"]
-       {:no-data-model true}))))
+       {:no-data-model true}
+
+       ["--continue-on-error"]
+       {:continue-on-error true}
+
+       ["-e"]
+       {:continue-on-error true}))))

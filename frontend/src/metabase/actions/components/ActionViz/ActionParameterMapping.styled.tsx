@@ -1,7 +1,7 @@
 import styled from "@emotion/styled";
 
-import { space } from "metabase/styled-components/theme";
 import { color } from "metabase/lib/colors";
+import { space } from "metabase/styled-components/theme";
 
 export const ParameterFormSection = styled.div`
   margin-top: ${space(2)};
@@ -22,8 +22,8 @@ export const ParameterFormLabel = styled.label<ParameterFormLabelProps>`
 `;
 
 export const ParameterFormBadge = styled.span`
-  color: ${color("text-dark")};
-  background-color: ${color("bg-medium")};
+  color: var(--mb-color-text-dark);
+  background-color: var(--mb-color-bg-medium);
   padding: ${space(0)} ${space(1)};
   border-radius: ${space(0)};
 `;

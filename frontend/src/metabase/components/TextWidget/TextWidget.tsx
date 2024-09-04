@@ -1,6 +1,7 @@
 import { Component } from "react";
 import ReactDOM from "react-dom";
 import { t } from "ttag";
+
 import { forceRedraw } from "metabase/lib/dom";
 
 type Props = {
@@ -34,8 +35,6 @@ export class TextWidget extends Component<Props, State> {
       isFocused: false,
     };
   }
-
-  static noPopover = true;
 
   UNSAFE_componentWillMount() {
     this.UNSAFE_componentWillReceiveProps(this.props);

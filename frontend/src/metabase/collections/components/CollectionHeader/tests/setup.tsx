@@ -1,12 +1,13 @@
-import { renderWithProviders } from "__support__/ui";
 import { setupEnterprisePlugins } from "__support__/enterprise";
+import { mockSettings } from "__support__/settings";
+import { renderWithProviders } from "__support__/ui";
+import type { Collection, TokenFeatures } from "metabase-types/api";
 import {
   createMockCollection,
   createMockTokenFeatures,
 } from "metabase-types/api/mocks";
-import { mockSettings } from "__support__/settings";
 import { createMockState } from "metabase-types/store/mocks";
-import type { Collection, TokenFeatures } from "metabase-types/api";
+
 import type { CollectionHeaderProps } from "../CollectionHeader";
 import CollectionHeader from "../CollectionHeader";
 
@@ -21,17 +22,8 @@ const getProps = (
   isPersonalCollectionChild: false,
   onUpdateCollection: jest.fn(),
   onCreateBookmark: jest.fn(),
-  onUpload: jest.fn(),
+  saveFile: jest.fn(),
   onDeleteBookmark: jest.fn(),
-  location: {
-    pathname: `/collection/1`,
-    search: "",
-    query: {},
-    hash: "",
-    state: {},
-    action: "PUSH",
-    key: "1",
-  },
   ...opts,
 });
 

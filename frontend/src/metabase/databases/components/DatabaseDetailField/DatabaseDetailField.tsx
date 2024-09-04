@@ -1,15 +1,15 @@
-import type { EngineField } from "metabase-types/api";
-import FormNumericInput from "metabase/core/components/FormNumericInput";
 import FormFileInput from "metabase/core/components/FormFileInput";
 import FormInput from "metabase/core/components/FormInput";
+import FormNumericInput from "metabase/core/components/FormNumericInput";
 import FormSelect from "metabase/core/components/FormSelect";
 import FormTextArea from "metabase/core/components/FormTextArea";
 import FormToggle from "metabase/core/components/FormToggle";
-import type { IconName } from "metabase/core/components/Icon";
-import DatabaseInfoField from "../DatabaseInfoField";
-import DatabaseSectionField from "../DatabaseSectionField";
+import type { EngineField } from "metabase-types/api";
+
 import { FIELD_OVERRIDES } from "../../constants";
 import type { EngineFieldOverride } from "../../types";
+import DatabaseInfoField from "../DatabaseInfoField";
+import DatabaseSectionField from "../DatabaseSectionField";
 
 export interface DatabaseDetailFieldProps {
   field: EngineField;
@@ -73,8 +73,7 @@ const getFieldProps = (field: EngineField, override?: EngineFieldOverride) => {
 
 const getInputProps = (field: EngineField) => {
   return {
-    infoTooltip: field["helper-text"],
-    rightIcon: (field["helper-text"] as unknown as IconName) ?? "info",
+    rightIcon: field["helper-text"] ? ("info" as const) : undefined,
     rightIconTooltip: field["helper-text"],
   };
 };

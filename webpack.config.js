@@ -1,18 +1,16 @@
+// @ts-check
 /* eslint-env node */
 /* eslint-disable import/no-commonjs */
-/* eslint-disable import/order */
-const NodePolyfillPlugin = require("node-polyfill-webpack-plugin");
-
-const webpack = require("webpack");
-
-const MiniCssExtractPlugin = require("mini-css-extract-plugin");
-const HtmlWebpackPlugin = require("html-webpack-plugin");
-const HtmlWebpackHarddiskPlugin = require("html-webpack-harddisk-plugin");
-const TerserPlugin = require("terser-webpack-plugin");
-const WebpackNotifierPlugin = require("webpack-notifier");
-const ReactRefreshPlugin = require("@pmmmwh/react-refresh-webpack-plugin");
-
 const fs = require("fs");
+
+const ReactRefreshPlugin = require("@pmmmwh/react-refresh-webpack-plugin");
+const HtmlWebpackPlugin = require("html-webpack-plugin");
+const MiniCssExtractPlugin = require("mini-css-extract-plugin");
+const NodePolyfillPlugin = require("node-polyfill-webpack-plugin");
+const path = require("path");
+const TerserPlugin = require("terser-webpack-plugin");
+const webpack = require("webpack");
+const WebpackNotifierPlugin = require("webpack-notifier");
 
 const ASSETS_PATH = __dirname + "/resources/frontend_client/app/assets";
 const FONTS_PATH = __dirname + "/resources/frontend_client/app/fonts";
@@ -20,6 +18,7 @@ const SRC_PATH = __dirname + "/frontend/src/metabase";
 const LIB_SRC_PATH = __dirname + "/frontend/src/metabase-lib";
 const ENTERPRISE_SRC_PATH =
   __dirname + "/enterprise/frontend/src/metabase-enterprise";
+const SDK_SRC_PATH = __dirname + "/enterprise/frontend/src/embedding-sdk";
 const TYPES_SRC_PATH = __dirname + "/frontend/src/metabase-types";
 const CLJS_SRC_PATH = __dirname + "/target/cljs_release";
 const CLJS_SRC_PATH_DEV = __dirname + "/target/cljs_dev";
@@ -31,23 +30,76 @@ const E2E_PATH = __dirname + "/e2e";
 const WEBPACK_BUNDLE = process.env.WEBPACK_BUNDLE || "development";
 const devMode = WEBPACK_BUNDLE !== "production";
 const useFilesystemCache = process.env.FS_CACHE === "true";
-const shouldUseEslint =
-  process.env.WEBPACK_BUNDLE !== "production" &&
-  process.env.USE_ESLINT === "true";
+const edition = process.env.MB_EDITION || "oss";
+const shouldEnableHotRefresh = WEBPACK_BUNDLE === "hot";
 
 // Babel:
 const BABEL_CONFIG = {
   cacheDirectory: process.env.BABEL_DISABLE_CACHE ? false : ".babel_cache",
+  plugins: ["@emotion"],
+};
+
+const BABEL_LOADER = { loader: "babel-loader", options: BABEL_CONFIG };
+
+const SWC_LOADER = {
+  loader: "swc-loader",
+  options: {
+    jsc: {
+      loose: true,
+      transform: {
+        react: {
+          runtime: "automatic",
+          refresh: shouldEnableHotRefresh,
+        },
+      },
+      parser: {
+        syntax: "typescript",
+        tsx: true,
+      },
+      experimental: {
+        plugins: [["@swc/plugin-emotion", { sourceMap: devMode }]],
+      },
+    },
+
+    sourceMaps: true,
+    minify: false, // produces same bundle size, but cuts 1s locally
+    env: {
+      targets: ["defaults"],
+    },
+  },
 };
 
 const CSS_CONFIG = {
-  localIdentName: devMode
-    ? "[name]__[local]___[hash:base64:5]"
-    : "[hash:base64:5]",
+  modules: {
+    auto: filename =>
+      !filename.includes("node_modules") && !filename.includes("vendor.css"),
+    localIdentName: devMode
+      ? "[name]__[local]___[hash:base64:5]"
+      : "[hash:base64:5]",
+  },
   importLoaders: 1,
 };
 
-const config = (module.exports = {
+class OnScriptError {
+  apply(compiler) {
+    compiler.hooks.compilation.tap("OnScriptError", compilation => {
+      HtmlWebpackPlugin.getHooks(compilation).alterAssetTags.tapAsync(
+        "OnScriptError",
+        (data, cb) => {
+          // Manipulate the content
+          data.assetTags.scripts.forEach(script => {
+            script.attributes.onerror = `Metabase.AssetErrorLoad(this)`;
+          });
+          // Tell webpack to move on
+          cb(null, data);
+        },
+      );
+    });
+  }
+}
+
+/** @type {import('webpack').Configuration} */
+const config = {
   mode: devMode ? "development" : "production",
   context: SRC_PATH,
 
@@ -57,8 +109,12 @@ const config = (module.exports = {
     "app-main": "./app-main.js",
     "app-public": "./app-public.js",
     "app-embed": "./app-embed.js",
-    styles: "./css/index.css",
+    "vendor-styles": "./css/vendor.css",
+    styles: "./css/index.module.css",
   },
+
+  // we override it for dev mode below
+  devtool: "source-map",
 
   externals: {
     canvg: "canvg",
@@ -68,36 +124,28 @@ const config = (module.exports = {
   // output to "dist"
   output: {
     path: BUILD_PATH + "/app/dist",
+    // for production, dev mode is overridden below
     filename: "[name].[contenthash].js",
     publicPath: "app/dist/",
     hashFunction: "sha256",
+    clean: !devMode,
   },
 
   module: {
     rules: [
       {
-        test: /\.(tsx?|jsx?)$/,
+        // swc breaks styles for the whole app if we process this file
+        test: /css\/core\/fonts\.styled\.ts$/,
         exclude: /node_modules|cljs/,
-        use: [{ loader: "babel-loader", options: BABEL_CONFIG }],
+        use: [BABEL_LOADER],
       },
-      ...(shouldUseEslint
-        ? [
-            {
-              test: /\.(tsx?|jsx?)$/,
-              exclude: /node_modules|cljs|\.spec\.js/,
-              use: [
-                {
-                  loader: "eslint-loader",
-                  options: {
-                    rulePaths: [__dirname + "/frontend/lint/eslint-rules"],
-                  },
-                },
-              ],
-            },
-          ]
-        : []),
       {
-        test: /\.(eot|woff2?|ttf|svg|png)$/,
+        test: /\.(tsx?|jsx?)$/,
+        exclude: /node_modules|cljs|css\/core\/fonts\.styled\.ts/,
+        use: [SWC_LOADER],
+      },
+      {
+        test: /\.(svg|png)$/,
         type: "asset/resource",
         resourceQuery: { not: [/component|source/] },
       },
@@ -177,11 +225,17 @@ const config = (module.exports = {
         process.env.MB_EDITION === "ee"
           ? ENTERPRISE_SRC_PATH + "/overrides"
           : SRC_PATH + "/lib/noop",
+      "embedding-sdk": SDK_SRC_PATH,
     },
   },
   cache: useFilesystemCache
     ? {
         type: "filesystem",
+        cacheDirectory: path.resolve(
+          __dirname,
+          "node_modules/.cache/",
+          edition === "oss" ? "webpack-oss" : "webpack-ee",
+        ),
         buildDependencies: {
           // invalidates the cache on configuration change
           config: [__filename],
@@ -193,9 +247,24 @@ const config = (module.exports = {
     splitChunks: {
       cacheGroups: {
         vendors: {
-          test: /[\\/]node_modules[\\/]/,
+          test: /[\\/]node_modules[\\/](?!(sql-formatter|jspdf|html2canvas-pro)[\\/])/,
           chunks: "all",
           name: "vendor",
+        },
+        sqlFormatter: {
+          test: /[\\/]node_modules[\\/]sql-formatter[\\/]/,
+          chunks: "all",
+          name: "sql-formatter",
+        },
+        jspdf: {
+          test: /[\\/]node_modules[\\/]jspdf[\\/]/,
+          chunks: "all",
+          name: "jspdf",
+        },
+        html2canvas: {
+          test: /[\\/]node_modules[\\/]html2canvas-pro[\\/]/,
+          chunks: "all",
+          name: "html2canvas",
         },
       },
     },
@@ -214,27 +283,24 @@ const config = (module.exports = {
       filename: devMode ? "[name].css" : "[name].[contenthash].css",
       chunkFilename: devMode ? "[id].css" : "[id].[contenthash].css",
     }),
+    new OnScriptError(),
     new HtmlWebpackPlugin({
       filename: "../../index.html",
       chunksSortMode: "manual",
-      chunks: ["vendor", "styles", "app-main"],
+      chunks: ["vendor", "vendor-styles", "styles", "app-main"],
       template: __dirname + "/resources/frontend_client/index_template.html",
-      alwaysWriteToDisk: true,
     }),
     new HtmlWebpackPlugin({
       filename: "../../public.html",
       chunksSortMode: "manual",
-      chunks: ["vendor", "styles", "app-public"],
+      chunks: ["vendor", "vendor-styles", "styles", "app-public"],
       template: __dirname + "/resources/frontend_client/index_template.html",
     }),
     new HtmlWebpackPlugin({
       filename: "../../embed.html",
       chunksSortMode: "manual",
-      chunks: ["vendor", "styles", "app-embed"],
+      chunks: ["vendor", "vendor-styles", "styles", "app-embed"],
       template: __dirname + "/resources/frontend_client/index_template.html",
-    }),
-    new HtmlWebpackHarddiskPlugin({
-      outputPath: __dirname + "/resources/frontend_client/app/dist",
     }),
     new webpack.BannerPlugin({
       banner:
@@ -243,34 +309,31 @@ const config = (module.exports = {
     new NodePolyfillPlugin(), // for crypto, among others
     new webpack.EnvironmentPlugin({
       WEBPACK_BUNDLE: "development",
+      MB_LOG_ANALYTICS: "false",
     }),
     // https://github.com/remarkjs/remark/discussions/903
     new webpack.ProvidePlugin({ process: "process/browser.js" }),
+    // https://github.com/metabase/metabase/issues/35374
+    new webpack.NormalModuleReplacementPlugin(
+      /.\/use-popover.js/,
+      `${SRC_PATH}/ui/components/overlays/Popover/use-popover`,
+    ),
   ],
-});
+};
 
-if (WEBPACK_BUNDLE === "hot") {
+if (shouldEnableHotRefresh) {
   config.target = "web";
+
+  if (!config.output || !config.plugins) {
+    throw new Error("webpack config is missing configuration");
+  }
+
   // suffixing with ".hot" allows us to run both `yarn run build-hot` and `yarn run test` or `yarn run test-watch` simultaneously
-  config.output.filename = "[name].hot.bundle.js?[contenthash]";
+  config.output.filename = "[name].hot.bundle.js";
 
   // point the publicPath (inlined in index.html by HtmlWebpackPlugin) to the hot-reloading server
   config.output.publicPath =
     "http://localhost:8080/" + config.output.publicPath;
-
-  config.module.rules.unshift({
-    test: /\.(tsx?|jsx?)$/,
-    exclude: /node_modules|cljs/,
-    use: [
-      {
-        loader: "babel-loader",
-        options: {
-          ...BABEL_CONFIG,
-          plugins: ["@emotion", "react-refresh/babel"],
-        },
-      },
-    ],
-  });
 
   config.devServer = {
     hot: true,
@@ -282,46 +345,35 @@ if (WEBPACK_BUNDLE === "hot") {
       "Access-Control-Allow-Origin": "*",
     },
     // tweak stats to make the output in the console more legible
-    // TODO - once we update webpack to v4+ we can just use `errors-warnings` preset
     devMiddleware: {
-      stats: {
-        assets: false,
-        cached: false,
-        cachedAssets: false,
-        chunks: false,
-        chunkModules: false,
-        chunkOrigins: false,
-        modules: false,
-        color: true,
-        hash: false,
-        warnings: true,
-        errorDetails: false,
-      },
+      stats: "errors-warnings",
+      writeToDisk: true,
+      // if webpack doesn't reload UI after code change in development
+      // watchOptions: {
+      //     aggregateTimeout: 300,
+      //     poll: 1000
+      // }
+      // if you want to reduce stats noise
+      // stats: 'minimal' // values: none, errors-only, minimal, normal, verbose
     },
-    // if webpack doesn't reload UI after code change in development
-    // watchOptions: {
-    //     aggregateTimeout: 300,
-    //     poll: 1000
-    // }
-    // if you want to reduce stats noise
-    // stats: 'minimal' // values: none, errors-only, minimal, normal, verbose
   };
 
   config.watchOptions = {
-    ignored: [
-      CLJS_SRC_PATH_DEV + "/**",
-    ],
+    ignored: ["**/node_modules", CLJS_SRC_PATH_DEV + "/**"],
   };
 
   config.plugins.unshift(
-    new webpack.NoEmitOnErrorsPlugin(),
     new ReactRefreshPlugin({
       overlay: false,
     }),
   );
 }
 
-if (WEBPACK_BUNDLE !== "production") {
+if (devMode) {
+  if (!config.output || !config.resolve || !config.plugins) {
+    throw new Error("webpack config is missing configuration");
+  }
+
   // replace minified files with un-minified versions
   for (const name in config.resolve.alias) {
     const minified = config.resolve.alias[name];
@@ -339,7 +391,6 @@ if (WEBPACK_BUNDLE !== "production") {
 
   // helps with source maps
   config.output.devtoolModuleFilenameTemplate = "[absolute-resource-path]";
-  config.output.pathinfo = true;
 
   config.plugins.push(
     new WebpackNotifierPlugin({
@@ -347,6 +398,6 @@ if (WEBPACK_BUNDLE !== "production") {
       skipFirstNotification: true,
     }),
   );
-} else {
-  config.devtool = "source-map";
 }
+
+module.exports = config;

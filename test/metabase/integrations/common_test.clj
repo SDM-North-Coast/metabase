@@ -1,7 +1,7 @@
 (ns metabase.integrations.common-test
   (:require
    [clojure.test :refer :all]
-   #_{:clj-kondo/ignore [:discouraged-namespace]}
+   ^{:clj-kondo/ignore [:discouraged-namespace]}
    [clojure.tools.logging]
    [metabase.integrations.common :as integrations.common]
    [metabase.models.permissions-group
@@ -83,7 +83,7 @@
              (group-memberships user)))))
 
   (testing "if we attempt to add a user to a group that doesn't exist, does the group sync complete for the other groups?"
-    (mt/with-ensure-with-temp-no-transaction!
+    (mt/test-helpers-set-global-values!
       (with-user-in-groups [group {:name (str ::group)}
                             user    []]
         (integrations.common/sync-group-memberships! user #{Integer/MAX_VALUE group} #{Integer/MAX_VALUE group})

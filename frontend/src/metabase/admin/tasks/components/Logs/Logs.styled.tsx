@@ -1,5 +1,7 @@
-import styled from "@emotion/styled";
 import { css } from "@emotion/react";
+import styled from "@emotion/styled";
+
+import LoadingAndErrorWrapper from "metabase/components/LoadingAndErrorWrapper";
 import { color } from "metabase/lib/colors";
 
 const LOG_PREFIX = ".react-ansi-style";
@@ -16,15 +18,23 @@ const LOG_COLORS = {
   cyan: "cyan",
 };
 
-export const LogsContainer = styled.div`
-  border: 1px solid ${color("border")};
+export const LogsContainer = styled(LoadingAndErrorWrapper)`
+  height: 100%;
+  padding-left: 1rem;
+  display: flex;
+  flex-direction: column;
+`;
+
+export const LogsContent = styled.div`
+  border: 1px solid var(--mb-color-border);
   border-radius: 0.5rem;
-  background-color: ${color("bg-light")};
+  background-color: var(--mb-color-bg-light);
   font-family: "Lucida Console", Monaco, monospace;
   font-size: 14px;
   white-space: pre;
   padding: 1em;
-  overflow-x: scroll;
+  overflow: auto;
+  height: 100%;
 
   ${LOG_PREFIX}-bold {
     font-weight: bold;
@@ -43,8 +53,8 @@ export const LogsContainer = styled.div`
   }
 
   ${LOG_PREFIX}-inverse {
-    color: ${color("black")};
-    background-color: ${color("white")};
+    color: var(--mb-color-text-dark);
+    background-color: var(--mb-color-bg-white);
   }
 
   ${LOG_PREFIX}-hidden {

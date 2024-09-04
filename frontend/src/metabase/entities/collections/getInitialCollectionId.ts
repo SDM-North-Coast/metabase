@@ -1,12 +1,12 @@
 import { createSelector } from "@reduxjs/toolkit";
 import type { Location } from "history";
 
+import {
+  canonicalCollectionId,
+  isRootTrashCollection,
+} from "metabase/collections/utils";
 import * as Urls from "metabase/lib/urls/collections";
-
 import { getUserPersonalCollectionId } from "metabase/selectors/user";
-
-import { canonicalCollectionId } from "metabase/collections/utils";
-
 import type { Collection, CollectionId } from "metabase-types/api";
 import type { State } from "metabase-types/store";
 
@@ -51,20 +51,19 @@ const getInitialCollectionId = createSelector(
     byCollectionIdProp,
     byCollectionIdNavParam,
     byCollectionUrlId,
-    byCollectionQueryParameter,
+    byCollectionQueryParameter, // used by new model flow
   ],
   (collections, personalCollectionId, ...collectionIds) => {
     const rootCollectionId = ROOT_COLLECTION.id as CollectionId;
-    const allCollectionIds = [
-      ...(collectionIds as CollectionId[]),
-      rootCollectionId,
-    ];
+    const validCollectionIds = collectionIds
+      .filter(id => !isRootTrashCollection(collections[id as CollectionId]))
+      .concat(rootCollectionId) as CollectionId[];
 
     if (personalCollectionId) {
-      allCollectionIds.push(personalCollectionId);
+      validCollectionIds.push(personalCollectionId);
     }
 
-    for (const collectionId of allCollectionIds) {
+    for (const collectionId of validCollectionIds) {
       const collection = collections[collectionId];
       if (collection?.can_write) {
         return canonicalCollectionId(collectionId);

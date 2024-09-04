@@ -1,14 +1,13 @@
-import {
-  restore,
-  popover,
-  openTable,
-  visitQuestionAdhoc,
-  getBinningButtonForDimension,
-  summarize,
-} from "e2e/support/helpers";
-
 import { SAMPLE_DB_ID } from "e2e/support/cypress_data";
 import { SAMPLE_DATABASE } from "e2e/support/cypress_sample_database";
+import {
+  getBinningButtonForDimension,
+  openTable,
+  popover,
+  restore,
+  summarize,
+  visitQuestionAdhoc,
+} from "e2e/support/helpers";
 
 const { ORDERS_ID, ORDERS, PEOPLE_ID, PEOPLE, PRODUCTS_ID, PRODUCTS } =
   SAMPLE_DATABASE;
@@ -326,7 +325,7 @@ function getAllOptions({ options, isSelected, shouldExpandList } = {}) {
     .last()
     .within(() => {
       if (shouldExpandList) {
-        cy.button("More…").click();
+        cy.findByText("More…").click();
       }
 
       regularOptions.forEach(option => {

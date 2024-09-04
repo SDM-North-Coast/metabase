@@ -4,6 +4,7 @@
    [clojure.set :refer [difference]]
    [compojure.core :refer [GET POST PUT]]
    [hiccup.core :refer [html]]
+   [hiccup.page :refer [html5]]
    [metabase.api.alert :as api.alert]
    [metabase.api.common :as api]
    [metabase.api.common.validation :as validation]
@@ -23,6 +24,7 @@
    [metabase.plugins.classloader :as classloader]
    [metabase.public-settings.premium-features :as premium-features]
    [metabase.pulse]
+   [metabase.pulse.preview :as preview]
    [metabase.pulse.render :as render]
    [metabase.query-processor :as qp]
    [metabase.query-processor.middleware.permissions :as qp.perms]
@@ -81,11 +83,11 @@
   This may include subscriptions which the current user does not have collection permissions for, in which case
   some sensitive metadata (the list of cards and recipients) is stripped out."
   [archived dashboard_id creator_or_recipient]
-  {archived             [:maybe ms/BooleanString]
+  {archived             [:maybe ms/BooleanValue]
    dashboard_id         [:maybe ms/PositiveInt]
-   creator_or_recipient [:maybe ms/BooleanString]}
-  (let [creator-or-recipient (Boolean/parseBoolean creator_or_recipient)
-        archived?            (Boolean/parseBoolean archived)
+   creator_or_recipient [:maybe ms/BooleanValue]}
+  (let [creator-or-recipient creator_or_recipient
+        archived?            archived
         pulses               (->> (pulse/retrieve-pulses {:archived?    archived?
                                                           :dashboard-id dashboard_id
                                                           :user-id      (when creator-or-recipient api/*current-user-id*)})
@@ -133,14 +135,14 @@
                     :dashboard_id        dashboard_id
                     :parameters          parameters}]
     (t2/with-transaction [_conn]
-     ;; Adding a new pulse at `collection_position` could cause other pulses in this collection to change position,
-     ;; check that and fix it if needed
-     (api/maybe-reconcile-collection-position! pulse-data)
-     ;; ok, now create the Pulse
-     (let [pulse (api/check-500
-                  (pulse/create-pulse! (map pulse/card->ref cards) channels pulse-data))]
-       (events/publish-event! :event/pulse-create {:object pulse :user-id api/*current-user-id*})
-       pulse))))
+      ;; Adding a new pulse at `collection_position` could cause other pulses in this collection to change position,
+      ;; check that and fix it if needed
+      (api/maybe-reconcile-collection-position! pulse-data)
+      ;; ok, now create the Pulse
+      (let [pulse (api/check-500
+                   (pulse/create-pulse! (map pulse/card->ref cards) channels pulse-data))]
+        (events/publish-event! :event/pulse-create {:object pulse :user-id api/*current-user-id*})
+        pulse))))
 
 (api/defendpoint GET "/:id"
   "Fetch `Pulse` with ID. If the user is a recipient of the Pulse but does not have read permissions for its collection,
@@ -148,11 +150,11 @@
   [id]
   {id ms/PositiveInt}
   (api/let-404 [pulse (pulse/retrieve-pulse id)]
-   (api/check-403 (mi/can-read? pulse))
-   (-> pulse
-       maybe-filter-pulse-recipients
-       maybe-strip-sensitive-metadata
-       (t2/hydrate :can_write))))
+    (api/check-403 (mi/can-read? pulse))
+    (-> pulse
+        maybe-filter-pulse-recipients
+        maybe-strip-sensitive-metadata
+        (t2/hydrate :can_write))))
 
 (defn- maybe-add-recipients
   "Sandboxed users and users using connection impersonation can't read the full recipient list for a pulse, so we need
@@ -184,9 +186,9 @@
    parameters    [:maybe [:sequential ms/Map]]}
   ;; do various perms checks
   (try
-   (validation/check-has-application-permission :monitoring)
-   (catch clojure.lang.ExceptionInfo _e
-     (validation/check-has-application-permission :subscription false)))
+    (validation/check-has-application-permission :monitoring)
+    (catch clojure.lang.ExceptionInfo _e
+      (validation/check-has-application-permission :subscription false)))
 
   (let [pulse-before-update (api/write-check (pulse/retrieve-pulse id))]
     (check-card-read-permissions cards)
@@ -212,12 +214,12 @@
       (t2/with-transaction [_conn]
        ;; If the collection or position changed with this update, we might need to fixup the old and/or new collection,
        ;; depending on what changed.
-       (api/maybe-reconcile-collection-position! pulse-before-update pulse-updates)
+        (api/maybe-reconcile-collection-position! pulse-before-update pulse-updates)
        ;; ok, now update the Pulse
-       (pulse/update-pulse!
-        (assoc (select-keys pulse-updates [:name :cards :channels :skip_if_empty :collection_id :collection_position
-                                           :archived :parameters])
-               :id id)))))
+        (pulse/update-pulse!
+         (assoc (select-keys pulse-updates [:name :cards :channels :skip_if_empty :collection_id :collection_position
+                                            :archived :parameters])
+                :id id)))))
   ;; return updated Pulse
   (pulse/retrieve-pulse id))
 
@@ -227,7 +229,8 @@
   (validation/check-has-application-permission :subscription false)
   (let [chan-types (-> channel-types
                        (assoc-in [:slack :configured] (slack/slack-configured?))
-                       (assoc-in [:email :configured] (email/email-configured?)))]
+                       (assoc-in [:email :configured] (email/email-configured?))
+                       (assoc-in [:http :configured] (t2/exists? :model/Channel :type :channel/http :active true)))]
     {:channels (cond
                  (premium-features/sandboxed-or-impersonated-user?)
                  (dissoc chan-types :slack)
@@ -252,14 +255,14 @@
   {:arglists '([card])}
   [{query :dataset_query, card-id :id}]
   (binding [qp.perms/*card-id* card-id]
-    (qp/process-query-and-save-execution!
-     (assoc query
-            :async? false
-            :middleware {:process-viz-settings? true
-                         :js-int-to-string?     false})
-     {:executed-by api/*current-user-id*
-      :context     :pulse
-      :card-id     card-id})))
+    (qp/process-query
+     (qp/userland-query
+      (assoc query
+             :middleware {:process-viz-settings? true
+                          :js-int-to-string?     false})
+      {:executed-by api/*current-user-id*
+       :context     :pulse
+       :card-id     card-id}))))
 
 (api/defendpoint GET "/preview_card/:id"
   "Get HTML rendering of a Card with `id`."
@@ -268,12 +271,33 @@
   (let [card   (api/read-check Card id)
         result (pulse-card-query-results card)]
     {:status 200
-     :body   (html
+     :body   (html5
               [:html
                [:body {:style "margin: 0;"}
                 (binding [render/*include-title*   true
                           render/*include-buttons* true]
                   (render/render-pulse-card-for-display (metabase.pulse/defaulted-timezone card) card result))]])}))
+
+(api/defendpoint GET "/preview_dashboard/:id"
+  "Get HTML rendering of a Dashboard with `id`.
+
+  This endpoint relies on a custom middleware defined in `metabase.pulse.preview/style-tag-nonce-middleware` to
+  allow the style tag to render properly, given our Content Security Policy setup. This middleware is attached to these
+  routes at the bottom of this namespace using `metabase.api.common/define-routes`."
+  [id]
+  {id ms/PositiveInt}
+  (api/read-check :model/Dashboard id)
+  {:status  200
+   :headers {"Content-Type" "text/html"}
+   :body    (preview/style-tag-from-inline-styles
+             (html5
+              [:head
+               [:meta {:charset "utf-8"}]
+               [:link {:nonce "%NONCE%" ;; this will be str/replaced by 'style-tag-nonce-middleware
+                       :rel  "stylesheet"
+                       :href "https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&display=swap"}]]
+              [:body [:h2 (format "Backend Artifacts Preview for Dashboard %s" id)]
+               (preview/render-dashboard-to-html id)]))})
 
 (api/defendpoint GET "/preview_card_info/:id"
   "Get JSON object containing HTML rendering of a Card with `id` and other information."
@@ -315,7 +339,11 @@
    collection_id       [:maybe ms/PositiveInt]
    collection_position [:maybe ms/PositiveInt]
    dashboard_id        [:maybe ms/PositiveInt]}
-  (check-card-read-permissions cards)
+  ;; Check permissions on cards that exist. Placeholders don't matter.
+  (check-card-read-permissions
+   (remove (fn [{:keys [id display]}]
+             (and (nil? id)
+                  (= "placeholder" display))) cards))
   ;; make sure any email addresses that are specified are allowed before sending the test Pulse.
   (doseq [channel channels]
     (pulse-channel/validate-email-domains channel))
@@ -332,4 +360,7 @@
     (t2/delete! PulseChannelRecipient :id pcr-id))
   api/generic-204-no-content)
 
-(api/define-routes)
+(def ^:private style-nonce-middleware
+  (partial preview/style-tag-nonce-middleware "/api/pulse/preview_dashboard"))
+
+(api/define-routes style-nonce-middleware)

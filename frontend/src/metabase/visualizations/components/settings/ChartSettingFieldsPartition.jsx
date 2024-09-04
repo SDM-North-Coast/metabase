@@ -1,19 +1,20 @@
 /* eslint-disable react/prop-types */
-import { Component } from "react";
 import cx from "classnames";
-import { t } from "ttag";
-import { Droppable, Draggable } from "react-beautiful-dnd";
-import _ from "underscore";
 import { splice } from "icepick";
+import { Component } from "react";
+import { Draggable, Droppable } from "react-beautiful-dnd";
+import { t } from "ttag";
+import _ from "underscore";
 
-import { DragDropContext } from "metabase/core/components/DragDropContext";
 import Label from "metabase/components/type/Label";
+import { DragDropContext } from "metabase/core/components/DragDropContext";
+import CS from "metabase/css/core/index.css";
+import { getColumnKey } from "metabase-lib/v1/queries/utils/column-key";
 
-import { getColumnKey } from "metabase-lib/queries/utils/get-column-key";
 import {
   DroppableContainer,
-  FieldPartitionColumn,
   EmptyColumnPlaceholder,
+  FieldPartitionColumn,
 } from "./ChartSettingFieldsPartition.styled";
 
 const columnMove = (columns, from, to) => {
@@ -111,7 +112,7 @@ class ChartSettingFieldsPartition extends Component {
           const partitionType = this.getPartitionType(partitionName);
           return (
             <div
-              className={cx("py2", { "border-top": index > 0 })}
+              className={cx(CS.py2, { [CS.borderTop]: index > 0 })}
               key={partitionName}
             >
               <Label color="medium">{title}</Label>
@@ -127,8 +128,8 @@ class ChartSettingFieldsPartition extends Component {
                     ) : (
                       columns.map((col, index) => (
                         <Draggable
-                          key={`draggable-${col.display_name}`}
-                          draggableId={`draggable-${col.display_name}`}
+                          key={`draggable-${col.name}`}
+                          draggableId={`draggable-${col.name}`}
                           index={index}
                         >
                           {provided => (
@@ -136,10 +137,10 @@ class ChartSettingFieldsPartition extends Component {
                               ref={provided.innerRef}
                               {...provided.draggableProps}
                               {...provided.dragHandleProps}
-                              className="mb1"
+                              className={CS.mb1}
                             >
                               <Column
-                                key={`${partitionName}-${col.display_name}`}
+                                key={`${partitionName}-${col.name}`}
                                 column={col}
                                 index={index}
                                 onEditFormatting={this.handleEditFormatting}

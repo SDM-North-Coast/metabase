@@ -1,5 +1,4 @@
 import styled from "@emotion/styled";
-import { color } from "metabase/lib/colors";
 
 export const TriggerContainer = styled.div`
   display: flex;
@@ -58,7 +57,7 @@ export const HueContainer = styled.div`
 `;
 
 export const ControlsPointer = styled.div`
-  border: 2px solid ${color("white")};
+  border: 2px solid var(--mb-color-bg-white);
   border-radius: 50%;
   pointer-events: none;
 `;

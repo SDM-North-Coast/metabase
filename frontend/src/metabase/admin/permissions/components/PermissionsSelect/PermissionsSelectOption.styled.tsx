@@ -1,4 +1,5 @@
 import styled from "@emotion/styled";
+
 import { color } from "metabase/lib/colors";
 
 export const PermissionsSelectOptionRoot = styled.div`
@@ -14,8 +15,9 @@ export const IconContainer = styled.div<{ color: string }>`
   border-radius: 3px;
   width: 20px;
   height: 20px;
-  color: ${color("white")};
+  color: var(--mb-color-text-white);
   background-color: ${props => color(props.color)};
+  flex-shrink: 0;
 `;
 
 export const PermissionsSelectLabel = styled.div`

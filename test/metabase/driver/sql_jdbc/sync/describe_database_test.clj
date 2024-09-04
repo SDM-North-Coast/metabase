@@ -1,11 +1,11 @@
 (ns metabase.driver.sql-jdbc.sync.describe-database-test
   (:require
    [clojure.java.jdbc :as jdbc]
+   [clojure.set :as set]
    [clojure.test :refer :all]
    [metabase.driver :as driver]
    [metabase.driver.sql-jdbc.execute :as sql-jdbc.execute]
-   [metabase.driver.sql-jdbc.sync.describe-database
-    :as sql-jdbc.describe-database]
+   [metabase.driver.sql-jdbc.sync.describe-database :as sql-jdbc.describe-database]
    [metabase.driver.sql-jdbc.sync.interface :as sql-jdbc.sync.interface]
    [metabase.driver.util :as driver.u]
    [metabase.models :refer [Database Table]]
@@ -16,8 +16,6 @@
    [metabase.test.data.one-off-dbs :as one-off-dbs]
    [metabase.test.fixtures :as fixtures]
    [metabase.util :as u]
-   #_{:clj-kondo/ignore [:deprecated-namespace]}
-   [metabase.util.honeysql-extensions :as hx]
    [toucan2.core :as t2]
    [toucan2.tools.with-temp :as t2.with-temp])
   (:import
@@ -28,36 +26,40 @@
 (use-fixtures :once (fixtures/initialize :plugins))
 
 (deftest ^:parallel simple-select-probe-query-test
-  (testing "honey-sql-version produces the same query"
-    (are [version] (= ["SELECT TRUE AS \"_\" FROM \"schema\".\"wow\" WHERE 1 <> 1 LIMIT 0"]
-                      (binding [hx/*honey-sql-version* version]
-                        (sql-jdbc.describe-database/simple-select-probe-query :sql "schema" "wow")))
-      1
-      2))
+  (is (= ["SELECT TRUE AS \"_\" FROM \"schema\".\"wow\" WHERE 1 <> 1 LIMIT 0"]
+         (sql-jdbc.describe-database/simple-select-probe-query :sql "schema" "wow"))))
+
+(deftest ^:parallel simple-select-probe-query-test-2
+  ;; this is mostly a sanity check against some of our known drivers so ok to hardcode driver names.
+  #_{:clj-kondo/ignore [:metabase/disallow-hardcoded-driver-names-in-tests]}
   (testing "real drivers produce correct query"
     (are [driver] (= ["SELECT TRUE AS \"_\" FROM \"schema\".\"wow\" WHERE 1 <> 1 LIMIT 0"]
                      (sql-jdbc.describe-database/simple-select-probe-query driver "schema" "wow"))
       :h2
-      :postgres))
+      :postgres)))
+
+(deftest ^:parallel simple-select-probe-query-test-3
   (testing "simple-select-probe-query shouldn't actually return any rows"
     (let [{:keys [name schema]} (t2/select-one Table :id (mt/id :venues))]
       (is (= []
              (mt/rows
-               (qp/process-query
-                 (let [[sql] (sql-jdbc.describe-database/simple-select-probe-query (or driver/*driver* :h2) schema name)]
-                   (mt/native-query {:query sql})))))))))
+              (qp/process-query
+               (let [[sql] (sql-jdbc.describe-database/simple-select-probe-query (or driver/*driver* :h2) schema name)]
+                 (mt/native-query {:query sql})))))))))
 
 (defn- sql-jdbc-drivers-with-default-describe-database-impl
   "All SQL JDBC drivers that use the default SQL JDBC implementation of `describe-database`. (As far as I know, this is
   all of them.)"
   []
-  (set
-   (filter
-    #(identical? (get-method driver/describe-database :sql-jdbc) (get-method driver/describe-database %))
-    (descendants driver/hierarchy :sql-jdbc))))
+  (conj (set
+         (filter
+          #(identical? (get-method driver/describe-database :sql-jdbc) (get-method driver/describe-database %))
+          (descendants driver/hierarchy :sql-jdbc)))
+        ;; redshift wraps the default implementation, but additionally filters tables according to the database name
+        :redshift))
 
 (deftest fast-active-tables-test
-  (is (= ["CATEGORIES" "CHECKINS" "USERS" "VENUES"]
+  (is (= ["CATEGORIES" "CHECKINS" "ORDERS" "PEOPLE" "PRODUCTS" "REVIEWS" "USERS" "VENUES"]
          (sql-jdbc.execute/do-with-connection-with-options
           (or driver/*driver* :h2)
           (mt/db)
@@ -70,7 +72,7 @@
                    sort)))))))
 
 (deftest post-filtered-active-tables-test
-  (is (= ["CATEGORIES" "CHECKINS" "USERS" "VENUES"]
+  (is (= ["CATEGORIES" "CHECKINS" "ORDERS" "PEOPLE" "PRODUCTS" "REVIEWS" "USERS" "VENUES"]
          (sql-jdbc.execute/do-with-connection-with-options
           :h2
           (mt/db)
@@ -84,10 +86,14 @@
   (is (= {:tables #{{:name "USERS", :schema "PUBLIC", :description nil}
                     {:name "VENUES", :schema "PUBLIC", :description nil}
                     {:name "CATEGORIES", :schema "PUBLIC", :description nil}
-                    {:name "CHECKINS", :schema "PUBLIC", :description nil}}}
+                    {:name "CHECKINS", :schema "PUBLIC", :description nil}
+                    {:name "ORDERS", :schema "PUBLIC", :description nil}
+                    {:name "PEOPLE", :schema "PUBLIC", :description nil}
+                    {:name "PRODUCTS", :schema "PUBLIC", :description nil}
+                    {:name "REVIEWS", :schema "PUBLIC", :description nil}}}
          (sql-jdbc.describe-database/describe-database :h2 (mt/id)))))
 
-(defn- describe-database-with-open-resultset-count
+(defn- describe-database-with-open-resultset-count!
   "Just like `describe-database`, but instead of returning the database description returns the number of ResultSet
   objects the sync process left open. Make sure you wrap ResultSets with `with-open`! Otherwise some JDBC drivers like
   Oracle and Redshift will keep open cursors indefinitely."
@@ -106,16 +112,16 @@
        driver
        db
        nil
-       (fn [conn]
-         (sql-jdbc.describe-database/describe-database driver {:connection conn})
+       (fn [_conn]
+         (sql-jdbc.describe-database/describe-database driver db)
          (reduce + (for [^ResultSet rs @resultsets]
                      (if (.isClosed rs) 0 1))))))))
 
 (defn- count-active-tables-in-db
   [db-id]
   (t2/count Table
-    :db_id  db-id
-    :active true))
+            :db_id  db-id
+            :active true))
 
 (deftest sync-only-accessable
   (one-off-dbs/with-blank-db
@@ -136,7 +142,7 @@
     (testing (str "make sure that running the sync process doesn't leak cursors because it's not closing the ResultSets. "
                   "See issues #4389, #6028, and #6467 (Oracle) and #7609 (Redshift)")
       (is (= 0
-             (describe-database-with-open-resultset-count driver/*driver* (mt/db)))))))
+             (describe-database-with-open-resultset-count! driver/*driver* (mt/db)))))))
 
 (defn- sync-and-assert-filtered-tables [database assert-table-fn]
   (t2.with-temp/with-temp [Database db-filtered database]
@@ -155,8 +161,20 @@
              :when  (driver.u/find-schema-filters-prop driver)]
          driver)))
 
+(defmethod driver/database-supports? [::driver/driver ::database-schema-filtering-test]
+  [_driver _feature _database]
+  true)
+
+;;; BigQuery is tested separately in [[metabase.driver.bigquery-cloud-sdk-test/dataset-filtering-test]], because
+;;; otherwise this test takes too long and flakes intermittently Redshift is also tested separately because it flakes.
+(doseq [driver [:bigquery-cloud-sdk :redshift]]
+  (defmethod driver/database-supports? [driver ::database-schema-filtering-test]
+    [_driver _feature _database]
+    false))
+
 (deftest database-schema-filtering-test
-  (mt/test-drivers (schema-filtering-drivers)
+  (mt/test-drivers (set/intersection (schema-filtering-drivers)
+                                     (mt/normal-drivers-with-feature ::database-schema-filtering-test))
     (let [driver             (driver.u/database->driver (mt/db))
           schema-filter-prop (find-schema-filters-prop driver)
           filter-type-prop   (keyword (str (:name schema-filter-prop) "-type"))
@@ -193,7 +211,7 @@
       (mt/test-drivers (into #{}
                              (filter default-have-slect-privilege?)
                              (descendants driver/hierarchy :sql-jdbc))
-        (let [{schema :schema, table-name :name} (t2/select-one :model/Table (mt/id :users))]
+        (let [{schema :schema, table-name :name} (t2/select-one :model/Table (mt/id :checkins))]
           (qp.store/with-metadata-provider (mt/id)
             (testing (sql-jdbc.describe-database/simple-select-probe-query driver/*driver* schema table-name)
               (doseq [auto-commit [true false]]
@@ -208,3 +226,24 @@
                                   driver/*driver* conn schema (str table-name "_should_not_exist"))))
                      (is (true? (sql-jdbc.sync.interface/have-select-privilege?
                                  driver/*driver* conn schema table-name))))))))))))))
+
+;;; TODO: fix and change this to test on (mt/sql-jdbc-drivers)
+#_{:clj-kondo/ignore [:metabase/disallow-hardcoded-driver-names-in-tests]}
+(deftest sync-table-with-backslash-test
+  (mt/test-drivers #{:postgres}
+    (testing "table with backslash in name, PKs, FKS are correctly synced"
+      (mt/with-temp-test-data [["human\\race"
+                                [{:field-name "humanraceid" :base-type :type/Integer :pk? true}
+                                 {:field-name "race" :base-type :type/Text}]
+                                [[1 "homo sapiens"]]]
+                               ["citizen"
+                                [{:field-name "citizen\\id" :base-type :type/Integer :pk? true}
+                                 {:field-name "race\\id" :base-type :type/Integer :fk "human\\race"}]
+                                [[1 1]]]]
+        (let [tables            (t2/select :model/Table :db_id (:id (mt/db)))
+              field-name->field (t2/select-fn->fn :name identity :model/Field :table_id [:in (map :id tables)])]
+          (is (= #{"human\\race" "citizen"} (set (map :name tables))))
+          (is (= #{"humanraceid" "citizen\\id" "race" "race\\id"}
+                 (set (keys field-name->field))))
+          (is (= (get-in field-name->field ["humanraceid" :id])
+                 (get-in field-name->field ["race\\id" :fk_target_field_id]))))))))

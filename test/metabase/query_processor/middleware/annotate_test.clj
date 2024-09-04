@@ -6,8 +6,8 @@
    [metabase.lib.test-metadata :as meta]
    [metabase.lib.test-util :as lib.tu]
    [metabase.lib.test-util.macros :as lib.tu.macros]
-   [metabase.query-processor :as qp]
    [metabase.query-processor.middleware.annotate :as annotate]
+   [metabase.query-processor.preprocess :as qp.preprocess]
    [metabase.query-processor.store :as qp.store]
    [metabase.test :as mt]
    [metabase.util :as u]))
@@ -28,26 +28,33 @@
     (testing "should still infer types even if the initial value(s) are `nil` (#4256, #6924)"
       (is (= [:type/Integer]
              (transduce identity (#'annotate/base-type-inferer {:cols [{}]})
-                        (concat (repeat 1000 [nil]) [[1] [2]])))))
+                        (concat (repeat 1000 [nil]) [[1] [2]])))))))
 
+(deftest ^:parallel native-column-info-test-2
+  (testing "native column info"
     (testing "should use default `base_type` of `type/*` if there are no non-nil values in the sample"
       (is (= [:type/*]
              (transduce identity (#'annotate/base-type-inferer {:cols [{}]})
-                        [[nil]]))))
+                        [[nil]]))))))
 
+(deftest ^:parallel native-column-info-test-3
+  (testing "native column info"
     (testing "should attempt to infer better base type if driver returns :type/* (#12150)"
       ;; `merged-column-info` handles merging info returned by driver & inferred by annotate
       (is (= [:type/Integer]
              (transduce identity (#'annotate/base-type-inferer {:cols [{:base_type :type/*}]})
-                        [[1] [2] [nil] [3]]))))
+                        [[1] [2] [nil] [3]]))))))
 
+(deftest ^:parallel native-column-info-test-4
+  (testing "native column info"
     (testing "should disambiguate duplicate names"
-      (is (= [{:name "a", :display_name "a", :base_type :type/Integer, :source :native, :field_ref [:field "a" {:base-type :type/Integer}]}
-              {:name "a", :display_name "a", :base_type :type/Integer, :source :native, :field_ref [:field "a_2" {:base-type :type/Integer}]}]
-             (annotate/column-info
-              {:type :native}
-              {:cols [{:name "a" :base_type :type/Integer} {:name "a" :base_type :type/Integer}]
-               :rows [[1 nil]]}))))))
+      (qp.store/with-metadata-provider meta/metadata-provider
+        (is (= [{:name "a", :display_name "a", :base_type :type/Integer, :source :native, :field_ref [:field "a" {:base-type :type/Integer}]}
+                {:name "a", :display_name "a", :base_type :type/Integer, :source :native, :field_ref [:field "a_2" {:base-type :type/Integer}]}]
+               (annotate/column-info
+                {:type :native}
+                {:cols [{:name "a" :base_type :type/Integer} {:name "a" :base_type :type/Integer}]
+                 :rows [[1 nil]]})))))))
 
 (deftest ^:parallel col-info-field-ids-test
   (testing {:base-type "make sure columns are comming back the way we'd expect for :field clauses"}
@@ -453,14 +460,14 @@
   (qp.store/with-metadata-provider meta/metadata-provider
     (testing (str "if a driver is kind enough to supply us with some information about the `:cols` that come back, we "
                   "should include that information in the results. Their information should be preferred over ours")
-      (is (=? {:cols [{:name           "metric"
+      (is (=? {:cols [{:name           "totalEvents"
                        :display_name   "Total Events"
                        :base_type      :type/Text
                        :effective_type :type/Text
                        :source         :aggregation
                        :field_ref      [:aggregation 0]}]}
               (add-column-info
-               (lib.tu.macros/mbql-query venues {:aggregation [[:metric "ga:totalEvents"]]})
+               (lib.tu.macros/mbql-query venues {:aggregation [[:metric 1]]})
                {:cols [{:name "totalEvents", :display_name "Total Events", :base_type :type/Text}]}))))))
 
 (deftest ^:parallel col-info-for-aggregation-clause-test-4
@@ -476,8 +483,8 @@
 (defn- infered-col-type
   [expr]
   (-> (add-column-info (lib.tu.macros/mbql-query venues {:expressions {"expr" expr}
-                                              :fields      [[:expression "expr"]]
-                                              :limit       10})
+                                                         :fields      [[:expression "expr"]]
+                                                         :limit       10})
                        {})
       :cols
       first
@@ -485,9 +492,9 @@
 
 (deftest ^:parallel computed-columns-inference
   (letfn [(infer [expr] (-> (lib.tu.macros/mbql-query venues
-                                           {:expressions {"expr" expr}
-                                            :fields [[:expression "expr"]]
-                                            :limit 10})
+                              {:expressions {"expr" expr}
+                               :fields [[:expression "expr"]]
+                               :limit 10})
                             (add-column-info {})
                             :cols
                             first))]
@@ -620,7 +627,7 @@
             (add-column-info
              (lib.tu.macros/mbql-query venues
                {:aggregation [[:count]
-                              [:sum]
+                              [:sum $price]
                               [:count]
                               [:aggregation-options [:count] {:display-name "count_2"}]]})
              {:cols [{:name "count", :display_name "count", :base_type :type/Number}
@@ -666,7 +673,7 @@
 (deftest ^:parallel mbql-cols-nested-queries-test
   (testing "Should be able to infer MBQL columns with nested queries"
     (qp.store/with-metadata-provider meta/metadata-provider
-      (let [base-query (qp/preprocess
+      (let [base-query (qp.preprocess/preprocess
                         (lib.tu.macros/mbql-query venues
                           {:joins [{:fields       :all
                                     :source-table $$categories
@@ -705,7 +712,7 @@
                                                        {:name "max"}]]
                                                      :breakout     [$category]
                                                      :order-by     [[:asc $category]]}})])
-      (let [query (qp/preprocess
+      (let [query (qp.preprocess/preprocess
                    (lib.tu.macros/mbql-query nil
                      {:source-table "card__1"
                       :aggregation  [[:aggregation-options
@@ -733,7 +740,7 @@
                 (select-keys result [:name :display_name :base_type :semantic_type :id :field_ref])))]
       (qp.store/with-metadata-provider meta/metadata-provider
         (testing "Make sure metadata is correct for the 'EAN' column with"
-          (let [base-query (qp/preprocess
+          (let [base-query (qp.preprocess/preprocess
                             (lib.tu.macros/mbql-query orders
                               {:joins [{:fields       :all
                                         :source-table $$products
@@ -766,7 +773,7 @@
                                          (lib.tu.macros/mbql-query people)])
         (testing "when a nested query is from a saved question, there should be no `:join-alias` on the left side"
           (lib.tu.macros/$ids nil
-            (let [base-query (qp/preprocess
+            (let [base-query (qp.preprocess/preprocess
                               (lib.tu.macros/mbql-query nil
                                 {:source-table "card__1"
                                  :joins        [{:fields       :all
@@ -813,7 +820,7 @@
                                                                [:field "B_COLUMN" {:base-type  :type/Text
                                                                                    :join-alias "alias"}]]
                                                 :alias        "alias"}]}}
-              cols  (qp/query->expected-cols query)]
+              cols  (qp.preprocess/query->expected-cols query)]
           (is (= "alias → B Column"
                  (-> cols second :display_name))
               "cols has wrong display name"))))))
@@ -821,7 +828,7 @@
 (deftest ^:parallel preserve-original-join-alias-e2e-test
   (testing "The join alias for the `:field_ref` in results metadata should match the one originally specified (#27464)"
     (mt/test-drivers (mt/normal-drivers-with-feature :left-join)
-      (mt/dataset sample-dataset
+      (mt/dataset test-data
         (let [join-alias "Products with a very long name - Product ID with a very long name"
               results    (mt/run-mbql-query orders
                            {:joins  [{:source-table $$products

@@ -1,9 +1,8 @@
 import { t } from "ttag";
 
 import ModalWithTrigger from "metabase/components/ModalWithTrigger";
-
+import CS from "metabase/css/core/index.css";
 import { ChartSettingsWithState } from "metabase/visualizations/components/ChartSettings";
-
 import type {
   Dashboard,
   DashboardCard,
@@ -11,7 +10,7 @@ import type {
   VisualizationSettings,
 } from "metabase-types/api";
 
-import { DashCardActionButton } from "../DashCardActionButton";
+import { DashCardActionButton } from "../DashCardActionButton/DashCardActionButton";
 
 interface Props {
   series: Series;
@@ -20,7 +19,7 @@ interface Props {
   onReplaceAllVisualizationSettings: (settings: VisualizationSettings) => void;
 }
 
-function ChartSettingsButton({
+export function ChartSettingsButton({
   series,
   dashboard,
   dashcard,
@@ -32,6 +31,7 @@ function ChartSettingsButton({
       tall
       triggerElement={
         <DashCardActionButton
+          as="div"
           tooltip={t`Visualization options`}
           aria-label={t`Show visualization options`}
         >
@@ -41,7 +41,7 @@ function ChartSettingsButton({
       enableMouseEvents
     >
       <ChartSettingsWithState
-        className="spread"
+        className={CS.spread}
         series={series}
         onChange={onReplaceAllVisualizationSettings}
         isDashboard
@@ -51,6 +51,3 @@ function ChartSettingsButton({
     </ModalWithTrigger>
   );
 }
-
-// eslint-disable-next-line import/no-default-export -- deprecated usage
-export default ChartSettingsButton;

@@ -1,13 +1,14 @@
-import type { IconProps } from "metabase/core/components/Icon";
-import { Icon } from "metabase/core/components/Icon";
+import type { IconProps } from "metabase/ui";
+import { Icon } from "metabase/ui";
+
 import {
-  ColumnItemIcon,
-  ColumnItemSpan,
-  ColumnItemContent,
-  ColumnItemContainer,
-  ColumnItemRoot,
-  ColumnItemDragHandle,
   ColumnItemColorPicker,
+  ColumnItemContainer,
+  ColumnItemContent,
+  ColumnItemDragHandle,
+  ColumnItemIcon,
+  ColumnItemRoot,
+  ColumnItemSpan,
 } from "./ColumnItem.styled";
 
 interface ColumnItemProps {
@@ -17,6 +18,7 @@ interface ColumnItemProps {
   role?: string;
   draggable?: boolean;
   icon?: IconProps["name"];
+  removeIcon?: IconProps["name"];
   onClick?: () => void;
   onAdd?: (target: HTMLElement) => void;
   onRemove?: (target: HTMLElement) => void;
@@ -32,6 +34,7 @@ const BaseColumnItem = ({
   role,
   draggable = false,
   icon,
+  removeIcon = "eye_outline",
   onClick,
   onAdd,
   onRemove,
@@ -43,9 +46,9 @@ const BaseColumnItem = ({
     <ColumnItemRoot
       className={className}
       role={role}
-      title={role ? title : undefined}
       isDraggable={draggable}
       onClick={onClick}
+      aria-label={role ? title : undefined}
       data-testid={draggable ? `draggable-item-${title}` : null}
       data-enabled={!!onRemove}
     >
@@ -79,7 +82,7 @@ const BaseColumnItem = ({
           )}
           {onRemove && (
             <ActionIcon
-              icon="eye_outline"
+              icon={removeIcon}
               onClick={onRemove}
               data-testid={`${title}-hide-button`}
             />

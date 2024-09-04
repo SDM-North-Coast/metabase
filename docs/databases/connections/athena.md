@@ -97,20 +97,17 @@ Turn this option **ON** to scan a sample of values every time Metabase runs a [s
 
 A fingerprinting query examines the first 10,000 rows from each column and uses that data to guesstimate how many unique values each column has, what the minimum and maximum values are for numeric and timestamp columns, and so on. If you leave this option **OFF**, Metabase will only fingerprint your columns once during setup.
 
-### Default result cache duration
+## Permissions and IAM Policies
 
-{% include plans-blockquote.html feature="Database-specific caching" %}
+Most issues that we see when people attempt to connect to AWS Athena involve permissions. Querying AWS Athena requires permissions to:
 
-How long to keep question results. By default, Metabase will use the value you supply on the [cache settings page](../../configuring-metabase/caching.md), but if this database has other factors that influence the freshness of data, it could make sense to set a custom duration. You can also choose custom durations on individual questions or dashboards to help improve performance.
+- AWS Athena.
+- AWS Glue.
+- The S3 bucket where Athena results are stored.
+- The resources that Athena is querying against (i.e., the S3 bucket(s) Athena is querying).
+- If you're using AWS Lake Formation, then you also need to grant AWS Lake Formation permissions through the AWS Console (AWS Lake Formation > Permissions > Data Lake Permissions > Grant data lake permissions; the role Metabase uses needs SELECT and DESCRIBE table permissions).
 
-Options are:
-
-- **Use instance default (TTL)**. TTL is time to live, meaning how long the cache remains valid before Metabase should run the query again.
-- **Custom**.
-
-If you are on a paid plan, you can also set cache duration per questions. See [Advanced caching controls](../../configuring-metabase/caching.md#advanced-caching-controls).
-
-## Example IAM Policy
+### Example IAM Policy
 
 This policy provides read-only permissions for data in S3. You'll need to specify any S3 buckets that you want Metabase to be able to query from _as well as_ the S3 bucket provided as part of the configuration where results are written to.
 
@@ -211,7 +208,8 @@ If Metabase also needs to create tables, you'll need additional AWS Glue permiss
         "glue:DeleteTable",
         "glue:CreatePartition",
         "glue:DeletePartition",
-        "glue:UpdatePartition"
+        "glue:UpdatePartition",
+        "glue:GetCatalogImportStatus",
       ],
       "Resource": "*"
     }

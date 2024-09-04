@@ -1,5 +1,6 @@
-import type { UserListResult } from "metabase-types/api";
 import { Text } from "metabase/ui";
+import type { UserListResult } from "metabase-types/api";
+
 import { UserElement } from "./UserListElement.styled";
 
 export type UserListElementProps = {
@@ -20,9 +21,9 @@ export const UserListElement = ({
     px="sm"
     py="xs"
     variant="subtle"
-    bg={isSelected ? "brand.0" : undefined}
+    bg={isSelected ? "brand" : undefined}
   >
-    <Text weight={700} color={isSelected ? "brand.1" : undefined} truncate>
+    <Text weight={700} color={isSelected ? "brand" : undefined} truncate>
       {value.common_name}
     </Text>
   </UserElement>

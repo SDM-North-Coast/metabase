@@ -10,6 +10,9 @@ const { ORDERS, ORDERS_ID, REVIEWS, PRODUCTS, PEOPLE } = SAMPLE_DATABASE;
 const sampleDBDataModelPage = `/admin/datamodel/database/${SAMPLE_DB_ID}`;
 
 it("should configure data model settings", () => {
+  cy.intercept("GET", "/api/segment").as("getSegments");
+  cy.intercept("GET", "/api/metric").as("getMetrics");
+
   cy.signInAsAdmin();
 
   cy.visit("/admin/datamodel");
@@ -21,7 +24,13 @@ it("should configure data model settings", () => {
   );
 
   cy.get(".AdminList").findByText("Orders").click();
-  cy.findByDisplayValue("Product ID").parent().find(".Icon-gear").click();
+
+  cy.findByDisplayValue("Product ID")
+    .parent()
+    .parent()
+    .find(".Icon-gear")
+    .click();
+
   // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
   cy.findByText("Use original value").click();
   // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
@@ -31,12 +40,14 @@ it("should configure data model settings", () => {
   cy.wait("@updateProductId");
 
   cy.visit(sampleDBDataModelPage);
+
   cy.get(".AdminList").findByText("Reviews").click();
   cy.intercept("POST", `/api/field/${REVIEWS.RATING}/values`).as(
     "remapRatingValues",
   );
 
-  cy.findByDisplayValue("Rating").parent().find(".Icon-gear").click();
+  cy.findByDisplayValue("Rating").parent().parent().find(".Icon-gear").click();
+
   // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
   cy.findByText("Use original value").click();
   // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
@@ -67,13 +78,23 @@ it("should configure data model settings", () => {
   cy.get(".AdminList").findByText("Products").click();
 
   cy.intercept("PUT", `/api/field/${PRODUCTS.EAN}`).as("hideEan");
-  cy.findByDisplayValue("Ean").parent().contains("Everywhere").click();
+
+  cy.findByDisplayValue("Ean").parent().parent().contains("Everywhere").click();
+
   // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
   cy.findByText("Do not include").click();
   cy.wait("@hideEan");
 
   cy.intercept("PUT", `/api/field/${PRODUCTS.PRICE}`).as("updatePriceField");
-  cy.findByDisplayValue("Price").parent().contains("No semantic type").click();
+
+  cy.findByDisplayValue("Price")
+    .parent()
+    .parent()
+    .findByText("No semantic type")
+    .click();
+
+  cy.get(".MB-Select").should("be.visible");
+
   cy.get(".MB-Select")
     .scrollTo("top")
     .within(() => {
@@ -91,7 +112,13 @@ it("should configure data model settings", () => {
   cy.get(".AdminList").findByText("People").click();
 
   cy.intercept("PUT", `/api/field/${PEOPLE.PASSWORD}`).as("hidePassword");
-  cy.findByDisplayValue("Password").parent().contains("Everywhere").click();
+
+  cy.findByDisplayValue("Password")
+    .parent()
+    .parent()
+    .contains("Everywhere")
+    .click();
+
   // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
   cy.findByText("Do not include").click();
   cy.wait("@hidePassword");
@@ -99,7 +126,7 @@ it("should configure data model settings", () => {
   const metric = {
     name: "Revenue",
     description: "Sum of orders subtotal",
-    table_id: ORDERS_ID,
+    table_id: ORDERS_ID, // legacy api
     definition: {
       "source-table": ORDERS_ID,
       aggregation: [["sum", ["field", ORDERS.SUBTOTAL, null]]],
@@ -116,14 +143,16 @@ it("should configure data model settings", () => {
     },
   };
 
-  createMetric(metric);
+  createMetric(metric); // legacy api
   createSegment(segment);
 
   cy.visit("/admin/datamodel/segments");
+  cy.wait("@getSegments");
   // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
   cy.findByText(segment.name);
 
   cy.visit("/admin/datamodel/metrics");
+  cy.wait("@getMetrics");
   // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
   cy.findByText(metric.name);
 });

@@ -1,10 +1,11 @@
 import { t } from "ttag";
-import { isReducedMotionPreferred } from "metabase/lib/dom";
+
 import { isSyncAborted, isSyncInProgress } from "metabase/lib/syncing";
+import type Database from "metabase-lib/v1/metadata/Database";
 import type { InitialSyncStatus } from "metabase-types/api";
-import type { IconName } from "metabase/core/components/Icon";
-import type Database from "metabase-lib/metadata/Database";
+
 import StatusSmall from "../StatusSmall";
+import { getIconName, isSpinnerVisible } from "../utils/status";
 
 export interface DatabaseStatusSmallProps {
   databases: Database[];
@@ -49,26 +50,6 @@ const getStatusLabel = (status: InitialSyncStatus): string => {
       return t`Done!`;
     case "aborted":
       return t`Error syncing`;
-  }
-};
-
-const getIconName = (status: InitialSyncStatus): IconName => {
-  switch (status) {
-    case "incomplete":
-      return "database";
-    case "complete":
-      return "check";
-    case "aborted":
-      return "warning";
-  }
-};
-
-const isSpinnerVisible = (status: InitialSyncStatus): boolean => {
-  switch (status) {
-    case "incomplete":
-      return !isReducedMotionPreferred();
-    default:
-      return false;
   }
 };
 

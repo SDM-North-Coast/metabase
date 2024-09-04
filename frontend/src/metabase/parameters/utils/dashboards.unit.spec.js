@@ -1,19 +1,18 @@
 import { createMockMetadata } from "__support__/metadata";
 import {
   createParameter,
-  setParameterName,
-  hasMapping,
-  isDashboardParameterWithoutMapping,
-  getParametersMappedToDashcard,
-  hasMatchingParameters,
-  getFilteringParameterValuesMap,
   getDashboardUiParameters,
+  getFilteringParameterValuesMap,
+  hasMapping,
+  hasMatchingParameters,
+  setParameterName,
 } from "metabase/parameters/utils/dashboards";
+import Question from "metabase-lib/v1/Question";
+import Field from "metabase-lib/v1/metadata/Field";
 import {
-  createSampleDatabase,
   PRODUCTS,
+  createSampleDatabase,
 } from "metabase-types/api/mocks/presets";
-import Field from "metabase-lib/metadata/Field";
 
 const metadata = createMockMetadata({
   databases: [createSampleDatabase()],
@@ -188,154 +187,6 @@ describe("metabase/parameters/utils/dashboards", () => {
       };
 
       expect(hasMapping(parameter, dashboard)).toBe(true);
-    });
-  });
-
-  describe("isDashboardParameterWithoutMapping", () => {
-    const parameter = { id: "foo" };
-
-    it("should return false when passed a falsy dashboard", () => {
-      expect(isDashboardParameterWithoutMapping(parameter, undefined)).toBe(
-        false,
-      );
-    });
-
-    it("should return false when the given parameter is not found in the dashboard's parameters list", () => {
-      const brokenDashboard = {
-        dashcards: [
-          {
-            parameter_mappings: [
-              {
-                parameter_id: "bar",
-              },
-              {
-                // having this parameter mapped but not in the parameters list shouldn't happen in practice,
-                // but I am proving the significance of having the parameter exist in the dashboard's parameters list
-                parameter_id: "foo",
-              },
-            ],
-          },
-        ],
-        parameters: [
-          {
-            id: "bar",
-          },
-        ],
-      };
-
-      expect(
-        isDashboardParameterWithoutMapping(parameter, brokenDashboard),
-      ).toBe(false);
-    });
-
-    it("should return false when the given parameter is both found in the dashboard's parameters and also mapped", () => {
-      const dashboard = {
-        dashcards: [
-          {
-            parameter_mappings: [
-              {
-                parameter_id: "bar",
-              },
-              {
-                parameter_id: "foo",
-              },
-            ],
-          },
-        ],
-        parameters: [
-          {
-            id: "bar",
-          },
-          { id: "foo" },
-        ],
-      };
-
-      expect(isDashboardParameterWithoutMapping(parameter, dashboard)).toBe(
-        false,
-      );
-    });
-
-    it("should return true when the given parameter is found on the dashboard but is not mapped", () => {
-      const dashboard = {
-        dashcards: [
-          {
-            parameter_mappings: [
-              {
-                parameter_id: "bar",
-              },
-            ],
-          },
-        ],
-        parameters: [
-          {
-            id: "bar",
-          },
-          { id: "foo" },
-        ],
-      };
-
-      expect(isDashboardParameterWithoutMapping(parameter, dashboard)).toBe(
-        true,
-      );
-    });
-  });
-
-  describe("getParametersMappedToDashcard", () => {
-    const dashboard = {
-      parameters: [
-        {
-          id: "foo",
-          type: "text",
-          target: ["variable", ["template-tag", "abc"]],
-        },
-        {
-          id: "bar",
-          type: "string/=",
-          target: ["dimension", ["field", 123, null]],
-        },
-        {
-          id: "baz",
-        },
-      ],
-    };
-
-    const dashboardWithNoParameters = { parameters: [] };
-
-    const dashcard = {
-      parameter_mappings: [
-        {
-          parameter_id: "foo",
-          target: ["variable", ["template-tag", "abc"]],
-        },
-        {
-          parameter_id: "bar",
-          target: ["dimension", ["field", 123, null]],
-        },
-      ],
-    };
-
-    const dashcardWithNoMappings = {};
-
-    it("should return the subset of the dashboard's parameters that are found in a given dashcard's parameter_mappings", () => {
-      expect(
-        getParametersMappedToDashcard(dashboardWithNoParameters, dashcard),
-      ).toEqual([]);
-      expect(
-        getParametersMappedToDashcard(dashboard, dashcardWithNoMappings),
-      ).toEqual([]);
-
-      expect(getParametersMappedToDashcard(dashboard, dashcard)).toEqual([
-        {
-          id: "foo",
-          type: "text",
-          target: ["variable", ["template-tag", "abc"]],
-        },
-        {
-          id: "bar",
-          type: "string/=",
-          target: ["dimension", ["field", 123, null]],
-        },
-      ]);
     });
   });
 
@@ -675,7 +526,20 @@ describe("metabase/parameters/utils/dashboards", () => {
     };
 
     it("should return a list of UiParameter objects from the given dashboard", () => {
-      expect(getDashboardUiParameters(dashboard, metadata)).toEqual([
+      const questions = Object.fromEntries(
+        dashboard.dashcards.map(dashcard => {
+          return [dashcard.id, new Question(dashcard.card, metadata)];
+        }),
+      );
+
+      expect(
+        getDashboardUiParameters(
+          dashboard.dashcards,
+          dashboard.parameters,
+          metadata,
+          questions,
+        ),
+      ).toEqual([
         {
           id: "a",
           slug: "slug-a",

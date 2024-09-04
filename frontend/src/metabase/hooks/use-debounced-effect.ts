@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export function useDebouncedEffect<TVALUE>(
   fn: () => TVALUE,
@@ -13,8 +13,25 @@ export function useDebouncedEffect<TVALUE>(
       setDebouncedResult(newValue);
     }, delay);
 
-    return () => clearTimeout(timeoutId);
+    return () => {
+      clearTimeout(timeoutId);
+    };
   }, dependencies); // eslint-disable-line react-hooks/exhaustive-deps
 
   return debouncedResult;
+}
+
+export function useDebouncedEffectWithCleanup(
+  getArgs: () => [() => void, () => void],
+  delay: number,
+  dependencies: any[],
+) {
+  const [fn, cleanup] = getArgs();
+  useDebouncedEffect(fn, delay, dependencies);
+
+  useEffect(() => {
+    return () => {
+      cleanup();
+    };
+  }, dependencies); // eslint-disable-line react-hooks/exhaustive-deps
 }

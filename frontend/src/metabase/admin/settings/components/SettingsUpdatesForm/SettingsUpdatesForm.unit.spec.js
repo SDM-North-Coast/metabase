@@ -1,3 +1,5 @@
+import { mockSettings } from "__support__/settings";
+import { renderWithProviders, screen } from "__support__/ui";
 import {
   createMockTokenStatus,
   createMockVersion,
@@ -5,8 +7,7 @@ import {
   createMockVersionInfoRecord,
 } from "metabase-types/api/mocks";
 import { createMockState } from "metabase-types/store/mocks";
-import { mockSettings } from "__support__/settings";
-import { renderWithProviders, screen } from "__support__/ui";
+
 import SettingsUpdatesForm from "./SettingsUpdatesForm";
 
 const elements = [
@@ -41,6 +42,7 @@ function setup({
 
   const state = createMockState({
     settings,
+    currentUser: { is_superuser: true },
   });
 
   renderWithProviders(<SettingsUpdatesForm elements={elements} />, {
@@ -70,14 +72,14 @@ describe("SettingsUpdatesForm", () => {
 
   it("shows upgrade call-to-action if not in Enterprise plan", () => {
     setup({ currentVersion: "v1.0.0", latestVersion: "v1.0.0" });
-    expect(screen.getByText("Migrate to Metabase Cloud.")).toBeInTheDocument();
+    expect(screen.getByText("Get automatic updates")).toBeInTheDocument();
   });
 
   it("does not show upgrade call-to-action if is a paid plan", () => {
     setup({ currentVersion: "v1.0.0", latestVersion: "v2.0.0", isPaid: true });
 
     expect(
-      screen.queryByText("Migrate to Metabase Cloud."),
+      screen.queryByText("Get automatic updates."),
     ).not.toBeInTheDocument();
   });
 });

@@ -1,5 +1,6 @@
 import { setupEnterpriseTest } from "__support__/enterprise";
 import { createMockCollection } from "metabase-types/api/mocks";
+
 import { PERSONAL_COLLECTIONS } from "./constants";
 import {
   buildCollectionTree,
@@ -349,7 +350,7 @@ describe("entities > collections > utils", () => {
         expectedIcon: "person",
       },
       {
-        name: "Instance Analytics",
+        name: "Metabase Analytics",
         collection: createMockCollection({ type: "instance-analytics" }),
         expectedIcon: "audit",
       },

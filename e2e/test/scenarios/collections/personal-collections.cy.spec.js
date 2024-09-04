@@ -1,19 +1,18 @@
-import {
-  restore,
-  popover,
-  modal,
-  navigationSidebar,
-  openNewCollectionItemFlowFor,
-  getCollectionActions,
-  openCollectionMenu,
-} from "e2e/support/helpers";
-
 import { USERS } from "e2e/support/cypress_data";
 import {
-  NO_DATA_PERSONAL_COLLECTION_ID,
   ADMIN_PERSONAL_COLLECTION_ID,
   NORMAL_USER_ID,
+  NO_DATA_PERSONAL_COLLECTION_ID,
 } from "e2e/support/cypress_sample_instance_data";
+import {
+  getCollectionActions,
+  modal,
+  navigationSidebar,
+  openCollectionMenu,
+  openNewCollectionItemFlowFor,
+  popover,
+  restore,
+} from "e2e/support/helpers";
 
 describe("personal collections", () => {
   beforeEach(() => {
@@ -62,15 +61,15 @@ describe("personal collections", () => {
       });
 
       cy.visit("/collection/root");
-      // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-      cy.findByText("Your personal collection");
+      cy.findAllByRole("tree")
+        .contains("Your personal collection")
+        .should("be.visible");
       navigationSidebar().within(() => {
         cy.icon("ellipsis").click();
       });
       popover().findByText("Other users' personal collections").click();
       cy.location("pathname").should("eq", "/collection/users");
-      // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-      cy.findByText(/All personal collections/i);
+      cy.findByTestId("browsercrumbs").findByText(/All personal collections/i);
       Object.values(USERS).forEach(user => {
         const FULL_NAME = `${user.first_name} ${user.last_name}`;
         cy.findByText(FULL_NAME);
@@ -99,7 +98,7 @@ describe("personal collections", () => {
       // Check that it's not possible to open permissions modal via URL for personal collection
       // cy.location().then(location => {
       //   cy.visit(`${location}/permissions`);
-      //   cy.get(".Modal").should("not.exist");
+      //   modal().should("not.exist");
       //   cy.url().should("eq", String(location));
       // });
 
@@ -116,7 +115,7 @@ describe("personal collections", () => {
       // Check that it's not possible to open permissions modal via URL for personal collection child
       // cy.location().then(location => {
       //   cy.visit(`${location}/permissions`);
-      //   cy.get(".Modal").should("not.exist");
+      //   modal().should("not.exist");
       //   cy.url().should("eq", String(location));
       // });
 
@@ -171,10 +170,10 @@ describe("personal collections", () => {
 
           openCollectionMenu();
           // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-          popover().within(() => cy.findByText("Archive").click());
-          modal().findByRole("button", { name: "Archive" }).click();
+          popover().within(() => cy.findByText("Move to trash").click());
+          modal().findByRole("button", { name: "Move to trash" }).click();
           // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-          cy.findByText("Archived collection");
+          cy.findByText("Trashed collection");
           cy.get("@sidebar").findByText("Foo").should("not.exist");
         });
       });
@@ -184,6 +183,11 @@ describe("personal collections", () => {
 
 function addNewCollection(name) {
   openNewCollectionItemFlowFor("collection");
-  cy.findByLabelText("Name").type(name, { delay: 0 });
-  cy.button("Create").click();
+  cy.findByPlaceholderText("My new fantastic collection").type(name, {
+    delay: 0,
+  });
+
+  cy.findByTestId("new-collection-modal").then(modal => {
+    cy.findByText("Create").click();
+  });
 }

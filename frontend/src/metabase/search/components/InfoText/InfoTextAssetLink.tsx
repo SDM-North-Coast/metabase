@@ -1,6 +1,6 @@
 import { t } from "ttag";
+
 import { useDatabaseQuery, useTableQuery } from "metabase/common/hooks";
-import { Icon } from "metabase/core/components/Icon";
 import {
   browseDatabase,
   browseSchema,
@@ -8,10 +8,11 @@ import {
 } from "metabase/lib/urls";
 import { SearchResultLink } from "metabase/search/components/SearchResultLink";
 import type { WrappedResult } from "metabase/search/types";
-import { Box, Text } from "metabase/ui";
-import type Database from "metabase-lib/metadata/Database";
-import { getInfoText } from "./get-info-text";
+import { Box, Icon, Text } from "metabase/ui";
+import type Database from "metabase-lib/v1/metadata/Database";
+
 import type { InfoTextData } from "./get-info-text";
+import { getInfoText } from "./get-info-text";
 
 type InfoTextAssetLinkProps = {
   result: WrappedResult;
@@ -19,7 +20,7 @@ type InfoTextAssetLinkProps = {
 };
 
 const LinkSeparator = (
-  <Box component="span" c="text.1">
+  <Box component="span" c="text-medium">
     <Icon name="chevronright" size={8} />
   </Box>
 );
@@ -135,7 +136,7 @@ export const InfoTextAssetLink = ({
     return <InfoTextTablePath showLinks={showLinks} result={result} />;
   }
 
-  if (result.model === "segment" || result.model === "metric") {
+  if (result.model === "segment") {
     return <InfoTextTableLink showLinks={showLinks} result={result} />;
   }
 

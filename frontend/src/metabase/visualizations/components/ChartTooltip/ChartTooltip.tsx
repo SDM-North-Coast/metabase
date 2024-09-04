@@ -1,14 +1,16 @@
 import { useMemo } from "react";
 import _ from "underscore";
-import { getEventTarget } from "metabase/lib/dom";
+
 import Tooltip from "metabase/core/components/Tooltip";
+import { getEventTarget } from "metabase/lib/dom";
 import type {
   HoveredObject,
   HoveredTimelineEvent,
 } from "metabase/visualizations/types";
 import type { VisualizationSettings } from "metabase-types/api";
-import StackedDataTooltip from "./StackedDataTooltip";
+
 import KeyValuePairChartTooltip from "./KeyValuePairChartTooltip";
+import StackedDataTooltip from "./StackedDataTooltip";
 import TimelineEventTooltip from "./TimelineEventTooltip";
 
 export interface ChartTooltipProps {
@@ -16,21 +18,26 @@ export interface ChartTooltipProps {
   settings: VisualizationSettings;
 }
 
+export const ChartTooltipContent = ({
+  hovered,
+  settings,
+}: ChartTooltipProps) => {
+  if (!hovered) {
+    return null;
+  }
+  if (!_.isEmpty(hovered.timelineEvents)) {
+    return <TimelineEventTooltip hovered={hovered as HoveredTimelineEvent} />;
+  }
+
+  if (hovered.stackedTooltipModel) {
+    return <StackedDataTooltip {...hovered.stackedTooltipModel} />;
+  }
+
+  return <KeyValuePairChartTooltip hovered={hovered} settings={settings} />;
+};
+
 const ChartTooltip = ({ hovered, settings }: ChartTooltipProps) => {
-  const tooltip = useMemo(() => {
-    if (!hovered) {
-      return null;
-    }
-    if (!_.isEmpty(hovered.timelineEvents)) {
-      return <TimelineEventTooltip hovered={hovered as HoveredTimelineEvent} />;
-    }
-
-    if (hovered.stackedTooltipModel) {
-      return <StackedDataTooltip {...hovered.stackedTooltipModel} />;
-    }
-
-    return <KeyValuePairChartTooltip hovered={hovered} settings={settings} />;
-  }, [hovered, settings]);
+  const tooltip = <ChartTooltipContent hovered={hovered} settings={settings} />;
 
   const isNotEmpty = useMemo(() => {
     if (!hovered) {

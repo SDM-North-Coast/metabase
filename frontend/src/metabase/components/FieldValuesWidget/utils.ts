@@ -1,25 +1,28 @@
 import { t } from "ttag";
 import _ from "underscore";
 
-import { MetabaseApi } from "metabase/services";
 import { stripId } from "metabase/lib/formatting";
-
-import type { Dashboard, Parameter, FieldValue } from "metabase-types/api";
-import type Field from "metabase-lib/metadata/Field";
-
-import {
-  isIdParameter,
-  isNumberParameter,
-  isStringParameter,
-} from "metabase-lib/parameters/utils/parameter-type";
+import { MetabaseApi } from "metabase/services";
+import type Question from "metabase-lib/v1/Question";
+import type Field from "metabase-lib/v1/metadata/Field";
 import {
   canListFieldValues,
   canListParameterValues,
   canSearchFieldValues,
   canSearchParameterValues,
   getSourceType,
-} from "metabase-lib/parameters/utils/parameter-source";
-import type Question from "metabase-lib/Question";
+} from "metabase-lib/v1/parameters/utils/parameter-source";
+import {
+  isIdParameter,
+  isNumberParameter,
+  isStringParameter,
+} from "metabase-lib/v1/parameters/utils/parameter-type";
+import type {
+  Dashboard,
+  FieldValue,
+  Parameter,
+  RowValue,
+} from "metabase-types/api";
 
 import type { ValuesMode } from "./types";
 
@@ -318,4 +321,12 @@ export function isNumeric(field: Field, parameter?: Parameter) {
   }
 
   return field.isNumeric();
+}
+
+export function getLabel(option: FieldValue): string | undefined {
+  return option[1];
+}
+
+export function getValue(option: FieldValue): RowValue {
+  return option[0];
 }

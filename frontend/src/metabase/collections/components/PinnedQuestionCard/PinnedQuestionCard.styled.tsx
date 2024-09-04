@@ -1,16 +1,16 @@
 import styled from "@emotion/styled";
-import { color } from "metabase/lib/colors";
+
 import Link from "metabase/core/components/Link";
+import { LegendLabel } from "metabase/visualizations/components/legend/LegendCaption.styled";
 import ChartSkeleton from "metabase/visualizations/components/skeletons/ChartSkeleton";
 import StaticSkeleton from "metabase/visualizations/components/skeletons/StaticSkeleton";
-import { LegendLabel } from "metabase/visualizations/components/legend/LegendCaption.styled";
 
 export const CardActionMenuContainer = styled.div`
   position: absolute;
   top: 0.3125rem;
   right: 0.3125rem;
   z-index: 3;
-  color: ${color("text-medium")};
+  color: var(--mb-color-text-medium);
   visibility: hidden;
 `;
 
@@ -32,9 +32,9 @@ export const CardRoot = styled(Link)<CardRootProps>`
   overflow: hidden;
   height: ${props => props.isPreview && "15.625rem"};
   padding: ${props => (props.isPreview ? "0" : "0.5rem 0")};
-  border: 1px solid ${color("border")};
+  border: 1px solid var(--mb-color-border);
   border-radius: 0.375rem;
-  background-color: ${color("white")};
+  background-color: var(--mb-color-bg-white);
 
   &:hover {
     ${CardActionMenuContainer} {
@@ -42,11 +42,11 @@ export const CardRoot = styled(Link)<CardRootProps>`
     }
 
     ${LegendLabel} {
-      color: ${color("brand")};
+      color: var(--mb-color-brand);
     }
 
     ${ChartSkeleton.Title} {
-      color: ${color("brand")};
+      color: var(--mb-color-brand);
     }
 
     ${ChartSkeleton.Description} {

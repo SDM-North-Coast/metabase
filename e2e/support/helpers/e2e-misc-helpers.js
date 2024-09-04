@@ -1,5 +1,3 @@
-import { modal } from "e2e/support/helpers/e2e-ui-elements-helpers";
-
 // Find a text field by label text, type it in, then blur the field.
 // Commonly used in our Admin section as we auto-save settings.
 export function typeAndBlurUsingLabel(label, value) {
@@ -27,16 +25,32 @@ export function openNativeEditor({
   databaseName,
   alias = "editor",
   fromCurrentPage,
+  newMenuItemTitle = "SQL query",
 } = {}) {
   if (!fromCurrentPage) {
     cy.visit("/");
   }
   cy.findByText("New").click();
-  cy.findByText("SQL query").click();
+  cy.findByText(newMenuItemTitle).click();
 
   databaseName && cy.findByText(databaseName).click();
 
-  return cy.findByTestId("native-query-editor").as(alias).should("be.visible");
+  // We are first loading databases to see if we should show the
+  // database selector or simply display the previously selected database
+  cy.findAllByTestId("loading-indicator").should("not.exist");
+
+  return focusNativeEditor().as(alias);
+}
+
+export function focusNativeEditor() {
+  cy.findByTestId("native-query-editor")
+    .should("be.visible")
+    .should("have.class", "ace_editor")
+    .click();
+
+  return cy
+    .findByTestId("native-query-editor")
+    .should("have.class", "ace_focus");
 }
 
 /**
@@ -91,36 +105,47 @@ export function interceptPromise(method, path) {
  *   cy.visit(`/dashboard/1`);
  * });
  */
-const cypressWaitAllRecursive = (results, currentCommand, commands) => {
-  return currentCommand.then(result => {
+const cypressWaitAllRecursive = (results, commands) => {
+  const [nextCommand, ...restCommands] = commands;
+  if (!nextCommand) {
+    return;
+  }
+
+  return nextCommand.then(result => {
     results.push(result);
 
-    const [nextCommand, ...rest] = Array.from(commands);
-
     if (nextCommand == null) {
-      return results;
+      return;
     }
 
-    return cypressWaitAllRecursive(results, nextCommand, rest);
+    return cypressWaitAllRecursive(results, restCommands);
   });
 };
 
 export const cypressWaitAll = function (commands) {
   const results = [];
 
-  return cypressWaitAllRecursive(
-    results,
-    cy.wrap(null, { log: false }),
-    commands,
-  );
+  return cy.wrap(results).then(() => {
+    cypressWaitAllRecursive(results, commands);
+  });
 };
 
 /**
  * Visit a question and wait for its query to load.
  *
- * @param {number} id
+ * @param {number|string} questionIdOrAlias
  */
-export function visitQuestion(id) {
+export function visitQuestion(questionIdOrAlias) {
+  if (typeof questionIdOrAlias === "number") {
+    visitQuestionById(questionIdOrAlias);
+  }
+
+  if (typeof questionIdOrAlias === "string") {
+    cy.get(questionIdOrAlias).then(id => visitQuestionById(id));
+  }
+}
+
+function visitQuestionById(id) {
   // In case we use this function multiple times in a test, make sure aliases are unique for each question
   const alias = "cardQuery" + id;
 
@@ -141,7 +166,7 @@ export function visitModel(id, { hasDataAccess = true } = {}) {
   const alias = "modelQuery" + id;
 
   if (hasDataAccess) {
-    cy.intercept("POST", `/api/dataset`).as(alias);
+    cy.intercept("POST", "/api/dataset").as(alias);
   } else {
     cy.intercept("POST", `/api/card/**/${id}/query`).as(alias);
   }
@@ -152,28 +177,61 @@ export function visitModel(id, { hasDataAccess = true } = {}) {
 }
 
 /**
+ * Visit a metric and wait for its query to load.
+ *
+ * @param {number} id
+ */
+export function visitMetric(id, { hasDataAccess = true } = {}) {
+  const alias = "metricQuery" + id;
+
+  if (hasDataAccess) {
+    cy.intercept("POST", "/api/dataset").as(alias);
+  } else {
+    cy.intercept("POST", `/api/card/**/${id}/query`).as(alias);
+  }
+
+  cy.visit(`/metric/${id}`);
+
+  cy.wait("@" + alias);
+}
+
+/**
  * Visit a dashboard and wait for the related queries to load.
  *
- * @param {number} dashboard_id
+ * @param {number|string} dashboardIdOrAlias
+ * @param {Object} config
  */
-export function visitDashboard(dashboard_id, { params = {} } = {}) {
+export function visitDashboard(dashboardIdOrAlias, { params = {} } = {}) {
+  if (typeof dashboardIdOrAlias === "number") {
+    visitDashboardById(dashboardIdOrAlias, { params });
+  }
+
+  if (typeof dashboardIdOrAlias === "string") {
+    cy.get(dashboardIdOrAlias).then(id => visitDashboardById(id, { params }));
+  }
+}
+
+function visitDashboardById(dashboard_id, config) {
   // Some users will not have permissions for this request
   cy.request({
     method: "GET",
     url: `/api/dashboard/${dashboard_id}`,
     // That's why we have to ignore failures
     failOnStatusCode: false,
-  }).then(({ status, body: { dashcards } }) => {
+  }).then(({ status, body: { dashcards, tabs } }) => {
     const dashboardAlias = "getDashboard" + dashboard_id;
 
-    cy.intercept("GET", `/api/dashboard/${dashboard_id}`).as(dashboardAlias);
+    cy.intercept("GET", `/api/dashboard/${dashboard_id}*`).as(dashboardAlias);
 
     const canViewDashboard = hasAccess(status);
 
     let validQuestions = dashboardHasQuestions(dashcards);
-    if (params.tab != null) {
+
+    // if dashboard has tabs, only expect cards on the first tab
+    if (tabs?.length > 0 && validQuestions) {
+      const firstTab = tabs[0];
       validQuestions = validQuestions.filter(
-        card => card.dashboard_tab_id === params.tab,
+        card => card.dashboard_tab_id === firstTab.id,
       );
     }
 
@@ -199,7 +257,7 @@ export function visitDashboard(dashboard_id, { params = {} } = {}) {
 
       cy.visit({
         url: `/dashboard/${dashboard_id}`,
-        qs: params,
+        qs: config.params,
       });
 
       cy.wait(aliases);
@@ -240,7 +298,7 @@ function dashboardHasQuestions(cards) {
 }
 
 export function interceptIfNotPreviouslyDefined({ method, url, alias } = {}) {
-  const aliases = Object.keys(cy.state("aliases"));
+  const aliases = Object.keys(cy.state("aliases") ?? {});
 
   const isAlreadyDefined = aliases.find(a => a === alias);
 
@@ -254,13 +312,13 @@ export function saveQuestion(
   { wrapId = false, idAlias = "questionId" } = {},
 ) {
   cy.intercept("POST", "/api/card").as("saveQuestion");
-  cy.findByText("Save").click();
+  cy.findByTestId("qb-header").button("Save").click();
 
-  modal().within(() => {
+  cy.findByTestId("save-question-modal").within(modal => {
     if (name) {
       cy.findByLabelText("Name").clear().type(name);
     }
-    cy.button("Save").click();
+    cy.findByText("Save").click();
   });
 
   cy.wait("@saveQuestion").then(({ response: { body } }) => {
@@ -269,8 +327,9 @@ export function saveQuestion(
     }
   });
 
-  modal().within(() => {
-    cy.button("Not now").click();
+  cy.get("#QuestionSavedModal").within(() => {
+    cy.findByText(/add this to a dashboard/i);
+    cy.findByText("Not now").click();
   });
 }
 
@@ -278,8 +337,8 @@ export function saveSavedQuestion() {
   cy.intercept("PUT", "/api/card/**").as("updateQuestion");
   cy.findByText("Save").click();
 
-  modal().within(() => {
-    cy.button("Save").click();
+  cy.findByTestId("save-question-modal").within(modal => {
+    cy.findByText("Save").click();
   });
   cy.wait("@updateQuestion");
 }
@@ -303,24 +362,4 @@ export function visitPublicDashboard(id, { params = {} } = {}) {
       });
     },
   );
-}
-
-/**
- * Returns a matcher function to find text content that is broken up by multiple elements
- * There is also a version of this for unit tests - frontend/test/__support__/ui.tsx
- * In case of changes, please, add them there as well
- *
- * @param {string} textToFind
- * @example
- * cy.findByText(getBrokenUpTextMatcher("my text with a styled word"))
- */
-export function getBrokenUpTextMatcher(textToFind) {
-  return (content, element) => {
-    const hasText = node => node?.textContent === textToFind;
-    const childrenDoNotHaveText = element
-      ? Array.from(element.children).every(child => !hasText(child))
-      : true;
-
-    return hasText(element) && childrenDoNotHaveText;
-  };
 }

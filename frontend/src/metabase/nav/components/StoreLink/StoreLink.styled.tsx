@@ -1,9 +1,9 @@
 import styled from "@emotion/styled";
 
+import ExternalLink from "metabase/core/components/ExternalLink";
 import { color, darken } from "metabase/lib/colors";
 import { space } from "metabase/styled-components/theme";
-import { Icon } from "metabase/core/components/Icon";
-import ExternalLink from "metabase/core/components/ExternalLink";
+import { Icon } from "metabase/ui";
 
 export const StoreIconRoot = styled(ExternalLink)`
   margin-right: ${space(1)};
@@ -17,12 +17,12 @@ export const StoreIconWrapper = styled.div`
   height: 40px;
   border-radius: 6px;
   cursor: pointer;
-  color: ${color("white")};
+  color: var(--mb-color-text-white);
   transition: all 300ms ease-in-out;
 
   &:hover {
-    color: ${color("white")};
-    background-color: ${darken(color("filter"))};
+    color: var(--mb-color-text-white);
+    background-color: ${() => darken(color("filter"))};
   }
 
   @media (prefers-reduced-motion) {

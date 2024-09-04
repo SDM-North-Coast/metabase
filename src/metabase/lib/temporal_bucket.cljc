@@ -98,11 +98,11 @@
       (neg? n)
       ;; this should legitimately be lowercasing in the user locale. I know system locale isn't necessarily the same
       ;; thing, but it might be. This will have to do until we have some sort of user-locale lower-case functionality
-      #_ {:clj-kondo/ignore [:discouraged-var]}
+      #_{:clj-kondo/ignore [:discouraged-var]}
       (i18n/tru "{0} {1} ago" (abs n) (str/lower-case (describe-temporal-unit (abs n) unit)))
 
       :else
-      #_ {:clj-kondo/ignore [:discouraged-var]}
+      #_{:clj-kondo/ignore [:discouraged-var]}
       (i18n/tru "{0} {1} from now" n (str/lower-case (describe-temporal-unit n unit))))))
 
 (defmulti with-temporal-bucket-method
@@ -181,15 +181,24 @@
             (= unit :day) (assoc :default true)))
         lib.schema.temporal-bucketing/ordered-date-bucketing-units))
 
+(def datetime-bucket-units
+  "The temporal bucketing units for datetime type expressions."
+  (into []
+        (remove hidden-bucketing-options)
+        lib.schema.temporal-bucketing/ordered-datetime-bucketing-units))
+
 (def datetime-bucket-options
   "The temporal bucketing options for datetime type expressions."
-  (into []
-        (comp (remove hidden-bucketing-options)
-              (map (fn [unit]
-                     (cond-> {:lib/type :option/temporal-bucketing
-                              :unit unit}
-                       (= unit :day) (assoc :default true)))))
-        lib.schema.temporal-bucketing/ordered-datetime-bucketing-units))
+  (mapv (fn [unit]
+          (cond-> {:lib/type :option/temporal-bucketing
+                   :unit unit}
+            (= unit :day) (assoc :default true)))
+        datetime-bucket-units))
+
+(defn available-temporal-units
+  "The temporal bucketing units for datetime type expressions."
+  []
+  datetime-bucket-units)
 
 (defmethod lib.metadata.calculation/display-name-method :option/temporal-bucketing
   [_query _stage-number {:keys [unit]} _style]
@@ -198,7 +207,12 @@
 (defmethod lib.metadata.calculation/display-info-method :option/temporal-bucketing
   [query stage-number option]
   (merge {:display-name (lib.metadata.calculation/display-name query stage-number option)
-          :short-name (u/qualified-name (raw-temporal-bucket option))}
+          :short-name (u/qualified-name (raw-temporal-bucket option))
+          :is-temporal-extraction (let [bucket (raw-temporal-bucket option)]
+                                    (and (contains? lib.schema.temporal-bucketing/datetime-extraction-units
+                                                    bucket)
+                                         (not (contains? lib.schema.temporal-bucketing/datetime-truncation-units
+                                                         bucket))))}
          (select-keys option [:default :selected])))
 
 (defmulti available-temporal-buckets-method
@@ -229,3 +243,34 @@
   [temporal-column
    temporal-value :- [:or :int :string]]
   (shared.ut/format-unit temporal-value (:unit (temporal-bucket temporal-column))))
+
+(defn add-temporal-bucket-to-ref
+  "Internal helper shared between a few implementations of [[with-temporal-bucket-method]].
+
+  Not intended to be called otherwise."
+  [[tag options id-or-name] unit]
+  ;; if `unit` is an extraction unit like `:month-of-year`, then the `:effective-type` of the ref changes to
+  ;; `:type/Integer` (month of year returns an int). We need to record the ORIGINAL effective type somewhere in case
+  ;; we need to refer back to it, e.g. to see what temporal buckets are available if we want to change the unit, or if
+  ;; we want to remove it later. We will record this with the key `::original-effective-type`. Note that changing the
+  ;; unit multiple times should keep the original first value of `::original-effective-type`.
+  (if unit
+    (let [extraction-unit?        (contains? lib.schema.temporal-bucketing/datetime-extraction-units unit)
+          original-effective-type ((some-fn :metabase.lib.field/original-effective-type :effective-type :base-type)
+                                   options)
+          new-effective-type      (if extraction-unit?
+                                    :type/Integer
+                                    original-effective-type)
+          options                 (assoc options
+                                         :temporal-unit unit
+                                         :effective-type new-effective-type
+                                         :metabase.lib.field/original-effective-type original-effective-type)]
+      [tag options id-or-name])
+    ;; `unit` is `nil`: remove the temporal bucket.
+    (let [options (if-let [original-effective-type (:metabase.lib.field/original-effective-type options)]
+                    (-> options
+                        (assoc :effective-type original-effective-type)
+                        (dissoc :metabase.lib.field/original-effective-type))
+                    options)
+          options (dissoc options :temporal-unit)]
+      [tag options id-or-name])))

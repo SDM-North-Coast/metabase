@@ -1,19 +1,19 @@
+import cx from "classnames";
+import type { Moment } from "moment-timezone"; // eslint-disable-line no-restricted-imports -- deprecated usage
+import moment from "moment-timezone"; // eslint-disable-line no-restricted-imports -- deprecated usage
+import Mustache from "mustache";
 import type * as React from "react";
 import ReactMarkdown from "react-markdown";
-import Mustache from "mustache";
-// eslint-disable-next-line no-restricted-imports -- deprecated usage
-import type { Moment } from "moment-timezone";
-// eslint-disable-next-line no-restricted-imports -- deprecated usage
-import moment from "moment-timezone";
 
 import ExternalLink from "metabase/core/components/ExternalLink";
+import CS from "metabase/css/core/index.css";
+import { NULL_DISPLAY_VALUE } from "metabase/lib/constants";
 import { renderLinkTextForClick } from "metabase/lib/formatting/link";
-import { NULL_DISPLAY_VALUE, NULL_NUMERIC_VALUE } from "metabase/lib/constants";
 import {
   clickBehaviorIsValid,
   getDataFromClicked,
-} from "metabase-lib/parameters/utils/click-behavior";
-import { rangeForValue } from "metabase-lib/queries/utils/range-for-value";
+} from "metabase-lib/v1/parameters/utils/click-behavior";
+import { rangeForValue } from "metabase-lib/v1/queries/utils/range-for-value";
 import {
   isBoolean,
   isCoordinate,
@@ -22,16 +22,16 @@ import {
   isNumber,
   isTime,
   isURL,
-} from "metabase-lib/types/utils/isa";
-import { formatEmail } from "./email";
-import { formatTime } from "./time";
-import { formatUrl } from "./url";
+} from "metabase-lib/v1/types/utils/isa";
+
 import { formatDateTimeWithUnit, formatRange } from "./date";
-import { formatNumber } from "./numbers";
+import { formatEmail } from "./email";
 import { formatCoordinate } from "./geography";
 import { formatImage } from "./image";
-
+import { formatNumber } from "./numbers";
+import { formatTime } from "./time";
 import type { OptionsType } from "./types";
+import { formatUrl } from "./url";
 
 const MARKDOWN_RENDERERS = {
   a: ({ href, children }: any) => (
@@ -80,7 +80,7 @@ export function formatValue(value: unknown, _options: OptionsType = {}) {
       return formatted;
     }
   }
-  if (prefix || suffix) {
+  if ((prefix || suffix) && formatted != null) {
     if (options.jsx && typeof formatted !== "string") {
       return (
         <span>
@@ -130,7 +130,7 @@ function formatStringFallback(value: any, options: OptionsType = {}) {
 export function formatValueRaw(
   value: unknown,
   options: OptionsType = {},
-): React.ReactElement | Moment | string | number | null {
+): React.ReactElement | string | number | null {
   options = {
     jsx: false,
     remap: true,
@@ -144,10 +144,8 @@ export function formatValueRaw(
     return remapped;
   }
 
-  if (value === NULL_NUMERIC_VALUE) {
-    return NULL_DISPLAY_VALUE;
-  } else if (value == null) {
-    return null;
+  if (value == null) {
+    return options.stringifyNull ? NULL_DISPLAY_VALUE : null;
   } else if (
     options.view_as !== "image" &&
     options.click_behavior &&
@@ -157,7 +155,10 @@ export function formatValueRaw(
     // Style this like a link if we're in a jsx context.
     // It's not actually a link since we handle the click differently for dashboard and question targets.
     return (
-      <div className="link link--wrappable">
+      <div
+        data-testid="link-formatted-text"
+        className={cx(CS.link, CS.linkWrappable)}
+      >
         {formatValueRaw(value, { ...options, jsx: false })}
       </div>
     );
@@ -177,7 +178,7 @@ export function formatValueRaw(
   } else if (isEmail(column)) {
     return formatEmail(value as string, options);
   } else if (isTime(column)) {
-    return formatTime(value as Moment);
+    return formatTime(value as Moment, column.unit, options);
   } else if (column && column.unit != null) {
     return formatDateTimeWithUnit(
       value as string | number,

@@ -9,8 +9,6 @@ collection_id: vG58R8k-QddHWA7_47umn
 collection_preview: true
 collection_position: null
 query_type: query
-dataset: false
-cache_ttl: null
 database_id: Internal Metabase Database
 table_id:
 - Internal Metabase Database
@@ -29,7 +27,10 @@ dataset_query:
     - - count
     breakout:
     - - field
-      - created_at
+      - - Internal Metabase Database
+        - public
+        - v_content
+        - created_at
       - base-type: type/DateTimeWithLocalTZ
         temporal-unit: week
     filter:
@@ -51,9 +52,8 @@ dataset_query:
         - base-type: type/DateTimeWithLocalTZ
       - -2
       - week
-      - include-current: false
     joins:
-    - alias: Question 34
+    - alias: Group Members - Creator
       condition:
       - =
       - - field
@@ -68,12 +68,53 @@ dataset_query:
           - v_group_members
           - user_id
         - base-type: type/Integer
-          join-alias: Question 34
-      fields: all
+          join-alias: Group Members - Creator
       source-table: lTp-ATFsCUFEr9I0fMEaO
+      strategy: left-join
     source-table: AxSackBiyXVRUzM_TyyQY
   type: query
-result_metadata: null
+result_metadata:
+- base_type: type/DateTimeWithLocalTZ
+  coercion_strategy: null
+  description: null
+  display_name: Created At
+  effective_type: type/DateTimeWithLocalTZ
+  field_ref:
+  - field
+  - - Internal Metabase Database
+    - public
+    - v_content
+    - created_at
+  - base-type: type/DateTimeWithLocalTZ
+    temporal-unit: week
+  fk_target_field_id: null
+  id:
+  - Internal Metabase Database
+  - public
+  - v_content
+  - created_at
+  name: created_at
+  nfc_path: null
+  parent_id: null
+  position: 3
+  semantic_type: type/CreationTimestamp
+  settings: null
+  source: breakout
+  table_id:
+  - Internal Metabase Database
+  - public
+  - v_content
+  unit: week
+  visibility_type: normal
+- aggregation_index: 0
+  base_type: type/Integer
+  display_name: Count
+  field_ref:
+  - aggregation
+  - 0
+  name: count
+  semantic_type: type/Quantity
+  source: aggregation
 visualization_settings:
   column_settings: null
   graph.dimensions:
@@ -81,8 +122,12 @@ visualization_settings:
   - group_name
   graph.metrics:
   - count
+  - count
 serdes/meta:
 - id: DnNyT6EtIn-Zx8bHRFHbV
   label: questions_created_last_week
   model: Card
+archived_directly: false
 metabase_version: null
+source_card_id: AxSackBiyXVRUzM_TyyQY
+type: question

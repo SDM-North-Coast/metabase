@@ -1,27 +1,25 @@
-import {
-  restore,
-  modal,
-  describeEE,
-  assertPermissionForItem,
-  modifyPermission,
-  downloadAndAssert,
-  assertSheetRowsCount,
-  sidebar,
-  visitQuestion,
-  visitDashboard,
-  popover,
-  setTokenFeatures,
-} from "e2e/support/helpers";
-
-import { SAMPLE_DATABASE } from "e2e/support/cypress_sample_database";
-
 import { SAMPLE_DB_ID, USER_GROUPS } from "e2e/support/cypress_data";
+import { SAMPLE_DATABASE } from "e2e/support/cypress_sample_database";
 import {
   ORDERS_DASHBOARD_ID,
   ORDERS_QUESTION_ID,
 } from "e2e/support/cypress_sample_instance_data";
+import {
+  assertPermissionForItem,
+  assertSheetRowsCount,
+  describeEE,
+  downloadAndAssert,
+  modal,
+  modifyPermission,
+  popover,
+  restore,
+  setTokenFeatures,
+  sidebar,
+  visitDashboard,
+  visitQuestion,
+} from "e2e/support/helpers";
 
-const { ALL_USERS_GROUP } = USER_GROUPS;
+const { ALL_USERS_GROUP, COLLECTION_GROUP, DATA_GROUP } = USER_GROUPS;
 
 const {
   PRODUCTS_ID,
@@ -42,6 +40,19 @@ describeEE("scenarios > admin > permissions > data > downloads", () => {
     restore();
     cy.signInAsAdmin();
     setTokenFeatures("all");
+    // Restrict downloads for Collection and Data groups before each test so that they don't override All Users
+    cy.updatePermissionsGraph({
+      [COLLECTION_GROUP]: {
+        [SAMPLE_DB_ID]: {
+          download: { schemas: "none" },
+        },
+      },
+      [DATA_GROUP]: {
+        [SAMPLE_DB_ID]: {
+          download: { schemas: "none" },
+        },
+      },
+    });
   });
 
   it("setting downloads permission UI flow should work", () => {
@@ -82,10 +93,9 @@ describeEE("scenarios > admin > permissions > data > downloads", () => {
     );
   });
 
-  it("respects 'no download' permissions when 'All users' group data permissions are set to `Block` (metabase#22408)", () => {
+  it("respects 'no download' permissions when 'All users' group data permissions are set to `Blocked` (metabase#22408)", () => {
     cy.visit(`/admin/permissions/data/database/${SAMPLE_DB_ID}`);
-
-    modifyPermission("All Users", DATA_ACCESS_PERMISSION_INDEX, "Block");
+    modifyPermission("All Users", DATA_ACCESS_PERMISSION_INDEX, "Blocked");
 
     cy.button("Save changes").click();
 
@@ -95,12 +105,12 @@ describeEE("scenarios > admin > permissions > data > downloads", () => {
       cy.button("Yes").click();
     });
 
-    // When data permissions are set to `Block`, download permissions are automatically revoked
+    // When data permissions are set to `Blocked`, download permissions are automatically revoked
     assertPermissionForItem("All Users", DOWNLOAD_PERMISSION_INDEX, "No");
 
-    // Normal user belongs to both "data" and "collections" groups.
+    // Normal user belongs to both "data" and "collection" groups.
     // They both have restricted downloads so this user shouldn't have the right to download anything.
-    cy.signIn("normal");
+    cy.signInAsNormalUser();
 
     visitQuestion(ORDERS_QUESTION_ID);
 
@@ -153,8 +163,6 @@ describeEE("scenarios > admin > permissions > data > downloads", () => {
     cy.signInAsNormalUser();
     visitQuestion(ORDERS_QUESTION_ID);
 
-    cy.icon("download").click();
-
     downloadAndAssert(
       { fileType: "xlsx", questionId: ORDERS_QUESTION_ID },
       assertSheetRowsCount(10000),
@@ -182,14 +190,10 @@ describeEE("scenarios > admin > permissions > data > downloads", () => {
       cy.get("@nativeQuestionId").then(id => {
         visitQuestion(id);
 
-        cy.icon("download").click();
-
         downloadAndAssert(
           { fileType: "xlsx", questionId: id },
           assertSheetRowsCount(18760),
         );
-
-        cy.icon("download").click();
 
         // Make sure we can download results from an ad-hoc nested query based on a native question
         cy.findByText("Explore results").click();
@@ -201,8 +205,6 @@ describeEE("scenarios > admin > permissions > data > downloads", () => {
         cy.request("PUT", `/api/card/${id}`, { name: "Native Model" });
 
         visitQuestion(id);
-
-        cy.icon("download").click();
 
         downloadAndAssert(
           { fileType: "xlsx", questionId: id },
@@ -247,8 +249,6 @@ describeEE("scenarios > admin > permissions > data > downloads", () => {
       cy.get("@nativeQuestionId").then(id => {
         visitQuestion(id);
 
-        cy.icon("download").click();
-
         downloadAndAssert(
           { fileType: "xlsx", questionId: id },
           assertSheetRowsCount(10000),
@@ -258,16 +258,12 @@ describeEE("scenarios > admin > permissions > data > downloads", () => {
         cy.findByText("Explore results").click();
         cy.wait("@dataset");
 
-        cy.icon("download").click();
-
         downloadAndAssert({ fileType: "xlsx" }, assertSheetRowsCount(10000));
 
         // Convert question to a model, which should also have a download row limit
         cy.request("PUT", `/api/card/${id}`, { name: "Native Model" });
 
         visitQuestion(id);
-
-        cy.icon("download").click();
 
         downloadAndAssert(
           { fileType: "xlsx", questionId: id },

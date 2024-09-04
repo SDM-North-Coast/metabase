@@ -1,34 +1,38 @@
 import { createSelector } from "@reduxjs/toolkit";
 
-import type {
-  SettingKey,
-  Settings,
-  TokenStatus,
-  Version,
-} from "metabase-types/api";
-import type { State } from "metabase-types/store";
 import { getPlan } from "metabase/common/utils/plan";
+import type { TokenStatus, Version } from "metabase-types/api";
+import type { State } from "metabase-types/store";
 
-export const getSettings = createSelector(
-  (state: State) => state.settings,
-  settings => settings.values,
-);
+export const getSettings: <S extends State>(state: S) => GetSettings<S> =
+  createSelector(
+    (state: State) => state.settings,
+    settings => settings.values,
+  );
 
 export const getSettingsLoading = createSelector(
   (state: State) => state.settings,
   settings => settings.loading,
 );
 
-export const getSetting = <T extends SettingKey>(
-  state: State,
+type GetSettings<S extends State> = S["settings"]["values"];
+type GetSettingKey<S extends State> = keyof GetSettings<S>;
+
+export const getSetting = <S extends State, T extends GetSettingKey<S>>(
+  state: S,
   key: T,
-): Settings[T] => getSettings(state)[key];
+): GetSettings<S>[T] => {
+  const settings = getSettings(state);
+  const setting = settings[key];
+  return setting;
+};
 
 export const getStoreUrl = (path = "") => {
   return `https://store.metabase.com/${path}`;
 };
 
 export const getLearnUrl = (path = "") => {
+  // eslint-disable-next-line no-unconditional-metabase-links-render -- This is the implementation of getLearnUrl()
   return `https://www.metabase.com/learn/${path}`;
 };
 
@@ -44,8 +48,10 @@ export const getDocsUrl = createSelector(
   (version, page, anchor) => getDocsUrlForVersion(version, page, anchor),
 );
 
-// should be private, but exported until there are usages of deprecated MetabaseSettings.docsUrl
-export const getDocsUrlForVersion = (
+export const getDocsSearchUrl = (query: Record<string, string>) =>
+  `https://www.metabase.com/search?${new URLSearchParams(query)}`;
+
+const getDocsUrlForVersion = (
   version: Version | undefined,
   page = "",
   anchor = "",
@@ -78,21 +84,34 @@ export const getDocsUrlForVersion = (
     anchor = `#${anchor}`;
   }
 
+  // eslint-disable-next-line no-unconditional-metabase-links-render -- This function is only used by this file and "metabase/lib/settings"
   return `https://www.metabase.com/docs/${tag}/${page}${anchor}`;
 };
 
 interface UpgradeUrlOpts {
-  utm_media: string;
+  utm_campaign?: string;
+  utm_content: string;
 }
 
 export const getUpgradeUrl = createSelector(
   (state: State) => getPlan(getSetting(state, "token-features")),
   (state: State) => getSetting(state, "active-users-count"),
-  (state: State, opts: UpgradeUrlOpts) => opts.utm_media,
-  (source, count, media) => {
+  (_state: State, utmTags: UpgradeUrlOpts) => utmTags,
+  (plan, count, utmTags) => {
     const url = new URL("https://www.metabase.com/upgrade");
-    url.searchParams.append("utm_media", media);
-    url.searchParams.append("utm_source", source);
+    const searchParams = {
+      utm_source: "product",
+      utm_medium: "upsell",
+      utm_campaign: utmTags.utm_campaign,
+      utm_content: utmTags.utm_content,
+      source_plan: plan,
+    };
+    for (const key in searchParams) {
+      const utmValue = searchParams[key as keyof typeof searchParams];
+      if (utmValue) {
+        url.searchParams.append(key, utmValue);
+      }
+    }
     if (count != null) {
       url.searchParams.append("utm_users", String(count));
     }
@@ -101,6 +120,9 @@ export const getUpgradeUrl = createSelector(
   },
 );
 
+/**
+ * ! The tokenStatus is only visible to admins
+ */
 export const getIsPaidPlan = createSelector(
   (state: State) => getSetting(state, "token-status"),
   (tokenStatus: TokenStatus | null) => {

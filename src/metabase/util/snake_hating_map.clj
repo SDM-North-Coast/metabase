@@ -12,6 +12,8 @@
    [potemkin :as p]
    [pretty.core :as pretty]))
 
+(set! *warn-on-reflection* true)
+
 (defn- snake-cased-key? [k]
   (some-> k (str/includes? "_")))
 
@@ -50,6 +52,9 @@
     (keys m))
   (meta [_this]
     (meta m))
+  (entryAt [this k]
+    (when (contains? m k)
+      (potemkin.PersistentMapProxy$MapEntry. this k)))
   (with-meta [this metta]
     (let [m' (with-meta m metta)]
       (if (identical? m m')
@@ -71,4 +76,9 @@
        (vary-meta assoc :metabase.driver/metadata-type :metabase.driver/metadata-type.mlv2)
        ->SnakeHatingMap))
   ([k v & more]
-   (snake-hating-map (into {} (cons [k v] (partition-all 2 more))))))
+   (snake-hating-map (into {k v} (partition-all 2) more))))
+
+(defn snake-hating-map?
+  "Return true if `m` is a SnakeHatingMap."
+  [m]
+  (instance? SnakeHatingMap m))

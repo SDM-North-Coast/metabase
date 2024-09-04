@@ -1,21 +1,23 @@
 import { screen } from "@testing-library/react";
 
-import SavedQuestionLoader from "metabase/containers/SavedQuestionLoader";
-import { renderWithProviders } from "__support__/ui";
 import {
   setupCardEndpoints,
-  setupSchemaEndpoints,
-  setupUnauthorizedSchemaEndpoints,
+  setupCardQueryMetadataEndpoint,
+  setupDatabaseEndpoints,
   setupUnauthorizedCardEndpoints,
+  setupUnauthorizedSchemaEndpoints,
 } from "__support__/server-mocks";
+import { renderWithProviders } from "__support__/ui";
+import SavedQuestionLoader from "metabase/containers/SavedQuestionLoader";
+import Question from "metabase-lib/v1/Question";
 import {
   createMockCard,
+  createMockCardQueryMetadata,
   createMockColumn,
-  createMockDatabase,
 } from "metabase-types/api/mocks";
-import Question from "metabase-lib/Question";
+import { createSampleDatabase } from "metabase-types/api/mocks/presets";
 
-const databaseMock = createMockDatabase({ id: 1 });
+const databaseMock = createSampleDatabase();
 
 const childrenRenderFn = ({ loading, question, error }) => {
   if (error) {
@@ -39,6 +41,12 @@ const setupQuestion = ({ id, name, hasAccess }) => {
 
   if (hasAccess) {
     setupCardEndpoints(q.card());
+    setupCardQueryMetadataEndpoint(
+      q.card(),
+      createMockCardQueryMetadata({
+        databases: [databaseMock],
+      }),
+    );
   } else {
     setupUnauthorizedCardEndpoints(q.card());
   }
@@ -48,7 +56,7 @@ const setupQuestion = ({ id, name, hasAccess }) => {
 
 const setup = ({ questionId, hasAccess }) => {
   if (hasAccess) {
-    setupSchemaEndpoints(databaseMock);
+    setupDatabaseEndpoints(databaseMock);
   } else {
     setupUnauthorizedSchemaEndpoints(databaseMock);
   }

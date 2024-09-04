@@ -1,11 +1,10 @@
-import styled from "@emotion/styled";
 import { css } from "@emotion/react";
+import styled from "@emotion/styled";
 
-import { space } from "metabase/styled-components/theme";
-import { alpha, color } from "metabase/lib/colors";
-import { Icon } from "metabase/core/components/Icon";
 import Button from "metabase/core/components/Button";
-import ExternalLink from "metabase/core/components/ExternalLink";
+import { alpha } from "metabase/lib/colors";
+import { space } from "metabase/styled-components/theme";
+import { Icon } from "metabase/ui";
 
 export const Container = styled.div<{ isSmall: boolean }>`
   margin: ${({ isSmall }) => (isSmall ? 0 : space(1))} 0;
@@ -14,10 +13,11 @@ export const Container = styled.div<{ isSmall: boolean }>`
   align-items: center;
   width: 100%;
   padding: 0.25rem;
+  position: relative;
 `;
 
 export const TextCardDefault = styled.div`
-  color: ${color("text-dark")};
+  color: var(--mb-color-text-dark);
   margin: ${space(1)} 0;
   display: flex;
   flex-direction: row;
@@ -25,36 +25,9 @@ export const TextCardDefault = styled.div`
   line-height: 1.5rem;
 `;
 
-export const NativeCardDefault = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-`;
-
-export const NativeCardIcon = styled(Icon)`
-  color: ${color("text-medium")};
-  margin-bottom: 0.5rem;
-  width: 1.25rem;
-  height: 1.25rem;
-`;
-
-export const NativeCardText = styled.div`
-  color: ${color("text-dark")};
-  max-width: 15rem;
-  text-align: center;
-  line-height: 1.5rem;
-`;
-
-export const NativeCardLink = styled(ExternalLink)`
-  color: ${color("brand")};
-  font-weight: bold;
-  margin-top: 0.5rem;
-`;
-
 export const CardLabel = styled.div`
   font-size: 0.83em;
   margin-bottom: ${space(1)};
-  text-weight: bold;
   text-overflow: ellipsis;
   white-space: nowrap;
   overflow: hidden;
@@ -63,7 +36,7 @@ export const CardLabel = styled.div`
 
 export const Header = styled.h4`
   width: 100%;
-  color: ${color("text-medium")};
+  color: var(--mb-color-text-medium);
   margin-bottom: ${space(1)};
   text-align: center;
 `;
@@ -73,15 +46,14 @@ export const TargetButton = styled.div<{ variant: string }>`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background-color: ${color("white")};
-  text-weight: bold;
+  background-color: var(--mb-color-bg-white);
   cursor: pointer;
-  border: 2px solid ${color("brand")};
+  border: 2px solid var(--mb-color-brand);
   border-radius: 8px;
   min-height: 30px;
   padding: 0.25em 0.5em;
   margin: 0 0.25rem;
-  color: ${color("text-medium")};
+  color: var(--mb-color-text-medium);
 
   ${({ variant }) =>
     variant === "disabled" &&
@@ -94,26 +66,26 @@ export const TargetButton = styled.div<{ variant: string }>`
   ${({ variant }) =>
     variant === "mapped" &&
     css`
-      border-color: ${color("brand")};
-      background-color: ${color("brand")};
-      color: ${color("white")};
+      border-color: var(--mb-color-brand);
+      background-color: var(--mb-color-brand);
+      color: var(--mb-color-text-white);
     `}
 
   ${({ variant }) =>
     variant === "unauthed" &&
     css`
       pointer-events: none;
-      border-color: ${color("bg-light")};
-      background-color: ${color("bg-light")};
-      color: ${color("text-medium")};
+      border-color: var(--mb-color-bg-light);
+      background-color: var(--mb-color-bg-light);
+      color: var(--mb-color-text-medium);
     `}
 
   ${({ variant }) =>
     variant === "invalid" &&
     css`
-      border-color: ${color("error")};
-      background-color: ${color("error")};
-      color: ${color("white")};
+      border-color: var(--mb-color-error);
+      background-color: var(--mb-color-error);
+      color: var(--mb-color-text-white);
     `}
 `;
 
@@ -128,15 +100,15 @@ export const TargetButtonText = styled.span`
   margin-right: ${space(1)};
 `;
 
-export const CloseIconButton = styled(Button)<{ icon: string; size: number }>`
-  color: ${color("white")};
+export const CloseIconButton = styled(Button)<{ icon?: string; size?: number }>`
+  color: var(--mb-color-text-white);
   background-color: transparent;
   border: none;
   padding: ${space(0)} !important;
 
   &:hover {
-    color: ${color("white")};
-    background-color: ${alpha("white", 0.2)};
+    color: var(--mb-color-text-white);
+    background-color: ${() => alpha("bg-white", 0.2)};
   }
 `;
 

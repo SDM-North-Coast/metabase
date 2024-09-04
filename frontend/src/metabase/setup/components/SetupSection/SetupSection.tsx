@@ -1,13 +1,14 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { t } from "ttag";
+
 import {
-  SectionRoot,
-  SectionHeader,
-  SectionContainer,
-  SectionTitle,
-  SectionDescription,
   SectionButton,
+  SectionContainer,
+  SectionDescription,
+  SectionHeader,
+  SectionRoot,
+  SectionTitle,
 } from "./SetupSection.styled";
 
 interface SetupSectionProps {

@@ -1,8 +1,14 @@
 import { screen } from "@testing-library/react";
-import { createMockRecentItem, createMockUser } from "metabase-types/api/mocks";
-import { renderWithProviders, waitForLoaderToBeRemoved } from "__support__/ui";
+import dayjs from "dayjs";
+
 import { setupRecentViewsEndpoints } from "__support__/server-mocks";
+import { renderWithProviders, waitForLoaderToBeRemoved } from "__support__/ui";
 import type { User } from "metabase-types/api";
+import {
+  createMockRecentTableItem,
+  createMockUser,
+} from "metabase-types/api/mocks";
+
 import { HomeRecentSection } from "./HomeRecentSection";
 
 interface SetupOpts {
@@ -11,11 +17,10 @@ interface SetupOpts {
 
 const setup = async ({ user = createMockUser() }: SetupOpts = {}) => {
   setupRecentViewsEndpoints([
-    createMockRecentItem({
+    createMockRecentTableItem({
       model: "table",
-      model_object: {
-        name: "Orders",
-      },
+      name: "ORDERS",
+      display_name: "Orders",
     }),
   ]);
 
@@ -29,22 +34,12 @@ const setup = async ({ user = createMockUser() }: SetupOpts = {}) => {
 };
 
 describe("HomeRecentSection", () => {
-  beforeEach(() => {
-    jest.useFakeTimers({ advanceTimers: true });
-    jest.setSystemTime(new Date(2020, 0, 4));
-  });
-
-  afterEach(() => {
-    jest.useRealTimers();
-    jest.restoreAllMocks();
-  });
-
   describe("new installers", () => {
     it("should show a help link for new installers", async () => {
       await setup({
         user: createMockUser({
           is_installer: true,
-          first_login: "2020-01-05T00:00:00Z",
+          first_login: dayjs().add(1, "hour").toISOString(),
         }),
       });
 
@@ -55,7 +50,7 @@ describe("HomeRecentSection", () => {
       await setup({
         user: createMockUser({
           is_installer: false,
-          first_login: "2019-11-05T00:00:00Z",
+          first_login: dayjs().subtract(1, "year").toISOString(),
         }),
       });
 

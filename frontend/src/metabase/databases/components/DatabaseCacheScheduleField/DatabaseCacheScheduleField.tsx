@@ -1,23 +1,25 @@
+import { useField, useFormikContext } from "formik";
 import type { ReactNode } from "react";
 import { useCallback } from "react";
-import { useField, useFormikContext } from "formik";
 import { t } from "ttag";
-import FormField from "metabase/core/components/FormField";
+
 import SchedulePicker from "metabase/components/SchedulePicker";
+import FormField from "metabase/core/components/FormField";
 import type {
   DatabaseData,
   ScheduleSettings,
   ScheduleType,
 } from "metabase-types/api";
+
 import {
-  ScheduleOptionList,
   ScheduleOptionBody,
   ScheduleOptionContent,
   ScheduleOptionIndicator,
   ScheduleOptionIndicatorBackground,
+  ScheduleOptionList,
   ScheduleOptionRoot,
-  ScheduleOptionTitle,
   ScheduleOptionText,
+  ScheduleOptionTitle,
 } from "./DatabaseCacheScheduleField.styled";
 
 const DEFAULT_SCHEDULE: ScheduleSettings = {
@@ -85,6 +87,7 @@ const DatabaseCacheScheduleField = ({
           onSelect={handleOnDemandSyncSelect}
         >
           <ScheduleOptionText>
+            {/* eslint-disable-next-line no-literal-metabase-strings -- Metabase settings */}
             {t`When a user adds a new filter to a dashboard or a SQL question, Metabase will scan the field(s) mapped to that filter in order to show the list of selectable values.`}
           </ScheduleOptionText>
         </ScheduleOption>

@@ -1,6 +1,9 @@
 import userEvent from "@testing-library/user-event";
-import { createMockCollection } from "metabase-types/api/mocks";
+import fetchMock from "fetch-mock";
+
 import { getIcon, screen } from "__support__/ui";
+import { createMockCollection } from "metabase-types/api/mocks";
+
 import type { SetupOpts } from "./setup";
 import { setup } from "./setup";
 
@@ -9,7 +12,13 @@ const setupEnterprise = (opts?: SetupOpts) => {
 };
 
 describe("CollectionMenu", () => {
-  it("should not be able to make the collection official", () => {
+  it("should not be able to make the collection official", async () => {
+    fetchMock.get("path:/api/collection/1/items", {
+      data: [],
+      models: [],
+      total: 10,
+    });
+
     setupEnterprise({
       collection: createMockCollection({
         can_write: true,
@@ -17,7 +26,7 @@ describe("CollectionMenu", () => {
       isAdmin: true,
     });
 
-    userEvent.click(getIcon("ellipsis"));
+    await userEvent.click(getIcon("ellipsis"));
     expect(
       screen.queryByText("Make collection official"),
     ).not.toBeInTheDocument();

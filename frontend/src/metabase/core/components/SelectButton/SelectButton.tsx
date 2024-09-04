@@ -1,10 +1,11 @@
 import type { ButtonHTMLAttributes, Ref } from "react";
 import { forwardRef, useCallback, useMemo } from "react";
 import * as React from "react";
+
 import {
-  SelectButtonRoot,
-  SelectButtonIcon,
   SelectButtonContent,
+  SelectButtonIcon,
+  SelectButtonRoot,
 } from "./SelectButton.styled";
 
 export interface SelectButtonProps
@@ -40,7 +41,7 @@ const SelectButton = forwardRef(function SelectButton(
   ref: Ref<HTMLButtonElement>,
 ) {
   const handleClear = useCallback(
-    event => {
+    (event: React.MouseEvent) => {
       if (onClear) {
         // Required not to trigger the usual SelectButton's onClick handler
         event.stopPropagation();
@@ -81,6 +82,7 @@ const SelectButton = forwardRef(function SelectButton(
         hasValue={hasValue}
         highlighted={highlighted}
         onClick={rightIcon === "close" ? handleClear : undefined}
+        style={{ flexShrink: 0 }}
       />
     </SelectButtonRoot>
   );

@@ -1,53 +1,40 @@
-import { assoc, dissoc, assocIn } from "icepick";
+import { assoc, assocIn, dissoc } from "icepick";
 import { parse } from "url";
+
 import { createMockMetadata } from "__support__/metadata";
 import { deserializeCardFromUrl } from "metabase/lib/card";
+import Question from "metabase-lib/v1/Question";
+import NativeQuery from "metabase-lib/v1/queries/NativeQuery";
+import StructuredQuery from "metabase-lib/v1/queries/StructuredQuery";
+import * as ML_Urls from "metabase-lib/v1/urls";
 import {
   createMockColumn,
   createMockDatasetData,
-  createMockMetric,
 } from "metabase-types/api/mocks";
 import {
-  createOrdersTable,
-  createPeopleTable,
-  createProductsTable,
-  createReviewsTable,
-  createSampleDatabase,
-  createOrdersIdField,
-  createOrdersUserIdField,
-  createOrdersProductIdField,
-  createOrdersSubtotalField,
-  createOrdersTaxField,
-  createOrdersTotalField,
-  createOrdersDiscountField,
-  createOrdersCreatedAtField,
-  createOrdersQuantityField,
   ORDERS,
   ORDERS_ID,
   PRODUCTS,
   PRODUCTS_ID,
   SAMPLE_DB_ID,
+  createOrdersCreatedAtField,
+  createOrdersDiscountField,
+  createOrdersIdField,
+  createOrdersProductIdField,
+  createOrdersQuantityField,
+  createOrdersSubtotalField,
+  createOrdersTable,
+  createOrdersTaxField,
+  createOrdersTotalField,
+  createOrdersUserIdField,
+  createPeopleTable,
+  createProductsTable,
+  createReviewsTable,
+  createSampleDatabase,
 } from "metabase-types/api/mocks/presets";
-import { TYPE as SEMANTIC_TYPE } from "cljs/metabase.types";
-import Question from "metabase-lib/Question";
-import * as ML_Urls from "metabase-lib/urls";
-import StructuredQuery from "metabase-lib/queries/StructuredQuery";
-import NativeQuery from "metabase-lib/queries/NativeQuery";
 
 const metadata = createMockMetadata({
   databases: [createSampleDatabase()],
-  metrics: [
-    createMockMetric({
-      id: 2,
-      table_id: ORDERS_ID,
-      name: "Total Order Value",
-      definition: {
-        filter: [">", ORDERS.TOTAL, 20],
-        aggregation: [["sum", ["field", ORDERS.TOTAL, null]]],
-        "source-table": ORDERS_ID,
-      },
-    }),
-  ],
 });
 
 const metadata_without_order_pk = createMockMetadata({
@@ -110,7 +97,7 @@ const orders_card_without_pk = {
   display: "table",
   visualization_settings: {},
   can_write: true,
-  dataset: true,
+  type: "model",
   database_id: SAMPLE_DB_ID,
   table_id: ORDERS_ID,
   dataset_query: {
@@ -166,44 +153,6 @@ const multipleRowsData = createMockDatasetData({
     [100, 200],
   ],
 });
-
-const orders_count_where_card = {
-  id: 2,
-  name: "# orders data",
-  display: "table",
-  visualization_settings: {},
-  dataset_query: {
-    type: "query",
-    database: SAMPLE_DB_ID,
-    query: {
-      "source-table": ORDERS_ID,
-      aggregation: [["count-where", [">", ORDERS.TOTAL, 50]]],
-    },
-  },
-};
-const orders_count_where_question = new Question(
-  orders_count_where_card,
-  metadata,
-);
-
-const orders_metric_filter_card = {
-  id: 2,
-  name: "# orders data",
-  display: "table",
-  visualization_settings: {},
-  dataset_query: {
-    type: "query",
-    database: SAMPLE_DB_ID,
-    query: {
-      "source-table": ORDERS_ID,
-      aggregation: [["metric", 2]],
-    },
-  },
-};
-const orders_metric_filter_question = new Question(
-  orders_metric_filter_card,
-  metadata,
-);
 
 const orders_filter_card = {
   id: 2,
@@ -276,10 +225,6 @@ const orders_multi_stage_card = {
     },
   },
 };
-const orders_multi_stage_question = new Question(
-  orders_multi_stage_card,
-  metadata,
-);
 
 const native_orders_count_card = {
   id: 3,
@@ -324,9 +269,6 @@ const orders_count_by_id_question = new Question(
 describe("Question", () => {
   describe("CREATED WITH", () => {
     describe("new Question(alreadyDefinedCard, metadata)", () => {
-      it("isn't empty", () => {
-        expect(orders_raw_question.isEmpty()).toBe(false);
-      });
       it("has an id", () => {
         expect(orders_raw_question.id()).toBe(orders_raw_card.id);
       });
@@ -349,8 +291,12 @@ describe("Question", () => {
       });
 
       it("contains an empty structured query", () => {
-        expect(question.query().constructor).toBe(StructuredQuery);
-        expect(question.query().constructor).toBe(StructuredQuery);
+        expect(
+          question.legacyQuery({ useStructuredQuery: true }).constructor,
+        ).toBe(StructuredQuery);
+        expect(
+          question.legacyQuery({ useStructuredQuery: true }).constructor,
+        ).toBe(StructuredQuery);
       });
 
       it("defaults to table display", () => {
@@ -384,22 +330,31 @@ describe("Question", () => {
   });
 
   describe("At the heart of a question is an MBQL query.", () => {
-    describe("query()", () => {
+    describe("legacyQuery()", () => {
       it("returns a correct class instance for structured query", () => {
         // This is a bit wack, and the repetitive naming is pretty confusing.
-        const query = orders_raw_question.query();
+        const query = orders_raw_question.legacyQuery({
+          useStructuredQuery: true,
+        });
         expect(query instanceof StructuredQuery).toBe(true);
       });
       it("returns a correct class instance for native query", () => {
-        const query = native_orders_count_question.query();
+        const query = native_orders_count_question.legacyQuery({
+          useStructuredQuery: true,
+        });
         expect(query instanceof NativeQuery).toBe(true);
       });
     });
     describe("setQuery(query)", () => {
       it("updates the dataset_query of card", () => {
-        const rawQuery = native_orders_count_question.query();
-        const newRawQuestion = orders_raw_question.setQuery(rawQuery);
-        expect(newRawQuestion.query() instanceof NativeQuery).toBe(true);
+        const rawQuery = native_orders_count_question.legacyQuery({
+          useStructuredQuery: true,
+        });
+        const newRawQuestion = orders_raw_question.setLegacyQuery(rawQuery);
+        expect(
+          newRawQuestion.legacyQuery({ useStructuredQuery: true }) instanceof
+            NativeQuery,
+        ).toBe(true);
       });
     });
     describe("setDatasetQuery(datasetQuery)", () => {
@@ -408,7 +363,10 @@ describe("Question", () => {
           native_orders_count_question.datasetQuery(),
         );
 
-        expect(rawQuestion.query() instanceof NativeQuery).toBe(true);
+        expect(
+          rawQuestion.legacyQuery({ useStructuredQuery: true }) instanceof
+            NativeQuery,
+        ).toBe(true);
       });
     });
   });
@@ -432,7 +390,7 @@ describe("Question", () => {
     describe("display()", () => {
       it("returns the card's visualization type", () => {
         // This forces a table view.
-        const tableQuestion = orders_raw_question.toUnderlyingData();
+        const tableQuestion = orders_raw_question.setDisplay("table");
         // Not sure I'm a huge fan of magic strings here.
         expect(tableQuestion.display()).toBe("table");
       });
@@ -591,450 +549,6 @@ describe("Question", () => {
     });
   });
 
-  // TODO: These are mode-dependent and should probably be tied to modes
-  // At the same time, the choice that which actions are visible depend on the question's properties
-  // as actions are filtered using those
-  describe("METHODS FOR DRILL-THROUGH / ACTION WIDGET", () => {
-    describe("aggregate(...)", () => {
-      it("returns the correct query for a summarization of a raw data table", () => {
-        const summarizedQuestion = orders_raw_question.aggregate(["count"]);
-        expect(summarizedQuestion.canRun()).toBe(true);
-        // if I actually call the .query() method below, this blows up garbage collection =/
-        expect(summarizedQuestion.datasetQuery()).toEqual(
-          orders_count_card.dataset_query,
-        );
-      });
-    });
-
-    describe("breakout(...)", () => {
-      it("works with a datetime field reference", () => {
-        const brokenOutCard = orders_count_question.breakout([
-          "field",
-          ORDERS.CREATED_AT,
-          null,
-        ]);
-        expect(brokenOutCard.canRun()).toBe(true);
-
-        expect(brokenOutCard.datasetQuery()).toEqual({
-          type: "query",
-          database: SAMPLE_DB_ID,
-          query: {
-            "source-table": ORDERS_ID,
-            aggregation: [["count"]],
-            breakout: [["field", ORDERS.CREATED_AT, null]],
-          },
-        });
-
-        // Make sure we haven't mutated the underlying query
-        expect(orders_count_question.datasetQuery().query).toEqual({
-          "source-table": ORDERS_ID,
-          aggregation: [["count"]],
-        });
-      });
-      it("works with a primary key field reference", () => {
-        const brokenOutQuestion = orders_count_question.breakout([
-          "field",
-          ORDERS.ID,
-          null,
-        ]);
-        expect(brokenOutQuestion.canRun()).toBe(true);
-        // This breaks because we're apparently modifying OrdersCountDataCard
-        expect(brokenOutQuestion.datasetQuery()).toEqual({
-          type: "query",
-          database: SAMPLE_DB_ID,
-          query: {
-            "source-table": ORDERS_ID,
-            aggregation: [["count"]],
-            breakout: [["field", ORDERS.ID, null]],
-          },
-        });
-
-        // Make sure we haven't mutated the underlying query
-        expect(orders_count_card.dataset_query.query).toEqual({
-          "source-table": ORDERS_ID,
-          aggregation: [["count"]],
-        });
-      });
-    });
-
-    describe("pivot(...)", () => {
-      it("works with a datetime dimension", () => {
-        const pivoted = orders_count_question.pivot([
-          ["field", ORDERS.CREATED_AT, null],
-        ]);
-        expect(pivoted.canRun()).toBe(true);
-
-        expect(pivoted.datasetQuery()).toEqual({
-          type: "query",
-          database: SAMPLE_DB_ID,
-          query: {
-            "source-table": ORDERS_ID,
-            aggregation: [["count"]],
-            breakout: [["field", ORDERS.CREATED_AT, null]],
-          },
-        });
-        // Make sure we haven't mutated the underlying query
-        expect(orders_count_card.dataset_query.query).toEqual({
-          "source-table": ORDERS_ID,
-          aggregation: [["count"]],
-        });
-      });
-      it("works with PK dimension", () => {
-        const pivoted = orders_count_question.pivot([
-          ["field", ORDERS.ID, null],
-        ]);
-        expect(pivoted.canRun()).toBe(true);
-
-        // if I actually call the .query() method below, this blows up garbage collection =/
-        expect(pivoted.datasetQuery()).toEqual({
-          type: "query",
-          database: SAMPLE_DB_ID,
-          query: {
-            "source-table": ORDERS_ID,
-            aggregation: [["count"]],
-            breakout: [["field", ORDERS.ID, null]],
-          },
-        });
-        // Make sure we haven't mutated the underlying query
-        expect(orders_count_card.dataset_query.query).toEqual({
-          "source-table": ORDERS_ID,
-          aggregation: [["count"]],
-        });
-      });
-    });
-
-    describe("filter(...)", () => {
-      const questionForFiltering = orders_raw_question;
-
-      it("works with an id filter", () => {
-        const ordersId = metadata.field(ORDERS.ID);
-        const filteringQuestion = questionForFiltering.filter(
-          "=",
-          ordersId.column(),
-          1,
-        );
-
-        expect(filteringQuestion.datasetQuery()).toEqual({
-          type: "query",
-          database: SAMPLE_DB_ID,
-          query: {
-            "source-table": ORDERS_ID,
-            filter: ["=", ["field", ORDERS.ID, null], 1],
-          },
-        });
-      });
-      it("works with a categorical value filter", () => {
-        const ordersProductId = metadata.field(ORDERS.PRODUCT_ID);
-        const productsCategory = metadata.field(PRODUCTS.CATEGORY);
-        const filteringQuestion = questionForFiltering.filter(
-          "=",
-          ordersProductId.foreign(productsCategory).column(),
-          "Doohickey",
-        );
-
-        expect(filteringQuestion.datasetQuery()).toEqual({
-          type: "query",
-          database: SAMPLE_DB_ID,
-          query: {
-            "source-table": ORDERS_ID,
-            filter: [
-              "=",
-              [
-                "field",
-                PRODUCTS.CATEGORY,
-                { "source-field": ORDERS.PRODUCT_ID },
-              ],
-              "Doohickey",
-            ],
-          },
-        });
-      });
-
-      it("works with a time filter", () => {
-        const ordersCreatedAt = metadata.field(ORDERS.CREATED_AT);
-        const filteringQuestion = questionForFiltering.filter(
-          "=",
-          ordersCreatedAt.column(),
-          "12/12/2012",
-        );
-
-        expect(filteringQuestion.datasetQuery()).toEqual({
-          type: "query",
-          database: SAMPLE_DB_ID,
-          query: {
-            "source-table": ORDERS_ID,
-            filter: ["=", ["field", ORDERS.CREATED_AT, null], "12/12/2012"],
-          },
-        });
-      });
-    });
-
-    describe("drillUnderlyingRecords(...)", () => {
-      it("applies a filter to a given query", () => {
-        const ordersId = metadata.field(ORDERS.ID);
-        const dimensions = [{ value: 1, column: ordersId.column() }];
-
-        const newQuestion =
-          orders_count_by_id_question.drillUnderlyingRecords(dimensions);
-
-        expect(newQuestion.datasetQuery()).toEqual({
-          type: "query",
-          database: SAMPLE_DB_ID,
-          query: {
-            "source-table": ORDERS_ID,
-            filter: [
-              "=",
-              ["field", ORDERS.ID, { "base-type": "type/BigInteger" }],
-              1,
-            ],
-          },
-        });
-      });
-
-      it("applies a filter from an aggregation to a given query", () => {
-        const ordersId = metadata.field(ORDERS.ID);
-        const dimensions = [{ value: 1, column: ordersId.column() }];
-        const column = { field_ref: ["aggregation", 0] };
-
-        const newQuestion = orders_count_where_question.drillUnderlyingRecords(
-          dimensions,
-          column,
-        );
-
-        expect(newQuestion.canRun()).toBe(true);
-        expect(newQuestion.datasetQuery()).toEqual({
-          type: "query",
-          database: SAMPLE_DB_ID,
-          query: {
-            "source-table": ORDERS_ID,
-            filter: [
-              "and",
-              [
-                "=",
-                ["field", ORDERS.ID, { "base-type": "type/BigInteger" }],
-                1,
-              ],
-              [">", ["field", ORDERS.TOTAL, { "base-type": "type/Float" }], 50],
-            ],
-          },
-        });
-      });
-
-      it("applies a filter from a metric to a given query", () => {
-        const ordersId = metadata.field(ORDERS.ID);
-        const dimensions = [{ value: 1, column: ordersId.column() }];
-        const column = { field_ref: ["aggregation", 0] };
-
-        const newQuestion =
-          orders_metric_filter_question.drillUnderlyingRecords(
-            dimensions,
-            column,
-          );
-
-        expect(newQuestion.canRun()).toBe(true);
-        expect(newQuestion.datasetQuery()).toEqual({
-          type: "query",
-          database: SAMPLE_DB_ID,
-          query: {
-            "source-table": ORDERS_ID,
-            filter: [
-              "and",
-              [
-                "=",
-                ["field", ORDERS.ID, { "base-type": "type/BigInteger" }],
-                1,
-              ],
-              [">", ["field", ORDERS.TOTAL, { "base-type": "type/Float" }], 20],
-            ],
-          },
-        });
-      });
-
-      it("removes post-aggregation filters from a given query", () => {
-        const ordersId = metadata.field(ORDERS.ID);
-        const dimensions = [{ value: 1, column: ordersId.column() }];
-
-        const newQuestion = orders_multi_stage_question
-          .topLevelQuestion()
-          .drillUnderlyingRecords(dimensions);
-
-        expect(newQuestion.datasetQuery()).toEqual({
-          type: "query",
-          database: SAMPLE_DB_ID,
-          query: {
-            "source-table": ORDERS_ID,
-            filter: [
-              "and",
-              [">", ["field", ORDERS.TOTAL, { "base-type": "type/Float" }], 10],
-              [
-                "=",
-                ["field", ORDERS.ID, { "base-type": "type/BigInteger" }],
-                1,
-              ],
-            ],
-          },
-        });
-      });
-    });
-
-    describe("toUnderlyingRecords(...)", () => {
-      it("returns underlying records correctly for a raw data query", () => {
-        const underlyingRecordsQuestion =
-          orders_raw_question.toUnderlyingRecords();
-
-        expect(underlyingRecordsQuestion.canRun()).toBe(true);
-        // if I actually call the .query() method below, this blows up garbage collection =/
-        expect(underlyingRecordsQuestion.datasetQuery()).toEqual(
-          orders_raw_card.dataset_query,
-        );
-
-        // Make sure we haven't mutated the underlying query
-        expect(orders_raw_card.dataset_query.query).toEqual({
-          "source-table": ORDERS_ID,
-        });
-      });
-      it("returns underlying records correctly for a broken out query", () => {
-        const underlyingRecordsQuestion =
-          orders_count_question.toUnderlyingRecords();
-
-        expect(underlyingRecordsQuestion.canRun()).toBe(true);
-        // if I actually call the .query() method below, this blows up garbage collection =/
-        expect(underlyingRecordsQuestion.datasetQuery()).toEqual(
-          orders_raw_card.dataset_query,
-        );
-
-        // Make sure we haven't mutated the underlying query
-        expect(orders_raw_card.dataset_query.query).toEqual({
-          "source-table": ORDERS_ID,
-        });
-      });
-    });
-
-    describe("toUnderlyingData()", () => {
-      it("returns underlying data correctly for table query", () => {
-        const underlyingDataQuestion = orders_count_question
-          .setDisplay("table")
-          .toUnderlyingData();
-
-        expect(underlyingDataQuestion.display()).toBe("table");
-      });
-      it("returns underlying data correctly for line chart", () => {
-        const underlyingDataQuestion = orders_count_question
-          .setDisplay("line")
-          .toUnderlyingData();
-
-        expect(underlyingDataQuestion.display()).toBe("table");
-      });
-    });
-
-    describe("drillPK(...)", () => {
-      it("returns the correct query for a PK detail drill-through", () => {
-        const ordersId = metadata.field(ORDERS.ID);
-        const drilledQuestion = orders_raw_question.drillPK(ordersId, 1);
-
-        expect(drilledQuestion.canRun()).toBe(true);
-
-        // if I actually call the .query() method below, this blows up garbage collection =/
-        expect(drilledQuestion.datasetQuery()).toEqual({
-          type: "query",
-          database: SAMPLE_DB_ID,
-          query: {
-            "source-table": ORDERS_ID,
-            filter: ["=", ["field", ORDERS.ID, null], 1],
-          },
-        });
-      });
-
-      describe("with composite PK", () => {
-        // Making TOTAL a PK column in addition to ID
-        const metadata = createMockMetadata({
-          databases: [
-            createSampleDatabase({
-              tables: [
-                createProductsTable(),
-                createPeopleTable(),
-                createReviewsTable(),
-                createOrdersTable({
-                  fields: [
-                    createOrdersIdField(),
-                    createOrdersUserIdField(),
-                    createOrdersProductIdField(),
-                    createOrdersSubtotalField(),
-                    createOrdersTaxField(),
-                    createOrdersTotalField({ semantic_type: "type/PK" }),
-                    createOrdersDiscountField(),
-                    createOrdersCreatedAtField(),
-                    createOrdersQuantityField(),
-                  ],
-                }),
-              ],
-            }),
-          ],
-        });
-
-        // Note: This is not orders_raw_question because we want the different metadata.
-        const question = new Question(orders_raw_card, metadata);
-
-        it("when drills to one column of a composite key returns equals filter by the column", () => {
-          const ordersId = metadata.field(ORDERS.ID);
-          const drilledQuestion = question.drillPK(ordersId, 1);
-
-          expect(drilledQuestion.canRun()).toBe(true);
-          expect(drilledQuestion.datasetQuery()).toEqual({
-            type: "query",
-            database: SAMPLE_DB_ID,
-            query: {
-              "source-table": ORDERS_ID,
-              filter: ["=", ["field", ORDERS.ID, null], 1],
-            },
-          });
-        });
-
-        it("when drills to both columns of a composite key returns query with equality filter by both PKs", () => {
-          const ordersId = metadata.field(ORDERS.ID);
-          const ordersTotal = metadata.field(ORDERS.TOTAL);
-
-          const drilledQuestion = question
-            .drillPK(ordersId, 1)
-            .drillPK(ordersTotal, 1);
-
-          expect(drilledQuestion.canRun()).toBe(true);
-          expect(drilledQuestion.datasetQuery()).toEqual({
-            type: "query",
-            database: SAMPLE_DB_ID,
-            query: {
-              "source-table": ORDERS_ID,
-              filter: [
-                "and",
-                ["=", ["field", ORDERS.TOTAL, null], 1],
-                ["=", ["field", ORDERS.ID, null], 1],
-              ],
-            },
-          });
-        });
-
-        it("when drills to other table PK removes the previous table PK filters", () => {
-          const ordersId = metadata.field(ORDERS.ID);
-          const productsId = metadata.field(PRODUCTS.ID);
-
-          const drilledQuestion = question
-            .drillPK(ordersId, 1)
-            .drillPK(productsId, 1);
-
-          expect(drilledQuestion.canRun()).toBe(true);
-          expect(drilledQuestion.datasetQuery()).toEqual({
-            type: "query",
-            database: SAMPLE_DB_ID,
-            query: {
-              "source-table": PRODUCTS_ID,
-              filter: ["=", ["field", PRODUCTS.ID, null], 1],
-            },
-          });
-        });
-      });
-    });
-  });
-
   describe("COMPARISON TO OTHER QUESTIONS", () => {
     describe("isDirtyComparedTo(question)", () => {
       it("New questions are automatically dirty", () => {
@@ -1042,8 +556,9 @@ describe("Question", () => {
         expect(newQuestion.isDirtyComparedTo(orders_raw_question)).toBe(true);
       });
       it("Changing vis settings makes the question dirty", () => {
-        const underlyingDataQuestion =
-          orders_count_question.toUnderlyingRecords();
+        const underlyingDataQuestion = orders_count_question.setSettings({
+          "table.pivot": false,
+        });
         expect(
           underlyingDataQuestion.isDirtyComparedTo(orders_count_question),
         ).toBe(true);
@@ -1081,182 +596,6 @@ describe("Question", () => {
     });
   });
 
-  describe("Question.prototype._syncNativeQuerySettings", () => {
-    let question;
-    const cols = [
-      {
-        display_name: "num",
-        source: "native",
-        field_ref: [
-          "field",
-          "num",
-          {
-            "base-type": "type/Float",
-          },
-        ],
-        name: "num",
-        base_type: "type/Float",
-      },
-      {
-        display_name: "text",
-        source: "native",
-        field_ref: [
-          "field",
-          "text",
-          {
-            "base-type": "type/Text",
-          },
-        ],
-        name: "text",
-        base_type: "type/Text",
-      },
-    ];
-
-    const vizSettingCols = [
-      {
-        name: "num",
-        fieldRef: ["field", "num", { "base-type": "type/Float" }],
-        enabled: true,
-      },
-      {
-        name: "text",
-        fieldRef: ["field", "text", { "base-type": "type/Text" }],
-        enabled: true,
-      },
-    ];
-
-    beforeEach(() => {
-      question = native_orders_count_question.clone();
-      question.setting = jest.fn();
-      question.updateSettings = jest.fn();
-    });
-
-    describe("when columns have not been defined", () => {
-      it("should do nothing when given no cols", () => {
-        question._syncNativeQuerySettings({});
-        question._syncNativeQuerySettings({ data: { cols: [] } });
-        question._syncNativeQuerySettings({ data: { cols } });
-
-        expect(question.updateSettings).not.toHaveBeenCalled();
-      });
-
-      it("should do nothing when given cols", () => {
-        question._syncNativeQuerySettings({ data: { cols } });
-
-        expect(question.updateSettings).not.toHaveBeenCalled();
-      });
-    });
-
-    describe("after vizSetting columns have been defined", () => {
-      beforeEach(() => {
-        question.setting.mockImplementation(property => {
-          if (property === "table.columns") {
-            return vizSettingCols;
-          }
-        });
-      });
-
-      it("should handle the addition and removal of columns", () => {
-        question._syncNativeQuerySettings({
-          data: {
-            cols: [
-              ...cols.slice(1),
-              {
-                display_name: "foo",
-                source: "native",
-                field_ref: [
-                  "field",
-                  "foo",
-                  {
-                    "base-type": "type/Float",
-                  },
-                ],
-                name: "foo",
-                base_type: "type/Float",
-              },
-            ],
-          },
-        });
-
-        expect(question.updateSettings).toHaveBeenCalledWith({
-          "table.columns": [
-            ...vizSettingCols.slice(1),
-            {
-              name: "foo",
-              fieldRef: [
-                "field",
-                "foo",
-                {
-                  "base-type": "type/Float",
-                },
-              ],
-              enabled: true,
-            },
-          ],
-        });
-      });
-
-      it("should handle the mutation of extraneous column props", () => {
-        question._syncNativeQuerySettings({
-          data: {
-            cols: [
-              {
-                display_name: "num with mutated display_name",
-                source: "native",
-                field_ref: [
-                  "field",
-                  "num",
-                  {
-                    "base-type": "type/Float",
-                  },
-                ],
-                name: "foo",
-                base_type: "type/Float",
-              },
-              ...cols.slice(1),
-            ],
-          },
-        });
-
-        expect(question.updateSettings).not.toHaveBeenCalled();
-      });
-
-      it("should handle the mutation of a field_ref on an existing column", () => {
-        question._syncNativeQuerySettings({
-          data: {
-            cols: [
-              {
-                display_name: "foo",
-                source: "native",
-                field_ref: [
-                  "field",
-                  "foo",
-                  {
-                    "base-type": "type/Integer",
-                  },
-                ],
-                name: "foo",
-                base_type: "type/Integer",
-              },
-              ...cols.slice(1),
-            ],
-          },
-        });
-
-        expect(question.updateSettings).toHaveBeenCalledWith({
-          "table.columns": [
-            ...vizSettingCols.slice(1),
-            {
-              name: "foo",
-              fieldRef: ["field", "foo", { "base-type": "type/Integer" }],
-              enabled: true,
-            },
-          ],
-        });
-      });
-    });
-  });
-
   describe("Question.prototype.getResultMetadata", () => {
     it("should return the `result_metadata` property off the underlying card", () => {
       const question = base_question.setResultsMetadata({ columns: [1, 2, 3] });
@@ -1266,24 +605,6 @@ describe("Question", () => {
     it("should default to an array", () => {
       const question = base_question.setResultsMetadata(null);
       expect(question.getResultMetadata()).toEqual([]);
-    });
-  });
-
-  describe("Question.prototype.dependentMetadata", () => {
-    it("should return model FK field targets", () => {
-      const question = base_question.setResultsMetadata({
-        columns: [{ semantic_type: SEMANTIC_TYPE.FK, fk_target_field_id: 5 }],
-      });
-
-      expect(question.dependentMetadata()).toEqual([{ type: "field", id: 5 }]);
-    });
-
-    it("should return skip with with FK target field which are not FKs semantically", () => {
-      const question = base_question.setResultsMetadata({
-        columns: [{ fk_target_field_id: 5 }],
-      });
-
-      expect(question.dependentMetadata()).toEqual([]);
     });
   });
 
@@ -1469,7 +790,14 @@ describe("Question", () => {
 
       expect(questionWithFilters.datasetQuery().query.filter).toEqual([
         "starts-with",
-        ["field", PRODUCTS.CATEGORY, null],
+        [
+          "field",
+          PRODUCTS.CATEGORY,
+          {
+            "base-type": "type/Text",
+            "source-field": ORDERS.PRODUCT_ID,
+          },
+        ],
         "abc",
         { "case-sensitive": false },
       ]);
@@ -1550,7 +878,7 @@ describe("Question", () => {
           ...assocIn(
             dissoc(card, "id"),
             ["dataset_query", "query", "filter"],
-            ["=", ["field", 1, null], "bar"],
+            ["=", ["field", 1, { "base-type": "type/Text" }], "bar"],
           ),
           original_card_id: card.id,
         };
@@ -1574,7 +902,7 @@ describe("Question", () => {
             ...assocIn(
               dissoc(card, "id"),
               ["dataset_query", "query", "filter"],
-              ["=", ["field", 2, null], 123],
+              ["=", ["field", 2, { "base-type": "type/Float" }], 123],
             ),
             original_card_id: card.id,
           },
@@ -1593,7 +921,15 @@ describe("Question", () => {
             ...assocIn(
               dissoc(card, "id"),
               ["dataset_query", "query", "filter"],
-              ["=", ["field", 3, { "temporal-unit": "month" }], "2017-05-01"],
+              [
+                "=",
+                [
+                  "field",
+                  3,
+                  { "base-type": "type/BigInteger", "temporal-unit": "month" },
+                ],
+                "2017-05-01",
+              ],
             ),
             original_card_id: card.id,
           },

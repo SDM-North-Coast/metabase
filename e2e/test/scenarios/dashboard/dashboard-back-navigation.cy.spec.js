@@ -1,34 +1,35 @@
+import { SAMPLE_DB_ID } from "e2e/support/cypress_data";
+import { SAMPLE_DATABASE } from "e2e/support/cypress_sample_database";
+import {
+  ADMIN_PERSONAL_COLLECTION_ID,
+  ORDERS_DASHBOARD_ID,
+  ORDERS_QUESTION_ID,
+} from "e2e/support/cypress_sample_instance_data";
 import {
   appBar,
   collectionTable,
   createAction,
+  filterWidget,
   getActionCardDetails,
-  getTextCardDetails,
   getDashboardCard,
   getDashboardCardMenu,
   getDashboardCards,
+  getTextCardDetails,
   modal,
+  openNotebook,
+  openQuestionsSidebar,
   popover,
   queryBuilderHeader,
   restore,
   rightSidebar,
+  saveDashboard,
   setActionsEnabledForDB,
+  sidebar,
   summarize,
   visitDashboard,
   visitDashboardAndCreateTab,
   visualize,
-  openQuestionsSidebar,
-  sidebar,
-  saveDashboard,
-  filterWidget,
 } from "e2e/support/helpers";
-import { SAMPLE_DATABASE } from "e2e/support/cypress_sample_database";
-import {
-  ORDERS_QUESTION_ID,
-  ORDERS_DASHBOARD_ID,
-  ADMIN_PERSONAL_COLLECTION_ID,
-} from "e2e/support/cypress_sample_instance_data";
-import { SAMPLE_DB_ID } from "e2e/support/cypress_data";
 
 const { ORDERS_ID } = SAMPLE_DATABASE;
 const PG_DB_ID = 2;
@@ -42,12 +43,12 @@ describe("scenarios > dashboard > dashboard back navigation", () => {
     cy.signInAsAdmin();
     setActionsEnabledForDB(SAMPLE_DB_ID);
 
-    cy.intercept("POST", `/api/dataset`).as("dataset");
+    cy.intercept("POST", "/api/dataset").as("dataset");
     cy.intercept("GET", "/api/card/*").as("card");
-    cy.intercept("POST", `/api/card/*/query`).as("cardQuery");
-    cy.intercept("PUT", `/api/card/*`).as("updateCard");
-    cy.intercept("GET", `/api/dashboard/*`).as("dashboard");
-    cy.intercept("POST", `/api/dashboard/*/dashcard/*/card/*/query`).as(
+    cy.intercept("POST", "/api/card/*/query").as("cardQuery");
+    cy.intercept("PUT", "/api/card/*").as("updateCard");
+    cy.intercept("GET", "/api/dashboard/*").as("dashboard");
+    cy.intercept("POST", "/api/dashboard/*/dashcard/*/card/*/query").as(
       "dashcardQuery",
     );
   });
@@ -61,7 +62,7 @@ describe("scenarios > dashboard > dashboard back navigation", () => {
     cy.findByTestId("dashcard").findByText("Orders").click();
     cy.wait("@cardQuery");
     cy.findByLabelText(backButtonLabel).should("be.visible");
-    cy.icon("notebook").click();
+    openNotebook();
     summarize({ mode: "notebook" });
     popover().findByText("Count of rows").click();
     cy.findByLabelText(backButtonLabel).should("be.visible");
@@ -87,7 +88,7 @@ describe("scenarios > dashboard > dashboard back navigation", () => {
 
   it("should expand the native editor when editing a question from a dashboard", () => {
     createDashboardWithNativeCard();
-    cy.get("@dashboardId").then(visitDashboard);
+    visitDashboard("@dashboardId");
     getDashboardCard().realHover();
     getDashboardCardMenu().click();
     popover().findByText("Edit question").click();
@@ -101,56 +102,46 @@ describe("scenarios > dashboard > dashboard back navigation", () => {
     cy.findByTestId("native-query-editor").should("not.be.visible");
   });
 
-  it(
-    "should display a back to the dashboard button in table x-ray dashboards",
-    { tags: "@slow" },
-    () => {
-      const cardTitle = "Total transactions";
-      cy.visit(`/auto/dashboard/table/${ORDERS_ID}?#show=${MAX_CARDS}`);
-      cy.wait("@dataset", { timeout: MAX_XRAY_WAIT_TIMEOUT });
+  it("should display a back to the dashboard button in table x-ray dashboards", () => {
+    const cardTitle = "Total transactions";
+    cy.visit(`/auto/dashboard/table/${ORDERS_ID}?#show=${MAX_CARDS}`);
+    cy.wait("@dataset", { timeout: MAX_XRAY_WAIT_TIMEOUT });
 
-      getDashboardCards()
-        .filter(`:contains("${cardTitle}")`)
-        .findByText(cardTitle)
-        .click();
-      cy.wait("@dataset");
+    getDashboardCards()
+      .filter(`:contains("${cardTitle}")`)
+      .findByText(cardTitle)
+      .click();
+    cy.wait("@dataset");
 
-      queryBuilderHeader()
-        .findByLabelText(/Back to .*Orders.*/)
-        .click();
+    queryBuilderHeader()
+      .findByLabelText(/Back to .*Orders.*/)
+      .click();
 
-      getDashboardCards().filter(`:contains("${cardTitle}")`).should("exist");
-    },
-  );
+    getDashboardCards().filter(`:contains("${cardTitle}")`).should("exist");
+  });
 
-  it(
-    "should display a back to the dashboard button in model x-ray dashboards",
-    { tags: "@slow" },
-    () => {
-      const cardTitle = "Orders by Subtotal";
-      cy.request("PUT", `/api/card/${ORDERS_QUESTION_ID}`, { dataset: true });
-      cy.visit(
-        `/auto/dashboard/model/${ORDERS_QUESTION_ID}?#show=${MAX_CARDS}`,
-      );
-      cy.wait("@dataset", { timeout: MAX_XRAY_WAIT_TIMEOUT });
+  it("should display a back to the dashboard button in model x-ray dashboards", () => {
+    const cardTitle = "Orders by Subtotal";
+    cy.request("PUT", `/api/card/${ORDERS_QUESTION_ID}`, { type: "model" });
+    cy.visit(`/auto/dashboard/model/${ORDERS_QUESTION_ID}?#show=${MAX_CARDS}`);
+    cy.wait("@dataset", { timeout: MAX_XRAY_WAIT_TIMEOUT });
 
-      getDashboardCards()
-        .filter(`:contains("${cardTitle}")`)
-        .findByText(cardTitle)
-        .click();
-      cy.wait("@dataset");
+    getDashboardCards()
+      .filter(`:contains("${cardTitle}")`)
+      .findByText(cardTitle)
+      .click();
+    cy.wait("@dataset");
 
-      queryBuilderHeader()
-        .findByLabelText(/Back to .*Orders.*/)
-        .click();
+    queryBuilderHeader()
+      .findByLabelText(/Back to .*Orders.*/)
+      .click();
 
-      getDashboardCards().filter(`:contains("${cardTitle}")`).should("exist");
-    },
-  );
+    getDashboardCards().filter(`:contains("${cardTitle}")`).should("exist");
+  });
 
   it("should preserve query results when navigating between the dashboard and the query builder", () => {
     createDashboardWithCards();
-    cy.get("@dashboardId").then(visitDashboard);
+    visitDashboard("@dashboardId");
     cy.wait("@dashboard");
     cy.wait("@dashcardQuery");
 
@@ -186,7 +177,7 @@ describe("scenarios > dashboard > dashboard back navigation", () => {
     cy.wait("@dashcardQuery");
 
     getDashboardCard().within(() => {
-      cy.findByText("101.04").should("be.visible"); // table data
+      cy.findByText("134.91").should("be.visible"); // table data
       cy.findByText("Orders").click();
       cy.wait("@cardQuery");
     });
@@ -205,8 +196,8 @@ describe("scenarios > dashboard > dashboard back navigation", () => {
       cy.findByText("Save").click();
     });
 
-    modal().within(() => {
-      cy.button("Save").click();
+    cy.findByTestId("save-question-modal").within(() => {
+      cy.findByText("Save").click();
       cy.wait("@updateCard");
     });
 
@@ -225,7 +216,7 @@ describe("scenarios > dashboard > dashboard back navigation", () => {
   it("should navigate back to a dashboard with permission errors", () => {
     createDashboardWithPermissionError();
     cy.signInAsNormalUser();
-    cy.get("@dashboardId").then(visitDashboard);
+    visitDashboard("@dashboardId");
     cy.wait("@dashboard");
     cy.wait("@dashcardQuery");
 
@@ -278,7 +269,7 @@ describe(
       cy.signInAsAdmin();
       cy.intercept("GET", "/api/dashboard/*").as("dashboard");
       cy.intercept("GET", "/api/card/*").as("card");
-      cy.intercept("POST", `/api/dashboard/*/dashcard/*/card/*/query`).as(
+      cy.intercept("POST", "/api/dashboard/*/dashcard/*/card/*/query").as(
         "dashcardQuery",
       );
     });
@@ -339,7 +330,7 @@ describe(
       cy.wait("@dashboard");
 
       getDashboardCard().within(() => {
-        cy.findByTestId("loading-spinner").should("be.visible");
+        cy.findByTestId("loading-indicator").should("be.visible");
         cy.findByText("Sleep card").click();
         cy.wait("@card");
       });
@@ -369,7 +360,7 @@ const createDashboardWithCards = () => {
   const modelDetails = {
     name: "Orders model",
     query: { "source-table": ORDERS_ID },
-    dataset: true,
+    type: "model",
   };
 
   const actionDetails = {

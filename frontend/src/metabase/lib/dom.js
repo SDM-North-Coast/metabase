@@ -1,6 +1,7 @@
-import _ from "underscore";
 import querystring from "querystring";
-import { isCypressActive } from "metabase/env";
+import _ from "underscore";
+
+import { isCypressActive, isStorybookActive } from "metabase/env";
 import MetabaseSettings from "metabase/lib/settings";
 
 // IE doesn't support scrollX/scrollY:
@@ -10,10 +11,20 @@ export const getScrollY = () =>
   typeof window.scrollY === "undefined" ? window.pageYOffset : window.scrollY;
 
 // denotes whether the current page is loaded in an iframe or not
-// Cypress renders the whole app within an iframe, but we want to exlude it from this check to avoid certain components (like Nav bar) not rendering
+// Cypress renders the whole app within an iframe, but we want to exclude it from this check to avoid certain components (like Nav bar) not rendering
+// Storybook also uses an iframe to display story content, so we want to ignore it
 export const isWithinIframe = function () {
   try {
-    return !isCypressActive && window.self !== window.top;
+    if (isCypressActive || isStorybookActive) {
+      return false;
+    }
+
+    // Mock that we're embedding, so we could visual test embed components
+    if (window.overrideIsWithinIframe) {
+      return true;
+    }
+
+    return window.self !== window.top;
   } catch (e) {
     return true;
   }
@@ -26,7 +37,7 @@ window.METABASE = true;
 // used for detecting if we're previewing an embed
 export const IFRAMED_IN_SELF = (function () {
   try {
-    return window.self !== window.top && window.top.METABASE;
+    return window.self !== window.parent && window.parent.METABASE;
   } catch (e) {
     return false;
   }
@@ -220,7 +231,36 @@ export function constrainToScreen(element, direction, padding) {
   return false;
 }
 
-const isAbsoluteUrl = url => url.startsWith("/");
+export function getSitePath() {
+  return new URL(MetabaseSettings.get("site-url")).pathname.toLowerCase();
+}
+
+function isMetabaseUrl(url) {
+  const urlPath = new URL(url, window.location.origin).pathname.toLowerCase();
+
+  if (!isAbsoluteUrl(url)) {
+    return true;
+  }
+
+  const pathNameWithoutSubPath = getPathnameWithoutSubPath(urlPath);
+  const isPublicLink = pathNameWithoutSubPath.startsWith("/public/");
+  const isEmbedding = pathNameWithoutSubPath.startsWith("/embed/");
+  /**
+   * (metabase#38640) We don't want to use client-side navigation for public links or embedding
+   * because public app, or embed app are built using separate routes.
+   **/
+  if (isPublicLink || isEmbedding) {
+    return false;
+  }
+
+  return isSameOrSiteUrlOrigin(url) && urlPath.startsWith(getSitePath());
+}
+
+function isAbsoluteUrl(url) {
+  return ["/", "http:", "https:", "mailto:"].some(prefix =>
+    url.startsWith(prefix),
+  );
+}
 
 function getWithSiteUrl(url) {
   const siteUrl = MetabaseSettings.get("site-url");
@@ -272,21 +312,20 @@ export function open(
     // custom function for opening in new window
     openInBlankWindow = url => clickLink(url, true),
     // custom function for opening in same app instance
-    openInSameOrigin = openInSameWindow,
+    openInSameOrigin,
     ignoreSiteUrl = false,
     ...options
   } = {},
 ) {
-  const isOriginalUrlAbsolute = isAbsoluteUrl(url); // this does not check real "absolute" url, but if a url should be resolved from the root URL
   url = ignoreSiteUrl ? url : getWithSiteUrl(url);
 
   if (shouldOpenInBlankWindow(url, options)) {
     openInBlankWindow(url);
   } else if (isSameOrigin(url)) {
-    if (isOriginalUrlAbsolute) {
+    if (!isMetabaseUrl(url)) {
       clickLink(url, false);
     } else {
-      openInSameOrigin(url, getLocation(url));
+      openInSameOrigin(getLocation(url));
     }
   } else {
     openInSameWindow(url);
@@ -350,11 +389,38 @@ const getLocation = url => {
   try {
     const { pathname, search, hash } = new URL(url, window.location.origin);
     const query = querystring.parse(search.substring(1));
-    return { pathname, search, query, hash };
+    return {
+      pathname: getPathnameWithoutSubPath(pathname),
+      search,
+      query,
+      hash,
+    };
   } catch {
     return {};
   }
 };
+
+function getPathnameWithoutSubPath(pathname) {
+  const pathnameSections = pathname.split("/");
+  const sitePathSections = getSitePath().split("/");
+
+  return isPathnameContainSitePath(pathnameSections, sitePathSections)
+    ? "/" + pathnameSections.slice(sitePathSections.length).join("/")
+    : pathname;
+}
+
+function isPathnameContainSitePath(pathnameSections, sitePathSections) {
+  for (let index = 0; index < sitePathSections.length; index++) {
+    const sitePathSection = sitePathSections[index].toLowerCase();
+    const pathnameSection = pathnameSections[index].toLowerCase();
+
+    if (sitePathSection !== pathnameSection) {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 export function isSameOrigin(url) {
   const origin = getOrigin(url);
@@ -429,23 +495,10 @@ export function initializeIframeResizer(onReady = () => {}) {
       onReady,
     };
 
-    // FIXME: Crimes
-    // This is needed so the FE test framework which runs in node
-    // without the avaliability of require.ensure skips over this part
-    // which is for external purposes only.
-    //
-    // Ideally that should happen in the test config, but it doesn't
-    // seem to want to play nice when messing with require
-    if (typeof require.ensure !== "function") {
-      return false;
-    }
-
     // Make iframe-resizer avaliable to the embed
     // We only care about contentWindow so require that minified file
 
-    require.ensure([], require => {
-      require("iframe-resizer/js/iframeResizer.contentWindow.js");
-    });
+    import("iframe-resizer/js/iframeResizer.contentWindow.js");
   }
 }
 
@@ -461,6 +514,9 @@ export function isReducedMotionPreferred() {
   return mediaQuery && mediaQuery.matches;
 }
 
+/**
+ * @returns {HTMLElement | undefined}
+ */
 export function getMainElement() {
   const [main] = document.getElementsByTagName("main");
   return main;
@@ -501,4 +557,16 @@ export function reload() {
  */
 export function redirect(url) {
   window.location.href = url;
+}
+
+export function openSaveDialog(fileName, fileContent) {
+  const url = URL.createObjectURL(fileContent);
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", fileName);
+  document.body.appendChild(link);
+  link.click();
+
+  URL.revokeObjectURL(url);
+  link.remove();
 }

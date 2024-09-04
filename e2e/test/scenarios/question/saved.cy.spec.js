@@ -1,73 +1,74 @@
 import {
-  restore,
-  popover,
-  modal,
-  openOrdersTable,
-  summarize,
-  visitQuestion,
-  openQuestionActions,
-  questionInfoButton,
-  rightSidebar,
-  appBar,
-} from "e2e/support/helpers";
-
-import {
+  ORDERS_COUNT_QUESTION_ID,
   ORDERS_QUESTION_ID,
   SECOND_COLLECTION_ID,
 } from "e2e/support/cypress_sample_instance_data";
+import {
+  WEBHOOK_TEST_DASHBOARD,
+  WEBHOOK_TEST_HOST,
+  WEBHOOK_TEST_SESSION_ID,
+  WEBHOOK_TEST_URL,
+  addSummaryGroupingField,
+  appBar,
+  collectionOnTheGoModal,
+  entityPickerModal,
+  entityPickerModalTab,
+  getAlertChannel,
+  modal,
+  openNotebook,
+  openOrdersTable,
+  openQuestionActions,
+  popover,
+  queryBuilderHeader,
+  questionInfoButton,
+  restore,
+  rightSidebar,
+  selectFilterOperator,
+  summarize,
+  tableHeaderClick,
+  visitQuestion,
+} from "e2e/support/helpers";
 
 describe("scenarios > question > saved", () => {
   beforeEach(() => {
     restore();
     cy.signInAsNormalUser();
+    cy.intercept("POST", "api/card").as("cardCreate");
   });
 
   it("should should correctly display 'Save' modal (metabase#13817)", () => {
     openOrdersTable();
-    cy.icon("notebook").click();
+    openNotebook();
+
     summarize({ mode: "notebook" });
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("Count of rows").click();
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("Pick a column to group by").click();
-    popover().findByText("Total").click();
+    popover().findByText("Count of rows").click();
+    addSummaryGroupingField({ field: "Total" });
+
     // Save the question
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("Save").click();
-    modal().within(() => {
+    queryBuilderHeader().button("Save").click();
+    cy.findByTestId("save-question-modal").within(modal => {
       cy.findByText("Save").click();
     });
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("Not now").click();
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("Save").should("not.exist");
+    cy.wait("@cardCreate");
+    cy.button("Not now").click();
 
     // Add a filter in order to be able to save question again
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("Filter").click();
-    popover()
-      .findByText(/^Total$/)
-      .click();
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("Equal to").click();
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("Greater than").click();
-    cy.findByPlaceholderText("Enter a number").type("60");
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("Add filter").click();
+    cy.findAllByTestId("action-buttons").last().findByText("Filter").click();
 
-    // Save question - opens "Save question" modal
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("Save").click();
+    popover().findByText("Total: Auto binned").click();
+    selectFilterOperator("Greater than");
 
-    modal().within(() => {
-      cy.findByText("Save question");
-      cy.button("Save").as("saveButton");
-      cy.get("@saveButton").should("not.be.disabled");
+    popover().within(() => {
+      cy.findByPlaceholderText("Enter a number").type("60");
+      cy.button("Add filter").click();
+    });
 
-      cy.log(
-        "**When there is no question name, it shouldn't be possible to save**",
-      );
+    queryBuilderHeader().button("Save").click();
+
+    cy.findByTestId("save-question-modal").within(modal => {
+      cy.findByText("Save question").should("be.visible");
+      cy.findByTestId("save-question-button").should("be.enabled");
+
       cy.findByText("Save as new question").click();
       cy.findByLabelText("Name")
         .click()
@@ -75,13 +76,10 @@ describe("scenarios > question > saved", () => {
         .blur();
       cy.findByLabelText("Name: required").should("be.empty");
       cy.findByLabelText("Description").should("be.empty");
-      cy.get("@saveButton").should("be.disabled");
+      cy.findByTestId("save-question-button").should("be.disabled");
 
-      cy.log(
-        "**It should `always` be possible to overwrite the original question**",
-      );
       cy.findByText(/^Replace original question,/).click();
-      cy.get("@saveButton").should("not.be.disabled");
+      cy.findByTestId("save-question-button").should("be.enabled");
     });
   });
 
@@ -90,10 +88,9 @@ describe("scenarios > question > saved", () => {
     cy.findAllByText("Orders"); // question and table name appears
 
     // filter to only orders with quantity=100
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("Quantity").click();
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    popover().within(() => cy.findByText("Filter by this column").click());
+    tableHeaderClick("Quantity");
+    popover().findByText("Filter by this column").click();
+    selectFilterOperator("Equal to");
     popover().within(() => {
       cy.findByPlaceholderText("Search the list").type("100");
       cy.findByText("100").click();
@@ -107,7 +104,7 @@ describe("scenarios > question > saved", () => {
     // check that save will give option to replace
     // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
     cy.findByText("Save").click();
-    modal().within(() => {
+    cy.findByTestId("save-question-modal").within(modal => {
       cy.findByText('Replace original question, "Orders"');
       cy.findByText("Save as new question");
       cy.findByText("Cancel").click();
@@ -140,9 +137,7 @@ describe("scenarios > question > saved", () => {
       cy.wait("@cardCreate");
     });
 
-    modal().within(() => {
-      cy.findByText("Not now").click();
-    });
+    cy.button("Not now").click();
 
     cy.findByTestId("qb-header-left-side").within(() => {
       cy.findByDisplayValue("Orders - Duplicate");
@@ -161,23 +156,30 @@ describe("scenarios > question > saved", () => {
 
     modal().within(() => {
       cy.findByLabelText("Name").should("have.value", "Orders - Duplicate");
-      cy.findByTestId("select-button").click();
+      cy.findByTestId("collection-picker-button").click();
     });
-    popover().findByText("New collection").click();
+
+    entityPickerModal().findByText("Create a new collection").click();
 
     const NEW_COLLECTION = "Foo";
-    modal().within(() => {
-      cy.findByLabelText("Name").type(NEW_COLLECTION);
+    collectionOnTheGoModal().then(() => {
+      cy.findByPlaceholderText("My new collection").type(NEW_COLLECTION);
       cy.findByText("Create").click();
+    });
+
+    entityPickerModal().findByText("Select").click();
+
+    modal().within(() => {
       cy.findByLabelText("Name").should("have.value", "Orders - Duplicate");
-      cy.findByTestId("select-button").should("have.text", NEW_COLLECTION);
+      cy.findByTestId("collection-picker-button").should(
+        "have.text",
+        NEW_COLLECTION,
+      );
       cy.findByText("Duplicate").click();
       cy.wait("@cardCreate");
     });
 
-    modal().within(() => {
-      cy.findByText("Not now").click();
-    });
+    cy.button("Not now").click();
 
     cy.findByTestId("qb-header-left-side").within(() => {
       cy.findByDisplayValue("Orders - Duplicate");
@@ -210,13 +212,6 @@ describe("scenarios > question > saved", () => {
     cy.findByText(/reverted to an earlier version/i);
     // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
     cy.findByText(/This is a question/i).should("not.exist");
-  });
-
-  it("should show table name in header with a table info popover on hover", () => {
-    visitQuestion(ORDERS_QUESTION_ID);
-    cy.findByTestId("question-table-badges").trigger("mouseenter");
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("9 columns");
   });
 
   it("should show collection breadcrumbs for a saved question in the root collection", () => {
@@ -257,40 +252,44 @@ describe("scenarios > question > saved", () => {
     });
   });
 
-  it("'read-only' user should be able to resize column width (metabase#9772)", () => {
-    cy.signIn("readonly");
-    visitQuestion(ORDERS_QUESTION_ID);
+  it(
+    "'read-only' user should be able to resize column width (metabase#9772)",
+    { tags: "@flaky" },
+    () => {
+      cy.signIn("readonly");
+      visitQuestion(ORDERS_QUESTION_ID);
 
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("Tax")
-      .closest(".TableInteractive-headerCellData")
-      .as("headerCell")
-      .then($cell => {
-        const originalWidth = $cell[0].getBoundingClientRect().width;
+      // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
+      cy.findByText("Tax")
+        .closest(".test-TableInteractive-headerCellData")
+        .as("headerCell")
+        .then($cell => {
+          const originalWidth = $cell[0].getBoundingClientRect().width;
 
-        // Retries the assertion a few times to ensure it waits for DOM changes
-        // More context: https://github.com/metabase/metabase/pull/21823#discussion_r855302036
-        function assertColumnResized(attempt = 0) {
-          cy.get("@headerCell").then($newCell => {
-            const newWidth = $newCell[0].getBoundingClientRect().width;
-            if (newWidth === originalWidth && attempt < 3) {
-              cy.wait(100);
-              assertColumnResized(++attempt);
-            } else {
-              expect(newWidth).to.be.gt(originalWidth);
-            }
-          });
-        }
+          // Retries the assertion a few times to ensure it waits for DOM changes
+          // More context: https://github.com/metabase/metabase/pull/21823#discussion_r855302036
+          function assertColumnResized(attempt = 0) {
+            cy.get("@headerCell").then($newCell => {
+              const newWidth = $newCell[0].getBoundingClientRect().width;
+              if (newWidth === originalWidth && attempt < 3) {
+                cy.wait(100);
+                assertColumnResized(++attempt);
+              } else {
+                expect(newWidth).to.be.gt(originalWidth);
+              }
+            });
+          }
 
-        cy.wrap($cell)
-          .find(".react-draggable")
-          .trigger("mousedown", 0, 0, { force: true })
-          .trigger("mousemove", 100, 0, { force: true })
-          .trigger("mouseup", 100, 0, { force: true });
+          cy.wrap($cell)
+            .find(".react-draggable")
+            .trigger("mousedown", 0, 0, { force: true })
+            .trigger("mousemove", 100, 0, { force: true })
+            .trigger("mouseup", 100, 0, { force: true });
 
-        assertColumnResized();
-      });
-  });
+          assertColumnResized();
+        });
+    },
+  );
 
   it("should always be possible to view the full title text of the saved question", () => {
     visitQuestion(ORDERS_QUESTION_ID);
@@ -308,4 +307,132 @@ describe("scenarios > question > saved", () => {
       expect(heightDifference).to.eq(0);
     });
   });
+
+  it("should not show '- Modified' suffix after we click 'Save' on a new model (metabase#42773)", () => {
+    cy.log("Use UI to create a model based on the Products table");
+    cy.visit("/model/new");
+    cy.findByTestId("new-model-options")
+      .findByText("Use the notebook editor")
+      .click();
+
+    entityPickerModal().within(() => {
+      entityPickerModalTab("Tables").click();
+      cy.findByText("Products").click();
+    });
+
+    cy.findByTestId("dataset-edit-bar").button("Save").click();
+
+    cy.findByTestId("save-question-modal").within(() => {
+      cy.button("Save").click();
+      cy.wait("@cardCreate");
+      // It is important to have extremely short timeout in order to catch the issue
+      cy.findByDisplayValue("Products - Modified", { timeout: 10 }).should(
+        "not.exist",
+      );
+    });
+  });
 });
+
+//http://127.0.0.1:9080/api/session/00000000-0000-0000-0000-000000000000/requests
+
+// Ensure the webhook tester docker container is running
+// docker run -p 9080:8080/tcp tarampampam/webhook-tester serve --create-session 00000000-0000-0000-0000-000000000000
+describe(
+  "scenarios > question > saved > alerts",
+  { tags: ["@external"] },
+
+  () => {
+    const firstWebhookName = "E2E Test Webhook";
+    const secondWebhookName = "Toucan Hook";
+
+    beforeEach(() => {
+      restore();
+      cy.signInAsAdmin();
+
+      cy.request("POST", "/api/channel", {
+        name: firstWebhookName,
+        description: "All aboard the Metaboat",
+        type: "channel/http",
+        details: {
+          url: WEBHOOK_TEST_URL,
+          "auth-method": "none",
+          "fe-form-type": "none",
+        },
+      });
+
+      cy.request("POST", "/api/channel", {
+        name: secondWebhookName,
+        description: "Quack!",
+        type: "channel/http",
+        details: {
+          url: WEBHOOK_TEST_URL,
+          "auth-method": "none",
+          "fe-form-type": "none",
+        },
+      });
+
+      cy.request(
+        "DELETE",
+        `${WEBHOOK_TEST_HOST}/api/session/${WEBHOOK_TEST_SESSION_ID}/requests`,
+        { failOnStatusCode: false },
+      );
+    });
+
+    it("should allow you to enable a webhook alert", () => {
+      visitQuestion(ORDERS_COUNT_QUESTION_ID);
+      cy.findByTestId("sharing-menu-button").click();
+      popover().findByText("Create alert").click();
+      modal().button("Set up an alert").click();
+      modal().within(() => {
+        getAlertChannel(secondWebhookName).scrollIntoView();
+        getAlertChannel(secondWebhookName)
+          .findByRole("checkbox")
+          .click({ force: true });
+        cy.button("Done").click();
+      });
+      cy.findByTestId("sharing-menu-button").click();
+      popover().findByText("Edit alerts").click();
+      popover().within(() => {
+        cy.findByText("You set up an alert").should("exist");
+        cy.findByText("Edit").click();
+      });
+
+      modal().within(() => {
+        getAlertChannel(secondWebhookName).scrollIntoView();
+        getAlertChannel(secondWebhookName)
+          .findByRole("checkbox")
+          .should("be.checked");
+      });
+    });
+
+    it("should allow you to test a webhook", () => {
+      visitQuestion(ORDERS_COUNT_QUESTION_ID);
+      cy.findByTestId("sharing-menu-button").click();
+      popover().findByText("Create alert").click();
+      modal().button("Set up an alert").click();
+      modal().within(() => {
+        getAlertChannel(firstWebhookName).scrollIntoView();
+
+        getAlertChannel(firstWebhookName)
+          .findByRole("checkbox")
+          .click({ force: true });
+
+        getAlertChannel(firstWebhookName).button("Send a test").click();
+      });
+
+      cy.visit(WEBHOOK_TEST_DASHBOARD);
+
+      cy.findByRole("heading", { name: /Requests 1/ }).should("exist");
+
+      cy.request(
+        `${WEBHOOK_TEST_HOST}/api/session/${WEBHOOK_TEST_SESSION_ID}/requests`,
+      ).then(({ body }) => {
+        const payload = cy.wrap(atob(body[0].content_base64));
+
+        payload
+          .should("have.string", "alert_creator_name")
+          .and("have.string", "Bobby Tables");
+      });
+    });
+  },
+);

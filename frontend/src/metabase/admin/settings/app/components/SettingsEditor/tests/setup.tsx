@@ -1,5 +1,14 @@
 /* istanbul ignore file */
 import { IndexRedirect, Route } from "react-router";
+
+import { setupEnterprisePlugins } from "__support__/enterprise";
+import {
+  setupApiKeyEndpoints,
+  setupPropertiesEndpoints,
+  setupSettingsEndpoints,
+} from "__support__/server-mocks";
+import { mockSettings } from "__support__/settings";
+import { renderWithProviders, screen, waitFor } from "__support__/ui";
 import type {
   SettingDefinition,
   Settings,
@@ -13,13 +22,7 @@ import {
   createMockUser,
 } from "metabase-types/api/mocks";
 import { createMockState } from "metabase-types/store/mocks";
-import { setupEnterprisePlugins } from "__support__/enterprise";
-import {
-  setupPropertiesEndpoints,
-  setupSettingsEndpoints,
-} from "__support__/server-mocks";
-import { mockSettings } from "__support__/settings";
-import { renderWithProviders, screen, waitFor } from "__support__/ui";
+
 import SettingsEditor from "../SettingsEditor";
 
 export const FULL_APP_EMBEDDING_URL =
@@ -61,10 +64,11 @@ export const setup = async ({
     setupEnterprisePlugins();
   }
 
+  setupApiKeyEndpoints([]);
   setupSettingsEndpoints(settings);
   setupPropertiesEndpoints(settingValuesWithToken);
 
-  renderWithProviders(
+  const { history } = renderWithProviders(
     <Route path="/admin/settings">
       <IndexRedirect to="general" />
       <Route path="*" component={SettingsEditor} />
@@ -77,4 +81,6 @@ export const setup = async ({
   );
 
   await waitFor(() => screen.getByText(/general/i));
+
+  return { history };
 };

@@ -1,5 +1,7 @@
-import type { Alert } from "../alert";
-import { createMockCard } from "./card";
+import type { Alert, AlertCard } from "../alert";
+import type { Channel } from "../notifications";
+
+import { createMockEntityId } from "./entity-id";
 import { createMockUserInfo } from "./user";
 
 export const createMockAlert = (opts?: Partial<Alert>): Alert => ({
@@ -10,9 +12,9 @@ export const createMockAlert = (opts?: Partial<Alert>): Alert => ({
   alert_first_only: false,
   skip_if_empty: false,
 
-  card: createMockCard(),
+  card: createMockAlertCard(),
   parameters: [],
-  channels: [],
+  channels: [createMockChannel()],
 
   dashboard_id: null,
   collection_id: null,
@@ -21,7 +23,7 @@ export const createMockAlert = (opts?: Partial<Alert>): Alert => ({
   can_write: true,
   archived: false,
 
-  entity_id: "1",
+  entity_id: createMockEntityId(),
 
   creator_id: 1,
   creator: createMockUserInfo(),
@@ -31,3 +33,24 @@ export const createMockAlert = (opts?: Partial<Alert>): Alert => ({
 
   ...opts,
 });
+
+export const createMockChannel = (opts?: Partial<Channel>): Channel => ({
+  channel_type: "email",
+  details: {},
+  enabled: true,
+  recipients: [],
+  schedule_day: null,
+  schedule_frame: null,
+  schedule_hour: null,
+  schedule_type: "daily",
+  ...opts,
+});
+
+export function createMockAlertCard(opts?: Partial<AlertCard>): AlertCard {
+  return {
+    id: 1,
+    include_csv: false,
+    include_xls: false,
+    ...opts,
+  };
+}

@@ -1,12 +1,17 @@
+import { ORDERS_DASHBOARD_ID } from "e2e/support/cypress_sample_instance_data";
 import {
+  editDashboard,
+  getDashboardCard,
+  getDashboardCardMenu,
+  getDraggableElements,
+  modal,
+  moveDnDKitElement,
   popover,
   restore,
-  visitDashboard,
-  getDashboardCard,
-  editDashboard,
+  saveDashboard,
   showDashboardCardActions,
+  visitDashboard,
 } from "e2e/support/helpers";
-import { ORDERS_DASHBOARD_ID } from "e2e/support/cypress_sample_instance_data";
 
 describe("scenarios > dashboard cards > visualization options", () => {
   beforeEach(() => {
@@ -14,20 +19,30 @@ describe("scenarios > dashboard cards > visualization options", () => {
     cy.signInAsAdmin();
   });
 
-  it("should allow empty card title (metabase#12013)", () => {
+  it("should allow empty card title (metabase#12013, metabase#36788)", () => {
+    const originalCardTitle = "Orders";
     visitDashboard(ORDERS_DASHBOARD_ID);
 
-    cy.findByTextEnsureVisible("Orders");
-    cy.findByTestId("legend-caption").should("exist");
+    cy.findByTestId("legend-caption")
+      .should("contain", originalCardTitle)
+      .and("be.visible");
 
     editDashboard();
     showDashboardCardActions();
     cy.icon("palette").click();
 
-    cy.findByDisplayValue("Orders").click().clear();
-    cy.get("[data-metabase-event='Chart Settings;Done']").click();
+    modal().within(() => {
+      cy.findByDisplayValue(originalCardTitle).click().clear().blur();
+      cy.button("Done").click();
+    });
 
-    cy.findByTestId("legend-caption").should("not.exist");
+    cy.findByTestId("legend-caption").should("not.contain", originalCardTitle);
+    saveDashboard();
+    getDashboardCard().realHover();
+    getDashboardCardMenu().click();
+    popover()
+      .should("contain", "Edit question")
+      .and("contain", "Download results");
   });
 
   it("column reordering should work (metabase#16229)", () => {
@@ -36,12 +51,9 @@ describe("scenarios > dashboard cards > visualization options", () => {
     getDashboardCard().realHover();
     cy.findByLabelText("Show visualization options").click();
     cy.findByTestId("chartsettings-sidebar").within(() => {
-      cy.findByText("ID")
-        .closest("[data-testid^=draggable-item]")
-        .trigger("mousedown", 0, 0, { force: true })
-        .trigger("mousemove", 5, 5, { force: true })
-        .trigger("mousemove", 0, 100, { force: true })
-        .trigger("mouseup", 0, 100, { force: true });
+      moveDnDKitElement(getDraggableElements().contains("ID"), {
+        vertical: 100,
+      });
 
       /**
        * When this issue gets fixed, it should be safe to uncomment the following assertion.
@@ -55,10 +67,7 @@ describe("scenarios > dashboard cards > visualization options", () => {
     });
 
     // The table preview should get updated immediately, reflecting the changes in columns ordering.
-    cy.get(".Modal")
-      .findAllByTestId("column-header")
-      .first()
-      .contains("User ID");
+    modal().findAllByTestId("column-header").first().contains("User ID");
   });
 
   it("should refelct column settings accurately when changing (metabase#30966)", () => {

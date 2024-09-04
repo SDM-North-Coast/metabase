@@ -1,5 +1,18 @@
 (ns metabase.server.middleware.session
-  "Ring middleware related to session (binding current user and permissions)."
+  "Ring middleware related to session and API-key based authentication (binding current user and permissions).
+
+  How do authenticated API requests work? There are two main paths to authentication: a session or an API key.
+
+  For session authentication, Metabase first looks for a cookie called `metabase.SESSION`. This is the normal way of
+  doing things; this cookie gets set automatically upon login. `metabase.SESSION` is an HttpOnly cookie and thus can't
+  be viewed by FE code. If the session is a full-app embedded session, then the cookie is `metabase.EMBEDDED_SESSION`
+  instead.
+
+  Finally we'll check for the presence of a `X-Metabase-Session` header. If that isn't present, you don't have a
+  Session ID.
+
+  The second main path to authentication is an API key. For this, we look at the `X-Api-Key` header. If that matches
+  an ApiKey in our database, you'll be authenticated as that ApiKey's associated User."
   (:require
    [honey.sql.helpers :as sql.helpers]
    [java-time.api :as t]
@@ -14,38 +27,28 @@
    [metabase.core.initialization-status :as init-status]
    [metabase.db :as mdb]
    [metabase.driver.sql.query-processor :as sql.qp]
+   [metabase.models.api-key :as api-key]
+   [metabase.models.data-permissions :as data-perms]
    [metabase.models.setting
     :as setting
     :refer [*user-local-values* defsetting]]
    [metabase.models.user :as user :refer [User]]
    [metabase.public-settings :as public-settings]
    [metabase.public-settings.premium-features :as premium-features]
-   [metabase.server.request.util :as request.u]
+   [metabase.server.request.util :as req.util]
    [metabase.util :as u]
-   [metabase.util.i18n :as i18n :refer [deferred-trs deferred-tru trs tru]]
+   [metabase.util.i18n :as i18n :refer [deferred-tru tru]]
    [metabase.util.log :as log]
+   [metabase.util.malli :as mu]
+   [metabase.util.password :as u.password]
    [ring.util.response :as response]
-   [schema.core :as s]
    [toucan2.core :as t2]
-   [toucan2.pipeline :as t2.pipeline])
-  (:import
-   (java.util UUID)))
+   [toucan2.pipeline :as t2.pipeline]))
 
-;; How do authenticated API requests work? Metabase first looks for a cookie called `metabase.SESSION`. This is the
-;; normal way of doing things; this cookie gets set automatically upon login. `metabase.SESSION` is an HttpOnly
-;; cookie and thus can't be viewed by FE code. If the session is a full-app embedded session, then the cookie is
-;; `metabase.EMBEDDED_SESSION` instead.
-;;
-;; If that cookie is isn't present, we look for the `metabase.SESSION_ID`, which is the old session cookie set in
-;; 0.31.x and older. Unlike `metabase.SESSION`, this cookie was set directly by the frontend and thus was not
-;; HttpOnly; for 0.32.x we'll continue to accept it rather than logging every one else out on upgrade. (We've
-;; switched to a new Cookie name for 0.32.x because the new cookie includes a `path` attribute, thus browsers consider
-;; it to be a different Cookie; Ring cookie middleware does not handle multiple cookies with the same name.)
-;;
-;; Finally we'll check for the presence of a `X-Metabase-Session` header. If that isn't present, you don't have a
-;; Session ID and thus are definitely not authenticated
+(set! *warn-on-reflection* true)
 
-(def ^:private ^String metabase-session-cookie          "metabase.SESSION")
+(def ^String metabase-session-cookie
+  "Where the session cookie goes."                      "metabase.SESSION")
 (def ^:private ^String metabase-embedded-session-cookie "metabase.EMBEDDED_SESSION")
 (def ^:private ^String metabase-session-timeout-cookie  "metabase.TIMEOUT")
 (def ^:private ^String anti-csrf-token-header           "x-metabase-anti-csrf-token")
@@ -102,7 +105,10 @@
                 (throw (ex-info (tru "Invalid value for session cookie samesite")
                                 {:possible-values possible-session-cookie-samesite-values
                                  :session-cookie-samesite normalized-value
-                                 :http-status 400}))))))
+                                 :http-status 400})))))
+  :doc "See [Embedding Metabase in a different domain](../embedding/interactive-embedding.md#embedding-metabase-in-a-different-domain).
+        Related to [MB_EMBEDDING_APP_ORIGIN](#mb_embedding_app_origin). Read more about [interactive Embedding](../embedding/interactive-embedding.md).
+        Learn more about [SameSite cookies](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite).")
 
 (defmulti default-session-cookie-attributes
   "The appropriate cookie attributes to persist a newly created Session to `response`."
@@ -112,25 +118,25 @@
 (defmethod default-session-cookie-attributes :default
   [session-type _]
   (throw (ex-info (str (tru "Invalid session-type."))
-           {:session-type session-type})))
+                  {:session-type session-type})))
 
 (defmethod default-session-cookie-attributes :normal
   [_ request]
   (merge
    {:same-site (session-cookie-samesite)
     ;; TODO - we should set `site-path` as well. Don't want to enable this yet so we don't end
-    ;; up breaking things
+    ;; up breaking things issue: https://github.com/metabase/metabase/issues/39346
     :path      "/" #_(site-path)}
    ;; If the authentication request request was made over HTTPS (hopefully always except for
    ;; local dev instances) add `Secure` attribute so the cookie is only sent over HTTPS.
-   (when (request.u/https? request)
+   (when (req.util/https? request)
      {:secure true})))
 
 (defmethod default-session-cookie-attributes :full-app-embed
   [_ request]
   (merge
    {:path "/"}
-   (when (request.u/https? request)
+   (when (req.util/https? request)
      ;; SameSite=None is required for cross-domain full-app embedding. This is safe because
      ;; security is provided via anti-CSRF token. Note that most browsers will only accept
      ;; SameSite=None with secure cookies, thus we are setting it only over HTTPS to prevent
@@ -174,13 +180,15 @@
     ;; Otherwise check whether the user selected "remember me" during login
     (get-in request [:body :remember])))
 
-(s/defn set-session-cookies
+(mu/defn set-session-cookies
   "Add the appropriate cookies to the `response` for the Session."
   [request
    response
    {session-uuid :id
     session-type :type
-    anti-csrf-token :anti_csrf_token} :- {:id (s/cond-pre UUID u/uuid-regex), s/Keyword s/Any}
+    anti-csrf-token :anti_csrf_token} :- [:map [:id [:or
+                                                     uuid?
+                                                     [:re u/uuid-regex]]]]
    request-time]
   (let [cookie-options (merge
                         (default-session-cookie-attributes session-type request)
@@ -192,11 +200,11 @@
                         ;; max-session age-is in minutes; Max-Age= directive should be in seconds
                         (when (use-permanent-cookies? request)
                           {:max-age (* 60 (config/config-int :max-session-age))}))]
-    (when (and (= (session-cookie-samesite) :none) (not (request.u/https? request)))
+    (when (and (= (session-cookie-samesite) :none) (not (req.util/https? request)))
       (log/warn
-       (str (deferred-trs "Session cookie's SameSite is configured to \"None\", but site is served over an insecure connection. Some browsers will reject cookies under these conditions.")
-            " "
-            "https://www.chromestatus.com/feature/5633521622188032")))
+       (str "Session cookie's SameSite is configured to \"None\", but site is served over an insecure connection."
+            " Some browsers will reject cookies under these conditions."
+            " https://www.chromestatus.com/feature/5633521622188032")))
     (-> response
         wrap-body-if-needed
         (cond-> (= session-type :full-app-embed)
@@ -252,7 +260,6 @@
                       request)]
       (handler request respond raise))))
 
-
 ;;; +----------------------------------------------------------------------------------------------------------------+
 ;;; |                                             wrap-current-user-info                                             |
 ;;; +----------------------------------------------------------------------------------------------------------------+
@@ -290,6 +297,32 @@
                                                  [:= :pgm.user_id :user.id]
                                                  [:is :pgm.is_group_manager true]]))))))))
 
+;; See above: because this query runs on every single API request (with an API Key) it's worth it to optimize it a bit
+;; and only compile it to SQL once rather than every time
+(def ^:private ^{:arglists '([enable-advanced-permissions?])} user-data-for-api-key-prefix-query
+  (memoize
+   (fn [enable-advanced-permissions?]
+     (first
+      (t2.pipeline/compile*
+       (cond-> {:select    [[:api_key.user_id :metabase-user-id]
+                            [:api_key.key :api-key]
+                            [:user.is_superuser :is-superuser?]
+                            [:user.locale :user-locale]]
+                :from      :api_key
+                :left-join [[:core_user :user] [:= :api_key.user_id :user.id]]
+                :where     [:and
+                            [:= :user.is_active true]
+                            [:= :api_key.key_prefix [:raw "?"]]]
+                :limit     [:inline 1]}
+         enable-advanced-permissions?
+         (->
+          (sql.helpers/select
+           [:pgm.is_group_manager :is-group-manager?])
+          (sql.helpers/left-join
+           [:permissions_group_membership :pgm] [:and
+                                                 [:= :pgm.user_id :user.id]
+                                                 [:is :pgm.is_group_manager true]]))))))))
+
 (defn- current-user-info-for-session
   "Return User ID and superuser status for Session with `session-id` if it is valid and not expired."
   [session-id anti-csrf-token]
@@ -305,21 +338,49 @@
               ;; is-group-manager? could return `nil, convert it to boolean so it's guaranteed to be only true/false
               (update :is-group-manager? boolean)))))
 
+(def ^:private api-key-that-should-never-match (str (random-uuid)))
+(def ^:private hash-that-should-never-match (u.password/hash-bcrypt "password"))
+
+(defn do-useless-hash
+  "Password check that will always fail, used to avoid exposing any info about existing users or API keys via timing
+  attacks."
+  []
+  (u.password/verify-password api-key-that-should-never-match "" hash-that-should-never-match))
+
+(defn- matching-api-key? [{:keys [api-key] :as _user-data} passed-api-key]
+  ;; if we get an API key, check the hash against the passed value. If not, don't reveal info via a timing attack - do
+  ;; a useless hash, *then* return `false`.
+  (if api-key
+    (u.password/verify-password passed-api-key "" api-key)
+    (do-useless-hash)))
+
+(defn- current-user-info-for-api-key
+  "Return User ID and superuser status for an API Key with `api-key-id"
+  [api-key]
+  (when (and api-key (init-status/complete?))
+    (let [user-data (some-> (t2/query-one (cons (user-data-for-api-key-prefix-query
+                                                 (premium-features/enable-advanced-permissions?))
+                                                [(api-key/prefix api-key)]))
+                            (update :is-group-manager? boolean))]
+      (when (matching-api-key? user-data api-key)
+        (dissoc user-data :api-key)))))
+
 (defn- merge-current-user-info
-  [{:keys [metabase-session-id anti-csrf-token], {:strs [x-metabase-locale]} :headers, :as request}]
+  [{:keys [metabase-session-id anti-csrf-token], {:strs [x-metabase-locale x-api-key]} :headers, :as request}]
   (merge
    request
-   (current-user-info-for-session metabase-session-id anti-csrf-token)
+   (or (current-user-info-for-session metabase-session-id anti-csrf-token)
+       (current-user-info-for-api-key x-api-key))
    (when x-metabase-locale
      (log/tracef "Found X-Metabase-Locale header: using %s as user locale" (pr-str x-metabase-locale))
      {:user-locale (i18n/normalized-locale-string x-metabase-locale)})))
 
 (defn wrap-current-user-info
-  "Add `:metabase-user-id`, `:is-superuser?`, `:is-group-manager?` and `:user-locale` to the request if a valid session token was passed."
+  "Add `:metabase-user-id`, `:is-superuser?`, `:is-group-manager?` and `:user-locale` to the request if a valid session
+  token OR a valid API key was passed."
   [handler]
   (fn [request respond raise]
     (handler (merge-current-user-info request) respond raise)))
-
 
 ;;; +----------------------------------------------------------------------------------------------------------------+
 ;;; |                                               bind-current-user                                                |
@@ -343,6 +404,20 @@
   ;;
   ::none)
 
+;;; this is actually used by [[metabase.models.permissions/clear-current-user-cached-permissions!]]
+#_{:clj-kondo/ignore [:clojure-lsp/unused-public-var]}
+(defn clear-current-user-cached-permissions-set!
+  "If [[metabase.api.common/*current-user-permissions-set*]] is bound, reset it so it gets recalculated on next use.
+  Called by [[metabase.models.permissions/delete-related-permissions!]]
+  and [[metabase.models.permissions/grant-permissions!]], mostly as a convenience for tests that bind a current user
+  and then grant or revoke permissions for that user without rebinding it."
+  []
+  (when-let [current-user-id api/*current-user-id*]
+    ;; [[api/*current-user-permissions-set*]] is dynamically bound
+    (when (get (get-thread-bindings) #'api/*current-user-permissions-set*)
+      (.set #'api/*current-user-permissions-set* (delay (user/permissions-set current-user-id)))))
+  nil)
+
 (defn do-with-current-user
   "Impl for [[with-current-user]]."
   [{:keys [metabase-user-id is-superuser? permissions-set user-locale settings is-group-manager?]} thunk]
@@ -359,7 +434,8 @@
                                              (delay (atom (or settings
                                                               (user/user-local-settings metabase-user-id)))))
             *user-local-values-user-id*    metabase-user-id]
-    (thunk)))
+    (data-perms/with-relevant-permissions-for-user metabase-user-id
+      (thunk))))
 
 (defmacro ^:private with-current-user-for-request
   [request & body]
@@ -387,17 +463,17 @@
   [current-user-id]
   (when current-user-id
     (t2/select-one [User [:id :metabase-user-id] [:is_superuser :is-superuser?] [:locale :user-locale] :settings]
-      :id current-user-id)))
+                   :id current-user-id)))
 
 (defmacro as-admin
   "Execude code in body as an admin user."
-  {:style/indent :defn}
+  {:style/indent 0}
   [& body]
   `(do-with-current-user
     (merge
-      (with-current-user-fetch-user-for-id ~`api/*current-user-id*)
-      {:is-superuser? true
-       :permissions-set #{"/"}})
+     (with-current-user-fetch-user-for-id ~`api/*current-user-id*)
+     {:is-superuser? true
+      :permissions-set #{"/"}})
     (fn [] ~@body)))
 
 (defmacro with-current-user
@@ -408,7 +484,6 @@
   `(do-with-current-user
     (with-current-user-fetch-user-for-id ~current-user-id)
     (fn [] ~@body)))
-
 
 ;;; +----------------------------------------------------------------------------------------------------------------+
 ;;; |                                              reset-cookie-timeout                                             |
@@ -440,17 +515,18 @@
              (let [value (setting/get-value-of-type :json :session-timeout)]
                (if-let [error-key (check-session-timeout value)]
                  (do (log/warn (case error-key
-                                 :amount-must-be-positive            (trs "Session timeout amount must be positive.")
-                                 :amount-must-be-less-than-100-years (trs "Session timeout must be less than 100 years.")))
+                                 :amount-must-be-positive            "Session timeout amount must be positive."
+                                 :amount-must-be-less-than-100-years "Session timeout must be less than 100 years."))
                      nil)
                  value)))
   :setter  (fn [new-value]
              (when-let [error-key (check-session-timeout new-value)]
                (throw (ex-info (case error-key
-                                 :amount-must-be-positive            (tru "Session timeout amount must be positive.")
-                                 :amount-must-be-less-than-100-years (tru "Session timeout must be less than 100 years."))
+                                 :amount-must-be-positive            "Session timeout amount must be positive."
+                                 :amount-must-be-less-than-100-years "Session timeout must be less than 100 years.")
                                {:status-code 400})))
-             (setting/set-value-of-type! :json :session-timeout new-value)))
+             (setting/set-value-of-type! :json :session-timeout new-value))
+  :doc "Has to be in the JSON format `\"{\"amount\":120,\"unit\":\"minutes\"}\"` where the unit is one of \"seconds\", \"minutes\" or \"hours\".")
 
 (defn session-timeout->seconds
   "Convert the session-timeout setting value to seconds."

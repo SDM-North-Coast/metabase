@@ -1,12 +1,11 @@
 import { useEffect } from "react";
-import { t } from "ttag";
 import { connect } from "react-redux";
-
-import type { ActionDashboardCard, Dashboard } from "metabase-types/api";
+import { t } from "ttag";
 
 import { setEditingDashcardId } from "metabase/dashboard/actions";
+import type { ActionDashboardCard, Dashboard } from "metabase-types/api";
 
-import { DashCardActionButton } from "../DashCardActionButton";
+import { DashCardActionButton } from "../DashCardActionButton/DashCardActionButton";
 
 const mapDispatchToProps = {
   setEditingDashcardId,
@@ -35,5 +34,7 @@ function ActionSettingsButton({ dashcard, setEditingDashcardId }: Props) {
   );
 }
 
-// eslint-disable-next-line import/no-default-export -- deprecated usage
-export default connect(null, mapDispatchToProps)(ActionSettingsButton);
+export const ActionSettingsButtonConnected = connect(
+  null,
+  mapDispatchToProps,
+)(ActionSettingsButton);

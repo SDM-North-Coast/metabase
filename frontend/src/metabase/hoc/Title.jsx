@@ -1,5 +1,6 @@
+import PropTypes from "prop-types";
 import { Component, cloneElement } from "react";
-
+import { Route as _Route } from "react-router";
 import _ from "underscore";
 
 const componentStack = [];
@@ -75,7 +76,18 @@ const title = documentTitleOrGetter => ComposedComponent =>
 
 export default title;
 
-import { Route as _Route } from "react-router";
+/**
+ * Component version of the title HOC
+ * @param {string} props.title
+ */
+export const SetTitle = props => {
+  const Component = title(props.title)(() => null);
+  return <Component />;
+};
+
+SetTitle.propTypes = {
+  title: PropTypes.string,
+};
 
 // react-router Route wrapper that adds a `title` property
 export class Route extends _Route {

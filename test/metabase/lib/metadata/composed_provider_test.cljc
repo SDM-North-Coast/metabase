@@ -1,11 +1,11 @@
 (ns metabase.lib.metadata.composed-provider-test
   (:require
+   #?@(:cljs ([metabase.test-runner.assert-exprs.approximately-equal]))
    [clojure.test :refer [deftest is testing]]
    [metabase.lib.core :as lib]
    [metabase.lib.metadata :as lib.metadata]
    [metabase.lib.test-metadata :as meta]
-   [metabase.lib.test-util :as lib.tu]
-   #?@(:cljs ([metabase.test-runner.assert-exprs.approximately-equal]))))
+   [metabase.lib.test-util :as lib.tu]))
 
 #?(:cljs
    (comment metabase.test-runner.assert-exprs.approximately-equal/keep-me))
@@ -25,3 +25,7 @@
               (lib.metadata/field
                metadata-provider
                (meta/id :people :birth-date)))))))
+
+(deftest ^:parallel equality-test
+  (is (= (lib/composed-metadata-provider meta/metadata-provider)
+         (lib/composed-metadata-provider meta/metadata-provider))))

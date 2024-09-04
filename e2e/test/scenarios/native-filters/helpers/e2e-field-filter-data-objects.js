@@ -3,11 +3,13 @@ export const STRING_FILTER_SUBTYPES = {
     searchTerm: "Synerg",
     value: "Synergistic Granite Chair",
     representativeResult: "Synergistic Granite Chair",
+    isList: true,
   },
   "String is not": {
     searchTerm: "Synerg",
     value: "Synergistic Granite Chair",
     representativeResult: "Rustic Paper Wallet",
+    isList: true,
   },
   "String contains": {
     searchTerm: null,
@@ -82,7 +84,7 @@ export const DATE_FILTER_SUBTYPES = {
   },
   "Date Filter": {
     value: {
-      timeBucket: "years",
+      timeBucket: "month",
     },
     representativeResult: "Synergistic Steel Chair",
   },

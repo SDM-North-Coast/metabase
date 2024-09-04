@@ -1,23 +1,27 @@
+import cx from "classnames";
 import { Component } from "react";
 import { t } from "ttag";
 
+import { SegmentedControl } from "metabase/components/SegmentedControl";
 import type { SelectChangeEvent } from "metabase/core/components/Select";
 import Select from "metabase/core/components/Select";
-import { SegmentedControl } from "metabase/components/SegmentedControl";
+import CS from "metabase/css/core/index.css";
+import {
+  AM_PM_OPTIONS,
+  HOUR_OPTIONS,
+  MINUTE_OPTIONS,
+  MONTH_DAY_OPTIONS,
+  getDayOfWeekOptions,
+} from "metabase/lib/date-time";
 import { capitalize } from "metabase/lib/formatting/strings";
+import { useSelector } from "metabase/lib/redux";
+import { getApplicationName } from "metabase/selectors/whitelabel";
 import type {
   ScheduleDayType,
   ScheduleFrameType,
   ScheduleSettings,
   ScheduleType,
 } from "metabase-types/api";
-import {
-  AM_PM_OPTIONS,
-  getDayOfWeekOptions,
-  HOUR_OPTIONS,
-  MINUTE_OPTIONS,
-  MONTH_DAY_OPTIONS,
-} from "metabase/lib/date-time";
 
 import {
   PickerRoot,
@@ -34,8 +38,8 @@ const optionNameTranslations = {
   monthly: t`Monthly`,
 };
 
-type ScheduleProperty = keyof ScheduleSettings;
-type ScheduleChangeProp = { name: ScheduleProperty; value: unknown };
+export type ScheduleProperty = keyof ScheduleSettings;
+export type ScheduleChangeProp = { name: ScheduleProperty; value: unknown };
 
 export interface SchedulePickerProps {
   schedule: ScheduleSettings;
@@ -143,7 +147,7 @@ class SchedulePicker extends Component<SchedulePickerProps> {
           options={MONTH_DAY_OPTIONS}
         />
         {schedule.schedule_frame !== "mid" && (
-          <span className="mx1">
+          <span className={CS.mx1}>
             <Select
               value={schedule.schedule_day}
               onChange={(e: SelectChangeEvent<ScheduleDayType>) =>
@@ -162,7 +166,7 @@ class SchedulePicker extends Component<SchedulePickerProps> {
 
     return (
       <PickerRow>
-        <span className="text-bold mx1">{t`on`}</span>
+        <span className={cx(CS.textBold, CS.mx1)}>{t`on`}</span>
         <Select
           value={schedule.schedule_day}
           onChange={(e: SelectChangeEvent<ScheduleDayType>) =>
@@ -183,14 +187,14 @@ class SchedulePicker extends Component<SchedulePickerProps> {
       <PickerSpacedRow>
         <PickerText>{t`at`}</PickerText>
         <Select
-          className="mr1"
+          className={CS.mr1}
           value={minuteOfHour}
           options={MINUTE_OPTIONS}
           onChange={(e: SelectChangeEvent<number>) =>
             this.handleChangeProperty("schedule_minute", e.target.value)
           }
         />
-        <span className="text-bold">{t`minutes past the hour`}</span>
+        <span className={CS.textBold}>{t`minutes past the hour`}</span>
       </PickerSpacedRow>
     );
   }
@@ -210,7 +214,7 @@ class SchedulePicker extends Component<SchedulePickerProps> {
         <PickerSpacedRow>
           <PickerText>{t`at`}</PickerText>
           <Select
-            className="mr1"
+            className={CS.mr1}
             value={hour}
             options={HOUR_OPTIONS}
             onChange={(e: SelectChangeEvent<number>) =>
@@ -232,7 +236,7 @@ class SchedulePicker extends Component<SchedulePickerProps> {
         {textBeforeSendTime && (
           <ScheduleDescriptionContainer>
             {textBeforeSendTime} {hour === 0 ? 12 : hour}:00{" "}
-            {amPm ? "PM" : "AM"} {timezone}, {t`your Metabase timezone`}.
+            {amPm ? "PM" : "AM"} {timezone}, <MetabaseTimeZone />.
           </ScheduleDescriptionContainer>
         )}
       </>
@@ -272,6 +276,11 @@ class SchedulePicker extends Component<SchedulePickerProps> {
       </PickerRoot>
     );
   }
+}
+
+function MetabaseTimeZone() {
+  const applicationName = useSelector(getApplicationName);
+  return <>{t`your ${applicationName} timezone`}</>;
 }
 
 // eslint-disable-next-line import/no-default-export -- deprecated usage

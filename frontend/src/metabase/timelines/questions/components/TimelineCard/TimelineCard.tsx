@@ -1,17 +1,20 @@
 import type { ChangeEvent, MouseEvent } from "react";
-import { memo, useCallback, useMemo, useState, useEffect } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { t } from "ttag";
 import _ from "underscore";
-import type { Timeline, TimelineEvent } from "metabase-types/api";
-import { getTimelineName } from "metabase/lib/timelines";
+
 import { Ellipsified } from "metabase/core/components/Ellipsified";
+import { getTimelineName } from "metabase/lib/timelines";
+import type { Timeline, TimelineEvent } from "metabase-types/api";
+
 import EventCard from "../EventCard";
+
 import {
-  CardHeader,
-  CardContent,
-  CardLabel,
   CardCheckbox,
+  CardContent,
+  CardHeader,
   CardIcon,
+  CardLabel,
   CardRoot,
 } from "./TimelineCard.styled";
 
@@ -92,7 +95,7 @@ const TimelineCard = ({
           onChange={handleChangeVisibility}
         />
         <CardLabel>
-          <Ellipsified tooltipMaxWidth="100%">
+          <Ellipsified tooltipMaxWidth="auto">
             {getTimelineName(timeline)}
           </Ellipsified>
         </CardLabel>

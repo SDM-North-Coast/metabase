@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
 import { t } from "ttag";
-import type { IconName } from "metabase/core/components/Icon";
-import { Icon } from "metabase/core/components/Icon";
-import { Flex, Text, Title } from "metabase/ui";
-import ExternalLink from "metabase/core/components/ExternalLink";
+
 import { getLimitedPermissionAvailabilityMessage } from "metabase/admin/permissions/constants/messages";
+import ExternalLink from "metabase/core/components/ExternalLink";
 import { useSelector } from "metabase/lib/redux";
 import { getUpgradeUrl } from "metabase/selectors/settings";
+import type { IconName } from "metabase/ui";
+import { Flex, Icon, Text, Title } from "metabase/ui";
+
 import { PermissionIconContainer } from "./PermissionHelpDescription.styled";
 
 interface PermissionHelpDescriptionProps {
@@ -25,7 +26,7 @@ export const PermissionHelpDescription = ({
   hasUpgradeNotice,
 }: PermissionHelpDescriptionProps) => {
   const upgradeUrl = useSelector(state =>
-    getUpgradeUrl(state, { utm_media: "admin_permissions" }),
+    getUpgradeUrl(state, { utm_content: "admin_permissions" }),
   );
 
   return (
@@ -38,7 +39,12 @@ export const PermissionHelpDescription = ({
           {name}
         </Title>
       </Flex>
-      {description && <Text>{description}</Text>}
+      {description &&
+        (typeof description === "string" ? (
+          <Text>{description}</Text>
+        ) : (
+          description
+        ))}
 
       {hasUpgradeNotice ? (
         <>

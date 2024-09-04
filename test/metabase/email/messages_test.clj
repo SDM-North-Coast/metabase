@@ -2,11 +2,15 @@
   (:require
    [clojure.string :as str]
    [clojure.test :refer :all]
+   [metabase.email :as email]
    [metabase.email-test :as et]
    [metabase.email.messages :as messages]
    [metabase.test :as mt]
-   [metabase.test.util :as tu])
+   [metabase.test.util :as tu]
+   [metabase.util.retry :as retry]
+   [metabase.util.retry-test :as rt])
   (:import
+   (io.github.resilience4j.retry Retry)
    (java.io IOException)))
 
 (set! *warn-on-reflection* true)
@@ -56,7 +60,7 @@
               (get-in [0 :body 0 :content])
               (str/includes? "deactivated"))))))
 
-(defmacro ^:private with-create-temp-failure [& body]
+(defmacro ^:private with-create-temp-failure! [& body]
   `(with-redefs [messages/create-temp-file (fn [~'_]
                                              (throw (IOException. "Failed to write file")))]
      ~@body))
@@ -64,10 +68,10 @@
 ;; Test that IOException bubbles up
 (deftest throws-exception
   (is (thrown-with-msg?
-        IOException
-        (re-pattern (format "Unable to create temp file in `%s`" (System/getProperty "java.io.tmpdir")))
-        (with-create-temp-failure
-          (#'messages/create-temp-file-or-throw "txt")))))
+       IOException
+       (re-pattern (format "Unable to create temp file in `%s`" (System/getProperty "java.io.tmpdir")))
+       (with-create-temp-failure!
+         (#'messages/create-temp-file-or-throw "txt")))))
 
 (deftest alert-schedule-text-test
   (testing "Alert schedules can be described as English strings, with the timezone included"
@@ -106,3 +110,62 @@
             emails (messages/render-pulse-email "America/Pacific" {} {} [part] nil)]
         (is (vector? emails))
         (is (map? (first emails)))))))
+
+(defn- get-positive-retry-metrics [^Retry retry]
+  (let [metrics (bean (.getMetrics retry))]
+    (into {}
+          (map (fn [field]
+                 (let [n (metrics field)]
+                   (when (pos? n)
+                     [field n]))))
+          [:numberOfFailedCallsWithRetryAttempt
+           :numberOfFailedCallsWithoutRetryAttempt
+           :numberOfSuccessfulCallsWithRetryAttempt
+           :numberOfSuccessfulCallsWithoutRetryAttempt])))
+
+(def test-email {:subject      "Test email subject"
+                 :recipients   ["test@test.com"]
+                 :message-type :html
+                 :message      "test mmail body"})
+
+(deftest send-email-retrying-test
+  (testing "send email succeeds w/o retry"
+    (let [test-retry (retry/random-exponential-backoff-retry "test-retry" (#'retry/retry-configuration))]
+      (with-redefs [email/send-email! mt/fake-inbox-email-fn
+                    retry/decorate    (rt/test-retry-decorate-fn test-retry)]
+        (mt/with-temporary-setting-values [email-smtp-host "fake_smtp_host"
+                                           email-smtp-port 587]
+          (mt/reset-inbox!)
+          (email/send-email-retrying! test-email)
+          (is (= {:numberOfSuccessfulCallsWithoutRetryAttempt 1}
+                 (get-positive-retry-metrics test-retry)))
+          (is (= 1 (count @mt/inbox)))))))
+  (testing "send email fails b/c retry limit"
+    (let [retry-config (assoc (#'retry/retry-configuration)
+                              :max-attempts 1
+                              :initial-interval-millis 1)
+          test-retry   (retry/random-exponential-backoff-retry "test-retry" retry-config)]
+      (with-redefs [email/send-email! (tu/works-after 1 mt/fake-inbox-email-fn)
+                    retry/decorate    (rt/test-retry-decorate-fn test-retry)]
+        (mt/with-temporary-setting-values [email-smtp-host "fake_smtp_host"
+                                           email-smtp-port 587]
+          (mt/reset-inbox!)
+          (try (#'email/send-email-retrying! test-email)
+               (catch Exception _))
+          (is (= {:numberOfFailedCallsWithRetryAttempt 1}
+                 (get-positive-retry-metrics test-retry)))
+          (is (= 0 (count @mt/inbox)))))))
+  (testing "send email succeeds w/ retry"
+    (let [retry-config (assoc (#'retry/retry-configuration)
+                              :max-attempts 2
+                              :initial-interval-millis 1)
+          test-retry   (retry/random-exponential-backoff-retry "test-retry" retry-config)]
+      (with-redefs [email/send-email! (tu/works-after 1 mt/fake-inbox-email-fn)
+                    retry/decorate    (rt/test-retry-decorate-fn test-retry)]
+        (mt/with-temporary-setting-values [email-smtp-host "fake_smtp_host"
+                                           email-smtp-port 587]
+          (mt/reset-inbox!)
+          (#'email/send-email-retrying! test-email)
+          (is (= {:numberOfSuccessfulCallsWithRetryAttempt 1}
+                 (get-positive-retry-metrics test-retry)))
+          (is (= 1 (count @mt/inbox))))))))

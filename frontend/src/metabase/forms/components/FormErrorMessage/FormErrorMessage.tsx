@@ -1,7 +1,9 @@
 import type { Ref } from "react";
 import { forwardRef } from "react";
-import { Text } from "metabase/ui";
+
 import type { TextProps } from "metabase/ui";
+import { Text } from "metabase/ui";
+
 import { useFormErrorMessage } from "../../hooks";
 
 export type FormErrorMessageProps = TextProps;
@@ -16,7 +18,7 @@ export const FormErrorMessage = forwardRef(function FormErrorMessage(
   }
 
   return (
-    <Text {...props} ref={ref} color="error.0">
+    <Text {...props} role="alert" aria-label={message} ref={ref} color="error">
       {message}
     </Text>
   );

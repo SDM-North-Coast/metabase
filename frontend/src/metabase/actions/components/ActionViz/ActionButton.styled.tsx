@@ -1,5 +1,5 @@
+import { css } from "@emotion/react";
 import styled from "@emotion/styled";
-import { color } from "metabase/lib/colors";
 
 import Button from "metabase/core/components/Button";
 
@@ -12,9 +12,9 @@ export const StyledButton = styled(Button)<{
 
   ${({ focus }) =>
     focus
-      ? `
-    border: 2px solid ${color("focus")};
-  `
+      ? css`
+          border: 2px solid var(--mb-color-focus);
+        `
       : ""}
 `;
 

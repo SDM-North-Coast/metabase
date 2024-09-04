@@ -1,13 +1,16 @@
 import type { ComponentType } from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { jt, t } from "ttag";
-import Settings from "metabase/lib/settings";
+
+import { useDocsUrl } from "metabase/common/hooks";
+import Modal from "metabase/components/Modal";
 import Button from "metabase/core/components/Button";
 import ExternalLink from "metabase/core/components/ExternalLink";
-import Modal from "metabase/components/Modal";
-import SlackBadge from "../SlackBadge";
+
 import SlackAppsLink from "../SlackAppsLink";
+import SlackBadge from "../SlackBadge";
 import SlackDeleteModal from "../SlackDeleteModal";
+
 import {
   StatusFooter,
   StatusHeader,
@@ -40,9 +43,7 @@ const SlackStatus = ({
     setIsOpened(false);
   }, []);
 
-  const docsUrl = useMemo(() => {
-    return Settings.docsUrl("configuring-metabase/slack");
-  }, []);
+  const { url: docsUrl } = useDocsUrl("configuring-metabase/slack");
 
   return (
     <StatusRoot>
@@ -69,7 +70,7 @@ const SlackStatus = ({
         <Button onClick={handleOpen}>{t`Delete Slack App`}</Button>
       </StatusFooter>
       {isOpened && (
-        <Modal isOpen={isOpened} full={false} onClose={handleClose}>
+        <Modal isOpen={isOpened} onClose={handleClose}>
           <SlackDeleteModal onDelete={onDelete} onClose={handleClose} />
         </Modal>
       )}

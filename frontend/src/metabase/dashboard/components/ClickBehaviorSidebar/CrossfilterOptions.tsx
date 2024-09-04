@@ -1,7 +1,7 @@
 import { t } from "ttag";
 
-import ClickMappings from "metabase/dashboard/components/ClickMappings";
-
+import CS from "metabase/css/core/index.css";
+import { ClickMappingsConnected } from "metabase/dashboard/components/ClickMappings";
 import type {
   ClickBehavior,
   Dashboard,
@@ -17,7 +17,7 @@ interface Props {
   updateSettings: (settings: ClickBehavior) => void;
 }
 
-function CrossfilterOptions({
+export function CrossfilterOptions({
   clickBehavior,
   dashboard,
   dashcard,
@@ -25,8 +25,10 @@ function CrossfilterOptions({
 }: Props) {
   return (
     <SidebarContent>
-      <Heading className="text-medium">{t`Pick one or more filters to update`}</Heading>
-      <ClickMappings
+      <Heading
+        className={CS.textMedium}
+      >{t`Pick one or more filters to update`}</Heading>
+      <ClickMappingsConnected
         object={dashboard}
         dashcard={dashcard}
         isDashboard
@@ -37,6 +39,3 @@ function CrossfilterOptions({
     </SidebarContent>
   );
 }
-
-// eslint-disable-next-line import/no-default-export -- deprecated usage
-export default CrossfilterOptions;

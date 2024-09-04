@@ -1,25 +1,29 @@
-import type { CollectionId, User } from "metabase-types/api";
-import { SearchBar } from "metabase/nav/components/search/SearchBar";
-import NewItemButton from "../NewItemButton";
-import ProfileLink from "../ProfileLink";
+import type { CollectionId } from "metabase-types/api";
+
 import CollectionBreadcrumbs from "../../containers/CollectionBreadcrumbs";
 import QuestionLineage from "../../containers/QuestionLineage";
-import AppBarLogo from "./AppBarLogo";
+import NewItemButton from "../NewItemButton";
+import { ProfileLink } from "../ProfileLink";
+import { SearchBar } from "../search/SearchBar";
+import { SearchButton } from "../search/SearchButton";
+
 import {
+  AppBarInfoContainer,
   AppBarLeftContainer,
+  AppBarProfileLinkContainer,
   AppBarRightContainer,
   AppBarRoot,
-  AppBarInfoContainer,
-  AppBarProfileLinkContainer,
 } from "./AppBarLarge.styled";
+import { AppBarLogo } from "./AppBarLogo";
+import { AppBarToggle } from "./AppBarToggle";
 
 export interface AppBarLargeProps {
-  currentUser: User;
   collectionId?: CollectionId;
   isNavBarOpen?: boolean;
   isNavBarEnabled?: boolean;
   isLogoVisible?: boolean;
   isSearchVisible?: boolean;
+  isEmbedded?: boolean;
   isNewButtonVisible?: boolean;
   isProfileLinkVisible?: boolean;
   isCollectionPathVisible?: boolean;
@@ -29,12 +33,12 @@ export interface AppBarLargeProps {
 }
 
 const AppBarLarge = ({
-  currentUser,
   collectionId,
   isNavBarOpen,
   isNavBarEnabled,
   isLogoVisible,
   isSearchVisible,
+  isEmbedded,
   isNewButtonVisible,
   isProfileLinkVisible,
   isCollectionPathVisible,
@@ -46,15 +50,15 @@ const AppBarLarge = ({
 
   return (
     <AppBarRoot isNavBarOpen={isNavBarVisible}>
-      <AppBarLeftContainer
-        isNavBarEnabled={isNavBarEnabled}
-        isLogoVisible={isLogoVisible}
-      >
+      <AppBarLeftContainer>
+        <AppBarToggle
+          isNavBarEnabled={isNavBarEnabled}
+          isNavBarOpen={isNavBarOpen}
+          onToggleClick={onToggleNavbar}
+        />
         <AppBarLogo
           isLogoVisible={isLogoVisible}
-          isNavBarOpen={isNavBarVisible}
           isNavBarEnabled={isNavBarEnabled}
-          onToggleClick={onToggleNavbar}
         />
         <AppBarInfoContainer
           isVisible={!isNavBarVisible || isQuestionLineageVisible}
@@ -68,11 +72,11 @@ const AppBarLarge = ({
       </AppBarLeftContainer>
       {(isSearchVisible || isNewButtonVisible || isProfileLinkVisible) && (
         <AppBarRightContainer>
-          {isSearchVisible && <SearchBar />}
+          {isSearchVisible && (isEmbedded ? <SearchBar /> : <SearchButton />)}
           {isNewButtonVisible && <NewItemButton collectionId={collectionId} />}
           {isProfileLinkVisible && (
             <AppBarProfileLinkContainer>
-              <ProfileLink user={currentUser} onLogout={onLogout} />
+              <ProfileLink onLogout={onLogout} />
             </AppBarProfileLinkContainer>
           )}
         </AppBarRightContainer>

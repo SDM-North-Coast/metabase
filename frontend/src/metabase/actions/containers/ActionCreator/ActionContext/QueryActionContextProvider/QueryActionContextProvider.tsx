@@ -2,33 +2,30 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import _ from "underscore";
 
 import type { CreateQueryActionParams } from "metabase/entities/actions";
-
+import Question from "metabase-lib/v1/Question";
+import type Metadata from "metabase-lib/v1/metadata/Metadata";
+import { getTemplateTagParametersFromCard } from "metabase-lib/v1/parameters/utils/template-tags";
+import type NativeQuery from "metabase-lib/v1/queries/NativeQuery";
 import type {
-  Card,
   ActionFormSettings,
+  Card,
   DatabaseId,
   NativeDatasetQuery,
   VisualizationSettings,
   WritebackParameter,
   WritebackQueryAction,
 } from "metabase-types/api";
-import type Metadata from "metabase-lib/metadata/Metadata";
-import type NativeQuery from "metabase-lib/queries/NativeQuery";
-
-import Question from "metabase-lib/Question";
-import { getTemplateTagParametersFromCard } from "metabase-lib/parameters/utils/template-tags";
 
 import { getDefaultFormSettings } from "../../../../utils";
-
 import type { ActionContextType } from "../ActionContext";
 import { ActionContext } from "../ActionContext";
 import type { ActionContextProviderProps, EditorBodyProps } from "../types";
 
+import QueryActionEditor from "./QueryActionEditor";
 import {
   setParameterTypesFromFieldSettings,
   setTemplateTagTypesFromFieldSettings,
 } from "./utils";
-import QueryActionEditor from "./QueryActionEditor";
 
 export interface QueryActionContextProviderProps
   extends ActionContextProviderProps<WritebackQueryAction> {
@@ -59,22 +56,30 @@ function convertActionToQuestionCard(
 ): Card<NativeDatasetQuery> {
   return {
     id: action.id,
+    entity_id: action.entity_id,
+    created_at: action.created_at,
+    updated_at: action.updated_at,
     name: action.name,
     description: action.description,
     dataset_query: action.dataset_query,
     display: "action",
     visualization_settings:
       action.visualization_settings as VisualizationSettings,
-
-    dataset: false,
+    type: "question",
     can_write: true,
+    can_restore: false,
+    can_delete: false,
     public_uuid: null,
     collection_id: null,
+    collection_position: null,
     result_metadata: [],
     cache_ttl: null,
     last_query_start: null,
     average_query_time: null,
     archived: false,
+    enable_embedding: false,
+    embedding_params: null,
+    initially_published_at: null,
   };
 }
 
@@ -135,7 +140,10 @@ function QueryActionContextProvider({
 
   const [question, setQuestion] = useState(initialQuestion);
 
-  const query = useMemo(() => question.query() as NativeQuery, [question]);
+  const query = useMemo(
+    () => question.legacyQuery() as NativeQuery,
+    [question],
+  );
 
   const [formSettings, setFormSettings] = useState(initialFormSettings);
 
@@ -190,11 +198,12 @@ function QueryActionContextProvider({
     ({ isEditable }: EditorBodyProps) => (
       <QueryActionEditor
         query={query}
+        question={question}
         isEditable={isEditable}
         onChangeQuestionQuery={handleQueryChange}
       />
     ),
-    [query, handleQueryChange],
+    [query, question, handleQueryChange],
   );
 
   const isDirty = useMemo(() => {

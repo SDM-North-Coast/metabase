@@ -1,14 +1,13 @@
-import {
-  restore,
-  visitQuestionAdhoc,
-  sidebar,
-  getDraggableElements,
-  moveColumnDown,
-  popover,
-} from "e2e/support/helpers";
-
 import { SAMPLE_DB_ID } from "e2e/support/cypress_data";
 import { SAMPLE_DATABASE } from "e2e/support/cypress_sample_database";
+import {
+  getDraggableElements,
+  moveDnDKitElement,
+  popover,
+  restore,
+  sidebar,
+  visitQuestionAdhoc,
+} from "e2e/support/helpers";
 
 const { PEOPLE_ID, PEOPLE } = SAMPLE_DATABASE;
 
@@ -33,7 +32,7 @@ describe("scenarios > visualizations > funnel chart", () => {
     sidebar().findByText("Data").click();
   });
 
-  it("hould allow you to reorder and show/hide rows", () => {
+  it("should allow you to reorder and show/hide rows", () => {
     cy.log("ensure that rows are shown");
     getDraggableElements().should("have.length", 5);
 
@@ -46,7 +45,7 @@ describe("scenarios > visualizations > funnel chart", () => {
           .first()
           .should("have.text", name);
 
-        moveColumnDown(getDraggableElements().first(), 2);
+        moveDnDKitElement(getDraggableElements().first(), { vertical: 100 });
 
         getDraggableElements().eq(2).should("have.text", name);
 
@@ -72,7 +71,7 @@ describe("scenarios > visualizations > funnel chart", () => {
   });
 
   it("should handle row items being filterd out and returned gracefully", () => {
-    moveColumnDown(getDraggableElements().first(), 2);
+    moveDnDKitElement(getDraggableElements().first(), { vertical: 100 });
 
     getDraggableElements()
       .eq(1)
@@ -83,20 +82,20 @@ describe("scenarios > visualizations > funnel chart", () => {
     // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
     cy.findByText("Filter").click();
 
-    cy.findByTestId("filter-field-Source").within(() => {
-      cy.findByTestId("operator-select").click();
+    cy.findByTestId("filter-column-Source").within(() => {
+      cy.findByLabelText("Filter operator").click();
     });
 
     popover().within(() => {
       cy.findByText("Is not").click();
     });
 
-    cy.findByTestId("filter-field-Source").within(() => {
+    cy.findByTestId("filter-column-Source").within(() => {
       cy.findByText("Facebook").click();
     });
 
     // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("Apply Filters").click();
+    cy.findByText("Apply filters").click();
 
     getDraggableElements().should("have.length", 4);
 

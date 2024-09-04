@@ -1,16 +1,13 @@
 import { t } from "ttag";
-import type {
-  RowValue,
-  RowValues,
-  SeriesOrderSetting,
-  DatasetData,
-} from "metabase-types/api";
 
+import { formatNullable } from "metabase/lib/formatting/nullable";
+import { getColumnScaling } from "metabase/visualizations/echarts/cartesian/model/util";
+import { sumMetric } from "metabase/visualizations/lib/dataset";
 import type {
-  ChartColumns,
+  CartesianChartColumns,
   ColumnDescriptor,
 } from "metabase/visualizations/lib/graph/columns";
-import type { ColumnFormatter } from "metabase/visualizations/shared/types/format";
+import type { Series } from "metabase/visualizations/shared/components/RowChart/types";
 import type {
   GroupedDataset,
   GroupedDatum,
@@ -18,25 +15,29 @@ import type {
   MetricValue,
   SeriesInfo,
 } from "metabase/visualizations/shared/types/data";
-import type { Series } from "metabase/visualizations/shared/components/RowChart/types";
-import { formatNullable } from "metabase/lib/formatting/nullable";
+import type { ColumnFormatter } from "metabase/visualizations/shared/types/format";
+import type {
+  ComputedVisualizationSettings,
+  RemappingHydratedDatasetColumn,
+} from "metabase/visualizations/types";
+import type {
+  DatasetData,
+  RowValue,
+  RowValues,
+  SeriesOrderSetting,
+} from "metabase-types/api";
+
 import { getChartMetrics } from "./series";
 
-const getMetricValue = (value: RowValue): MetricValue => {
+const getMetricValue = (
+  value: RowValue,
+  metric: RemappingHydratedDatasetColumn,
+  settings: ComputedVisualizationSettings,
+): MetricValue => {
+  const scale = getColumnScaling(metric, settings);
+
   if (typeof value === "number") {
-    return value;
-  }
-
-  return null;
-};
-
-export const sumMetric = (left: RowValue, right: RowValue) => {
-  if (typeof left === "number" && typeof right === "number") {
-    return left + right;
-  } else if (typeof left === "number") {
-    return left;
-  } else if (typeof right === "number") {
-    return right;
+    return scale * value;
   }
 
   return null;
@@ -52,7 +53,8 @@ const sumMetrics = (left: MetricDatum, right: MetricDatum): MetricDatum => {
 
 export const getGroupedDataset = (
   rows: RowValues[],
-  chartColumns: ChartColumns,
+  chartColumns: CartesianChartColumns,
+  settings: ComputedVisualizationSettings,
   columnFormatter: ColumnFormatter,
 ): GroupedDataset => {
   const { dimension } = chartColumns;
@@ -71,7 +73,11 @@ export const getGroupedDataset = (
 
     const rowMetrics = getChartMetrics(chartColumns).reduce<MetricDatum>(
       (datum, metric) => {
-        datum[metric.column.name] = getMetricValue(row[metric.index]);
+        datum[metric.column.name] = getMetricValue(
+          row[metric.index],
+          metric.column,
+          settings,
+        );
         return datum;
       },
       {},
@@ -227,7 +233,7 @@ const getMultipleMetricSeries = (
 
 export const getSeries = (
   data: DatasetData,
-  chartColumns: ChartColumns,
+  chartColumns: CartesianChartColumns,
   columnFormatter: ColumnFormatter,
 ): Series<GroupedDatum, SeriesInfo>[] => {
   if ("breakout" in chartColumns) {

@@ -1,8 +1,9 @@
 (ns metabase-enterprise.audit-app.permissions
   (:require
-   [metabase-enterprise.audit-db :refer [default-audit-collection]]
+   [metabase.audit :as audit]
    [metabase.lib.metadata :as lib.metadata]
-   [metabase.models.permissions :as perms]
+   [metabase.models.data-permissions :as data-perms]
+   [metabase.models.interface :as mi]
    [metabase.models.query.permissions :as query-perms]
    [metabase.public-settings.premium-features :refer [defenterprise]]
    [metabase.query-processor.store :as qp.store]
@@ -28,10 +29,17 @@
     "v_view_log"})
 
 (defenterprise check-audit-db-permissions
-  "Checks that a given query is not a native query, and only includes table IDs corresponding to the audit views
-  listed above. (These should be the only tables present in the DB anyway, but this is an extra check as a fallback measure)."
+  "Performs a number of permission checks to ensure that a query on the Audit database can be run.
+   Causes for rejection are:
+      - if the current user does not have access to the analytics collection
+      - native queries
+      - queries that include tables that are not audit views"
   :feature :audit-app
   [{query-type :type, database-id :database, query :query :as outer-query}]
+  ;; Check if the user has access to the analytics collection, since this should be coupled with access to the
+  ;; audit database in general.
+  (when-not (mi/can-read? (audit/default-audit-collection))
+    (throw (ex-info (tru "You do not have access to the audit database") outer-query)))
   ;; query->source-table-ids returns a set of table IDs and/or the ::query-perms/native keyword
   (when (= query-type :native)
     (throw (ex-info (tru "Native queries are not allowed on the audit database")
@@ -48,16 +56,18 @@
                           outer-query)))))))
 
 (defenterprise update-audit-collection-permissions!
-  "Will remove or grant audit db (AppDB) permissions, if the instance analytics permissions changes."
+  "Will remove or grant audit db (AppDB) permissions, if the instance analytics collection permissions changes. This
+  technically isn't necessary, because we block all audit DB queries if a user doesn't have collection permissions.
+  But it's cleaner to keep the audit DB permission paths in the database consistent."
   :feature :audit-app
   [group-id changes]
-  (let [[change-id type] (first (filter #(= (first %) (:id (default-audit-collection))) changes))]
-      (when change-id
-        (let [change-permissions! (case type
-                                    :read  perms/grant-permissions!
-                                    :none  perms/delete-related-permissions!
-                                    :write (throw (ex-info (tru (str "Unable to make audit collections writable."))
-                                                           {:status-code 400})))
-              view-tables         (t2/select :model/Table :db_id perms/audit-db-id :name [:in audit-db-view-names])]
-          (doseq [table view-tables]
-            (change-permissions! group-id (perms/table-query-path table)))))))
+  (let [[change-id tyype] (first (filter #(= (first %) (:id (audit/default-audit-collection))) changes))]
+    (when change-id
+      (let [create-queries-value (case tyype
+                                   :read  :query-builder
+                                   :none  :no
+                                   :write (throw (ex-info (tru (str "Unable to make audit collections writable."))
+                                                          {:status-code 400})))
+            view-tables         (t2/select :model/Table :db_id audit/audit-db-id :name [:in audit-db-view-names])]
+        (doseq [table view-tables]
+          (data-perms/set-table-permission! group-id table :perms/create-queries create-queries-value))))))

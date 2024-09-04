@@ -1,7 +1,9 @@
-import { createThunkAction } from "metabase/lib/redux";
+import {
+  fetchDashboard,
+  fetchDashboardCardData,
+} from "metabase/dashboard/actions";
 import Revision from "metabase/entities/revisions";
-
-import { fetchDashboard, fetchDashboardCardData } from "./data-fetching";
+import { createThunkAction } from "metabase/lib/redux";
 
 export const REVERT_TO_REVISION = "metabase/dashboard/REVERT_TO_REVISION";
 export const revertToRevision = createThunkAction(
@@ -9,7 +11,12 @@ export const revertToRevision = createThunkAction(
   revision => {
     return async dispatch => {
       await dispatch(Revision.objectActions.revert(revision));
-      await dispatch(fetchDashboard(revision.model_id, null));
+      await dispatch(
+        fetchDashboard({
+          dashId: revision.model_id,
+          queryParams: null,
+        }),
+      );
       await dispatch(
         fetchDashboardCardData({ reload: false, clearCache: true }),
       );

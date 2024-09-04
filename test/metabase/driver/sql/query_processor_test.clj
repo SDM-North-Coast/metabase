@@ -1,7 +1,9 @@
 (ns metabase.driver.sql.query-processor-test
   (:require
+   [buddy.core.codecs :as codecs]
    [clojure.string :as str]
    [clojure.test :refer :all]
+   [java-time.api :as t]
    [malli.core :as mc]
    [metabase.driver :as driver]
    [metabase.driver.sql.query-processor :as sql.qp]
@@ -14,36 +16,35 @@
    [metabase.models.setting :as setting]
    [metabase.query-processor :as qp]
    [metabase.query-processor.interface :as qp.i]
+   [metabase.query-processor.preprocess :as qp.preprocess]
    [metabase.query-processor.store :as qp.store]
    [metabase.query-processor.util.add-alias-info :as add]
    [metabase.test :as mt]
    [metabase.test.data.env :as tx.env]
-   #_{:clj-kondo/ignore [:deprecated-namespace]}
-   [metabase.util.honeysql-extensions :as hx]))
+   [metabase.util.date-2 :as u.date]
+   [metabase.util.honey-sql-2 :as h2x]))
 
 (comment metabase.driver.sql.query-processor.deprecated/keep-me)
 
+(set! *warn-on-reflection* true)
+
 (deftest ^:parallel compiled-test
-  (binding [hx/*honey-sql-version* 2]
-    (is (= [:raw "x"]
-           (sql.qp/->honeysql :sql (sql.qp/compiled [:raw "x"]))))))
+  (is (= [:raw "x"]
+         (sql.qp/->honeysql :sql (sql.qp/compiled [:raw "x"])))))
 
 (deftest ^:parallel default-select-test
-  (are [hsql-version expected] (= expected
-                                  (binding [hx/*honey-sql-version* hsql-version]
-                                    (->> {:from [[(sql.qp/sql-source-query "SELECT *" nil)
-                                                  (sql.qp/maybe-wrap-unaliased-expr (hx/identifier :table-alias "source"))]]}
-                                         (#'sql.qp/add-default-select :sql)
-                                         (sql.qp/format-honeysql :sql))))
-    1 ["SELECT \"source\".* FROM (SELECT *) \"source\""]
-    2 ["SELECT \"source\".* FROM (SELECT *) AS \"source\""]))
+  (is (= ["SELECT \"source\".* FROM (SELECT *) AS \"source\""]
+         (->> {:from [[(sql.qp/sql-source-query "SELECT *" nil)
+                       [(h2x/identifier :table-alias "source")]]]}
+              (#'sql.qp/add-default-select :sql)
+              (sql.qp/format-honeysql :sql)))))
 
 (deftest ^:parallel sql-source-query-validation-test
   (testing "[[sql.qp/sql-source-query]] should throw Exceptions if you pass in invalid nonsense"
     (doseq [params [nil [1000]]]
       (testing (format "Params = %s" (pr-str params))
-        (is (instance? metabase.driver.sql.query_processor.deprecated.SQLSourceQuery
-                       (sql.qp/sql-source-query "SELECT *" params)))))
+        (is (= {::sql.qp/sql-source-query ["SELECT *" params]}
+               (sql.qp/sql-source-query "SELECT *" params)))))
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
          #"Expected native source query to be a string, got: clojure.lang.PersistentArrayMap"
@@ -69,7 +70,7 @@
                                      (qp.store/metadata-provider)
                                      meta/metadata-provider)
     (driver/with-driver :h2
-      (-> (sql.qp/mbql->native :h2 (qp/preprocess query))
+      (-> (sql.qp/mbql->native :h2 (qp.preprocess/preprocess query))
           :query
           sql.qp-test-util/pretty-sql))))
 
@@ -207,10 +208,10 @@
     (mt/with-metadata-provider meta/metadata-provider
       (driver/with-driver :h2
         (is (= [[(sql.qp/sql-source-query "SELECT * FROM VENUES;" [])
-                 (hx/identifier :table-alias "card")]
+                 [(h2x/identifier :table-alias "card")]]
                 [:=
-                 (hx/with-database-type-info (hx/identifier :field "PUBLIC" "CHECKINS" "VENUE_ID") "integer")
-                 (hx/identifier :field "card" "id")]]
+                 (h2x/with-database-type-info (h2x/identifier :field "PUBLIC" "CHECKINS" "VENUE_ID") "integer")
+                 (h2x/identifier :field "card" "id")]]
                (sql.qp/join->honeysql :h2
                                       (lib.tu.macros/$ids checkins
                                         {:source-query {:native "SELECT * FROM VENUES;", :params []}
@@ -226,64 +227,68 @@
 
 (defn- compile-join [driver]
   (driver/with-driver driver
-    (sql.qp/with-driver-honey-sql-version driver
-      (qp.store/with-metadata-provider meta/metadata-provider
-        (let [join (sql.qp/join->honeysql
-                    driver
-                    {:source-query {:native "SELECT * FROM VENUES;", :params []}
-                     :alias        "card"
-                     :strategy     :left-join
-                     :condition    [:=
-                                    [:field (meta/id :checkins :id) {::add/source-table (meta/id :checkins)
-                                                                     ::add/source-alias "VENUE_ID"}]
-                                    [:field "id" {:base-type         :type/Text
-                                                  ::add/source-table "card"
-                                                  ::add/source-alias "id"}]]})]
-          (sql.qp/format-honeysql driver {:join join}))))))
+    (qp.store/with-metadata-provider meta/metadata-provider
+      (let [join (sql.qp/join->honeysql
+                  driver
+                  {:source-query {:native "SELECT * FROM VENUES;", :params []}
+                   :alias        "card"
+                   :strategy     :left-join
+                   :condition    [:=
+                                  [:field (meta/id :checkins :id) {::add/source-table (meta/id :checkins)
+                                                                   ::add/source-alias "VENUE_ID"}]
+                                  [:field "id" {:base-type         :type/Text
+                                                ::add/source-table "card"
+                                                ::add/source-alias "id"}]]})]
+        (sql.qp/format-honeysql driver {:join join})))))
 
+;;; Ok to hardcode driver names here because it's for general HoneySQL compilation behavior and not something that needs
+;;; to be run against all supported drivers
+#_{:clj-kondo/ignore [:metabase/disallow-hardcoded-driver-names-in-tests]}
 (deftest ^:parallel compile-honeysql-test
   (testing "make sure the generated HoneySQL will compile to the correct SQL"
-    (are [driver expected] (= [expected]
+    (are [driver expected] (= ["INNER JOIN (SELECT * FROM VENUES) AS \"card\" ON \"PUBLIC\".\"CHECKINS\".\"VENUE_ID\" = \"card\".\"id\""]
                               (compile-join driver))
-      :sql      "INNER JOIN (SELECT * FROM VENUES) \"card\" ON \"PUBLIC\".\"CHECKINS\".\"VENUE_ID\" = \"card\".\"id\""
-      :h2       "INNER JOIN (SELECT * FROM VENUES) AS \"card\" ON \"PUBLIC\".\"CHECKINS\".\"VENUE_ID\" = \"card\".\"id\""
-      :postgres "INNER JOIN (SELECT * FROM VENUES) AS \"card\" ON \"PUBLIC\".\"CHECKINS\".\"VENUE_ID\" = \"card\".\"id\"")))
+      :sql :h2 :postgres)))
 
 (deftest adjust-start-of-week-test
   (driver/with-driver :h2
-    (binding [hx/*honey-sql-version* 2]
-      (with-redefs [driver/db-start-of-week   (constantly :monday)
-                    setting/get-value-of-type (constantly :sunday)]
-        (is (= [:dateadd
-                (hx/literal "day")
-                (hx/with-database-type-info [:cast [:inline -1] [:raw "long"]] "long")
-                (hx/with-database-type-info
-                  [:cast
-                   [:week [:dateadd (hx/literal "day")
-                           (hx/with-database-type-info [:cast [:inline 1] [:raw "long"]] "long")
-                           (hx/with-database-type-info [:cast :created_at [:raw "datetime"]] "datetime")]]
-                   [:raw "datetime"]]
-                  "datetime")]
-               (sql.qp/adjust-start-of-week :h2 (partial hx/call :week) :created_at)))))
+    (with-redefs [driver/db-start-of-week   (constantly :monday)
+                  setting/get-value-of-type (constantly :sunday)]
+      (is (= (-> [:dateadd
+                  (h2x/literal "day")
+                  [:inline -1]
+                  (-> [:cast
+                       [:week (-> [:dateadd
+                                   (h2x/literal "day")
+                                   [:inline 1]
+                                   (-> [:cast :created_at [:raw "datetime"]]
+                                       (h2x/with-database-type-info "datetime"))]
+                                  (h2x/with-database-type-info "datetime"))]
+                       [:raw "datetime"]]
+                      (h2x/with-database-type-info "datetime"))]
+                 (h2x/with-database-type-info "datetime"))
+             (sql.qp/adjust-start-of-week :h2 (fn [x] [:week x]) :created_at))))
     (testing "Do we skip the adjustment if offset = 0"
       (with-redefs [driver/db-start-of-week   (constantly :monday)
                     setting/get-value-of-type (constantly :monday)]
-        (is (= (hx/call :week :created_at)
-               (sql.qp/adjust-start-of-week :h2 (partial hx/call :week) :created_at)))))))
+        (is (= [:week :created_at]
+               (sql.qp/adjust-start-of-week :h2 (fn [x] [:week x]) :created_at)))))))
 
 (defn- query-on-dataset-with-nils
   [query]
   (mt/rows
-    (qp/process-query
-     {:database (mt/id)
-      :type     :query
-      :query    (merge
-                 {:source-query {:native "select 'foo' as a union select null as a union select 'bar' as a"}
-                  :order-by     [[:asc [:field "A" {:base-type :type/Text}]]]}
-                 query)})))
+   (qp/process-query
+    {:database (mt/id)
+     :type     :query
+     :query    (merge
+                {:source-query {:native "select 'foo' as a union select null as a union select 'bar' as a"}
+                 :expressions  {"initial" [:regex-match-first [:field "A" {:base-type :type/Text}] "(\\w)"]}
+                 :order-by     [[:asc [:field "A" {:base-type :type/Text}]]]}
+                query)})))
 
 (deftest ^:parallel correct-for-null-behaviour
-  (testing "NULLs should be treated intuitively in filters (SQL has somewhat unintuitive semantics where NULLs get propagated out of expressions)."
+  (testing (str "NULLs should be treated intuitively in filters (SQL has somewhat unintuitive semantics where NULLs "
+                "get propagated out of expressions).")
     (is (= [[nil] ["bar"]]
            (query-on-dataset-with-nils {:filter [:not [:starts-with [:field "A" {:base-type :type/Text}] "f"]]})))
     (is (= [[nil] ["bar"]]
@@ -291,7 +296,9 @@
     (is (= [[nil] ["bar"]]
            (query-on-dataset-with-nils {:filter [:not [:contains [:field "A" {:base-type :type/Text}] "f"]]})))
     (is (= [[nil] ["bar"]]
-           (query-on-dataset-with-nils {:filter [:!= [:field "A" {:base-type :type/Text}] "foo"]}))))
+           (query-on-dataset-with-nils {:filter [:!= [:field "A" {:base-type :type/Text}] "foo"]})))
+    (is (= [[nil] ["bar"]]
+           (query-on-dataset-with-nils {:filter [:!= [:expression "initial" {:base-type :type/Text}] "f"]}))))
   (testing "Null behaviour correction fix should work with joined fields (#13534)"
     (is (= [[1000]]
            (mt/rows
@@ -377,22 +384,14 @@
                     source.LONGITUDE   AS LONGITUDE
                     source.PRICE       AS PRICE
                     source.double_id   AS double_id]
-           :from   [{:select [source.ID          AS ID
-                              source.NAME        AS NAME
-                              source.CATEGORY_ID AS CATEGORY_ID
-                              source.LATITUDE    AS LATITUDE
-                              source.LONGITUDE   AS LONGITUDE
-                              source.PRICE       AS PRICE
-                              source.double_id   AS double_id]
-                     :from   [{:select [VENUES.ID AS ID
-                                        VENUES.NAME AS NAME
-                                        VENUES.CATEGORY_ID AS CATEGORY_ID
-                                        VENUES.LATITUDE    AS LATITUDE
-                                        VENUES.LONGITUDE   AS LONGITUDE
-                                        VENUES.PRICE       AS PRICE
-                                        VENUES.ID * 2      AS double_id]
-                               :from   [VENUES]}
-                              AS source]}
+           :from   [{:select [VENUES.ID          AS ID
+                              VENUES.NAME        AS NAME
+                              VENUES.CATEGORY_ID AS CATEGORY_ID
+                              VENUES.LATITUDE    AS LATITUDE
+                              VENUES.LONGITUDE   AS LONGITUDE
+                              VENUES.PRICE       AS PRICE
+                              VENUES.ID * 2      AS double_id]
+                     :from   [VENUES]}
                     AS source]
            :limit  [1]}
          (-> (lib.tu.macros/mbql-query venues
@@ -416,6 +415,7 @@
                                      ORDERS.CREATED_AT                  AS CREATED_AT
                                      ABS (0)                            AS pivot-grouping
                                      ;; TODO -- I'm not sure if the order here is deterministic
+                                     ;; Tech debt issue: #39396
                                      PRODUCTS__via__PRODUCT_ID.CATEGORY AS PRODUCTS__via__PRODUCT_ID__CATEGORY
                                      PEOPLE__via__USER_ID.SOURCE        AS PEOPLE__via__USER_ID__SOURCE
                                      PRODUCTS__via__PRODUCT_ID.ID       AS PRODUCTS__via__PRODUCT_ID__ID
@@ -429,7 +429,7 @@
                                      AND
                                      ((PRODUCTS__via__PRODUCT_ID.CATEGORY = ?) OR (PRODUCTS__via__PRODUCT_ID.CATEGORY = ?))
                                      AND
-                                     (ORDERS.CREATED_AT >= DATE_TRUNC ("year" DATEADD ("year" CAST (-2 AS long) CAST (NOW () AS datetime))))
+                                     (ORDERS.CREATED_AT >= DATE_TRUNC ("year" DATEADD ("year" -2 NOW ())))
                                      AND
                                      (ORDERS.CREATED_AT < DATE_TRUNC ("year" NOW ()))]}
                         AS source]
@@ -482,42 +482,29 @@
                sql.qp-test-util/sql->sql-map)))))
 
 (def ^:private reference-aggregation-expressions-in-joins-test-expected-sql
-  '{:select [source.ID                           AS ID
-             source.NAME                         AS NAME
-             source.CATEGORY_ID                  AS CATEGORY_ID
-             source.LATITUDE                     AS LATITUDE
-             source.LONGITUDE                    AS LONGITUDE
-             source.PRICE                        AS PRICE
-             source.RelativePrice                AS RelativePrice
-             source.CategoriesStats__CATEGORY_ID AS CategoriesStats__CATEGORY_ID
-             source.CategoriesStats__MaxPrice    AS CategoriesStats__MaxPrice
-             source.CategoriesStats__AvgPrice    AS CategoriesStats__AvgPrice
-             source.CategoriesStats__MinPrice    AS CategoriesStats__MinPrice]
-    :from   [{:select    [VENUES.ID          AS ID
-                          VENUES.NAME        AS NAME
-                          VENUES.CATEGORY_ID AS CATEGORY_ID
-                          VENUES.LATITUDE    AS LATITUDE
-                          VENUES.LONGITUDE   AS LONGITUDE
-                          VENUES.PRICE       AS PRICE
-                          CAST (VENUES.PRICE AS float)
-                          /
-                          CASE WHEN CategoriesStats.AvgPrice = 0 THEN NULL
-                          ELSE CategoriesStats.AvgPrice END AS RelativePrice
-                          CategoriesStats.CATEGORY_ID AS CategoriesStats__CATEGORY_ID
-                          CategoriesStats.MaxPrice    AS CategoriesStats__MaxPrice
-                          CategoriesStats.AvgPrice    AS CategoriesStats__AvgPrice
-                          CategoriesStats.MinPrice    AS CategoriesStats__MinPrice]
-              :from      [VENUES]
-              :left-join [{:select   [VENUES.CATEGORY_ID AS CATEGORY_ID
-                                      MAX (VENUES.PRICE) AS MaxPrice
-                                      AVG (VENUES.PRICE) AS AvgPrice
-                                      MIN (VENUES.PRICE) AS MinPrice]
-                           :from     [VENUES]
-                           :group-by [VENUES.CATEGORY_ID]
-                           :order-by [VENUES.CATEGORY_ID ASC]} AS CategoriesStats
-                          ON VENUES.CATEGORY_ID = CategoriesStats.CATEGORY_ID]}
-             AS source]
-    :limit  [3]})
+  '{:select    [VENUES.ID          AS ID
+                VENUES.NAME        AS NAME
+                VENUES.CATEGORY_ID AS CATEGORY_ID
+                VENUES.LATITUDE    AS LATITUDE
+                VENUES.LONGITUDE   AS LONGITUDE
+                VENUES.PRICE       AS PRICE
+                CAST (VENUES.PRICE AS float)
+                /
+                NULLIF (CategoriesStats.AvgPrice, 0) AS RelativePrice
+                CategoriesStats.CATEGORY_ID AS CategoriesStats__CATEGORY_ID
+                CategoriesStats.MaxPrice    AS CategoriesStats__MaxPrice
+                CategoriesStats.AvgPrice    AS CategoriesStats__AvgPrice
+                CategoriesStats.MinPrice    AS CategoriesStats__MinPrice]
+    :from      [VENUES]
+    :left-join [{:select   [VENUES.CATEGORY_ID AS CATEGORY_ID
+                            MAX (VENUES.PRICE) AS MaxPrice
+                            AVG (VENUES.PRICE) AS AvgPrice
+                            MIN (VENUES.PRICE) AS MinPrice]
+                 :from     [VENUES]
+                 :group-by [VENUES.CATEGORY_ID]
+                 :order-by [VENUES.CATEGORY_ID ASC]} AS CategoriesStats
+                ON VENUES.CATEGORY_ID = CategoriesStats.CATEGORY_ID]
+    :limit     [3]})
 
 (deftest ^:parallel reference-aggregation-expressions-in-joins-test
   (testing "See if we can correctly compile a query that references expressions that come from a join"
@@ -591,12 +578,9 @@
                                    [:expression "test"]]
                      :limit       1})]
         (testing "Generated SQL"
-          (is (= '{:select [source.PRICE AS PRICE
-                            source.test  AS test]
-                   :from   [{:select [TIMESTAMPADD ("second" VENUES.PRICE timestamp "1970-01-01T00:00:00Z") AS PRICE
-                                      1 * 1 AS test]
-                             :from   [VENUES]}
-                            AS source]
+          (is (= '{:select [TIMESTAMPADD ("second" VENUES.PRICE timestamp "1970-01-01T00:00:00Z") AS PRICE
+                            1 * 1 AS test]
+                   :from   [VENUES]
                    :limit  [1]}
                  (-> query mbql->native sql.qp-test-util/sql->sql-map)))
           (testing "Results"
@@ -728,7 +712,7 @@
 
 (deftest ^:parallel expression-with-duplicate-column-name-test
   (testing "Can we use expression with same column name as table (#14267)"
-    (is (= '{:select   [source.CATEGORY_2 AS CATEGORY_2
+    (is (= '{:select   [source.CATEGORY_2 AS CATEGORY
                         COUNT (*)         AS count]
              :from     [{:select [PRODUCTS.CATEGORY            AS CATEGORY
                                   CONCAT (PRODUCTS.CATEGORY ?) AS CATEGORY_2]
@@ -807,19 +791,12 @@
 
 (deftest ^:parallel floating-point-division-test
   (testing "Make sure FLOATING POINT division is done when dividing by expressions/fields"
-    (is (= '{:select   [source.my_cool_new_field AS my_cool_new_field]
-             :from     [{:select [VENUES.ID          AS ID
-                                  VENUES.PRICE       AS PRICE
-                                  VENUES.PRICE + 2   AS big_price
-                                  CAST
-                                  (VENUES.PRICE AS float)
-                                  /
-                                  CASE WHEN (VENUES.PRICE + 2) = 0 THEN NULL
-                                  ELSE VENUES.PRICE + 2
-                                  END AS my_cool_new_field]
-                         :from   [VENUES]}
-                        AS source]
-             :order-by [source.ID ASC]
+    (is (= '{:select   [CAST
+                        (VENUES.PRICE AS float)
+                        /
+                        NULLIF (VENUES.PRICE + 2, 0) AS my_cool_new_field]
+             :from     [VENUES]
+             :order-by [VENUES.ID ASC]
              :limit    [3]}
            (-> (lib.tu.macros/mbql-query venues
                  {:expressions {:big_price         [:+ $price 2]
@@ -832,26 +809,15 @@
 
 (deftest ^:parallel floating-point-division-test-2
   (testing "Don't generate unneeded casts to FLOAT for the numerator if it is a number literal"
-    (doseq [honey-sql-version [1 2]]
-      (binding [hx/*honey-sql-version* honey-sql-version]
-        (testing (format "hx/*honey-sql-version* = %d" hx/*honey-sql-version*)
-          (is (= (case hx/*honey-sql-version*
-                   1 '{:select [source.my_cool_new_field AS my_cool_new_field]
-                       :from   [{:select [2.0 / 4.0 AS my_cool_new_field]
-                                 :from   [VENUES]}
-                                AS source]
-                       :limit  [1]}
-                   2 '{:select [source.my_cool_new_field AS my_cool_new_field]
-                       :from   [{:select [2.0 / 4.0 AS my_cool_new_field]
-                                 :from   [VENUES]}
-                                AS source]
-                       :limit  [1]})
-                 (-> (lib.tu.macros/mbql-query venues
-                       {:expressions {:my_cool_new_field [:/ 2 4]}
-                        :fields      [[:expression "my_cool_new_field"]]
-                        :limit       1})
-                     mbql->native
-                     sql.qp-test-util/sql->sql-map))))))))
+    (is (= '{:select [2.0 / 4.0 AS my_cool_new_field]
+             :from   [VENUES]
+             :limit  [1]}
+           (-> (lib.tu.macros/mbql-query venues
+                 {:expressions {:my_cool_new_field [:/ 2 4]}
+                  :fields      [[:expression "my_cool_new_field"]]
+                  :limit       1})
+               mbql->native
+               sql.qp-test-util/sql->sql-map)))))
 
 (deftest ^:parallel duplicate-aggregations-test
   (testing "Make sure multiple aggregations of the same type get unique aliases"
@@ -912,30 +878,22 @@
                            Q1.CC           AS Q1__CC]
                :from      [{:select [source.CATEGORY AS CATEGORY
                                      source.count    AS count
-                                     source.CC       AS CC]
-                            :from   [{:select [source.CATEGORY AS CATEGORY
-                                               source.count    AS count
-                                               1 + 1           AS CC]
-                                      :from   [{:select   [PRODUCTS.CATEGORY AS CATEGORY
-                                                           COUNT (*)         AS count]
-                                                :from     [PRODUCTS]
-                                                :group-by [PRODUCTS.CATEGORY]
-                                                :order-by [PRODUCTS.CATEGORY ASC]}
-                                               AS source]}
+                                     1 + 1           AS CC]
+                            :from   [{:select   [PRODUCTS.CATEGORY AS CATEGORY
+                                                 COUNT (*)         AS count]
+                                      :from     [PRODUCTS]
+                                      :group-by [PRODUCTS.CATEGORY]
+                                      :order-by [PRODUCTS.CATEGORY ASC]}
                                      AS source]}
                            AS source]
                :left-join [{:select [source.CATEGORY AS CATEGORY
                                      source.count    AS count
-                                     source.CC       AS CC]
-                            :from   [{:select [source.CATEGORY AS CATEGORY
-                                               source.count    AS count
-                                               1 + 1           AS CC]
-                                      :from   [{:select   [PRODUCTS.CATEGORY AS CATEGORY
-                                                           COUNT (*)         AS count]
-                                                :from     [PRODUCTS]
-                                                :group-by [PRODUCTS.CATEGORY]
-                                                :order-by [PRODUCTS.CATEGORY ASC]}
-                                               AS source]}
+                                     1 + 1           AS CC]
+                            :from   [{:select   [PRODUCTS.CATEGORY AS CATEGORY
+                                                 COUNT (*)         AS count]
+                                      :from     [PRODUCTS]
+                                      :group-by [PRODUCTS.CATEGORY]
+                                      :order-by [PRODUCTS.CATEGORY ASC]}
                                      AS source]}
                            AS Q1 ON source.CC = Q1.CC]
                :limit     [1]}
@@ -1018,37 +976,28 @@
                sql.qp-test-util/sql->sql-map)))))
 
 (deftest ^:parallel format-honeysql-test
-  (are [version honeysql expected] (= expected
-                                      (sql.qp/format-honeysql version :ansi (binding [hx/*honey-sql-version* version]
-                                                                              honeysql)))
-    1 {:select [:*], :from [:table]} ["SELECT * FROM \"table\""]
-    2 {:select [:*], :from [:table]} ["SELECT * FROM \"table\""]
+  (are [honeysql expected] (= expected
+                              (sql.qp/format-honeysql :sql honeysql))
+    {:select [:*], :from [:table]} ["SELECT * FROM \"table\""]
 
-    1 (hx/identifier :field "A" "B") ["\"A\".\"B\""]
-    2 (hx/identifier :field "A" "B") ["\"A\".\"B\""]
+    (h2x/identifier :field "A" "B") ["\"A\".\"B\""]
 
     ;; don't complain on 'suspicious' characters since we're quoting things anyway!
-    1 (hx/identifier :field "A;B") ["\"A;B\""]
-    2 (hx/identifier :field "A;B") ["\"A;B\""]
+    (h2x/identifier :field "A;B") ["\"A;B\""]
 
     ;; but we should be escaping quotes.
-    1 (hx/identifier :field "A\"B") ["\"A\"\"B\""]
-    2 (hx/identifier :field "A\"B") ["\"A\"\"B\""]
+    (h2x/identifier :field "A\"B") ["\"A\"\"B\""]
 
     ;; make sure kebab-case is preserved.
-    1 (hx/identifier :field "test-data") ["\"test-data\""]
-    2 (hx/identifier :field "test-data") ["\"test-data\""]
+    (h2x/identifier :field "test-data") ["\"test-data\""]
 
-    1 {:select [[(hx/identifier :field "test-data") :a]]} ["SELECT \"test-data\" AS \"a\""]
-    2 {:select [[(hx/identifier :field "test-data") :a]]} ["SELECT \"test-data\" AS \"a\""]
+    {:select [[(h2x/identifier :field "test-data") :a]]} ["SELECT \"test-data\" AS \"a\""]
 
     ;; Honey SQL 2 can't be configured to always inline numbers, so we have to remember to do it, otherwise it won't
     ;; do it for us =(
-    1 [:= "A" 1] ["? = 1" "A"]
-    2 [:= "A" 1] ["(? = ?)" "A" 1]
+    [:= "A" 1] ["(? = ?)" "A" 1]
 
-    1 [:or [:not= :state "OR"] [:= :state nil]] ["(\"state\" <> ? OR \"state\" IS NULL)" "OR"]
-    2 [:or [:not= :state "OR"] [:= :state nil]] ["((\"state\" <> ?) OR (\"state\" IS NULL))" "OR"]))
+    [:or [:not= :state "OR"] [:= :state nil]] ["((\"state\" <> ?) OR (\"state\" IS NULL))" "OR"]))
 
 (deftest day-of-week-inline-numbers-test
   (testing "Numbers should be returned inline, even when targeting Honey SQL 2."
@@ -1063,30 +1012,28 @@
                      :friday
                      :saturday]]
           (mt/with-temporary-setting-values [start-of-week day]
-            (sql.qp/with-driver-honey-sql-version driver/*driver*
-              (let [sql-args (-> (sql.qp/format-honeysql driver/*driver* (sql.qp/date driver/*driver* :day-of-week :x))
-                                 vec
-                                 (update 0 #(str/split-lines (driver/prettify-native-form driver/*driver* %))))]
-                (testing "this query should not have any parameters"
-                  (is (mc/validate [:cat [:sequential :string]] sql-args)))))))))))
+            (let [sql-args (-> (sql.qp/format-honeysql driver/*driver* (sql.qp/date driver/*driver* :day-of-week :x))
+                               vec
+                               (update 0 #(str/split-lines (driver/prettify-native-form driver/*driver* %))))]
+              (testing "this query should not have any parameters"
+                (is (mc/validate [:cat [:sequential :string]] sql-args))))))))))
 
 (deftest ^:parallel binning-optimize-math-expressions-test
   (testing "Don't include nonsense like `+ 0.0` and `- 0.0` when generating expressions for binning"
-    (binding [hx/*honey-sql-version* 2]
-      (is (= ["SELECT"
-              "  FLOOR((ORDERS.QUANTITY / 10.0)) * 10.0 AS QUANTITY,"
-              "  COUNT(*) AS count"
-              "FROM"
-              "  ORDERS"
-              "GROUP BY"
-              "  FLOOR((ORDERS.QUANTITY / 10.0)) * 10.0"
-              "ORDER BY"
-              "  FLOOR((ORDERS.QUANTITY / 10.0)) * 10.0 ASC"]
-             (->> (mbql->native (lib.tu.macros/mbql-query orders
-                                  {:aggregation [[:count]]
-                                   :breakout    [:binning-strategy $quantity :num-bins 10]}))
-                  (driver/prettify-native-form :h2)
-                  str/split-lines))))))
+    (is (= ["SELECT"
+            "  FLOOR((ORDERS.QUANTITY / 10.0)) * 10.0 AS QUANTITY,"
+            "  COUNT(*) AS count"
+            "FROM"
+            "  ORDERS"
+            "GROUP BY"
+            "  FLOOR((ORDERS.QUANTITY / 10.0)) * 10.0"
+            "ORDER BY"
+            "  FLOOR((ORDERS.QUANTITY / 10.0)) * 10.0 ASC"]
+           (->> (mbql->native (lib.tu.macros/mbql-query orders
+                                {:aggregation [[:count]]
+                                 :breakout    [:binning-strategy $quantity :num-bins 10]}))
+                (driver/prettify-native-form :h2)
+                str/split-lines)))))
 
 (deftest ^:parallel make-nestable-sql-test
   (testing "Native sql query should be modified to be usable in subselect"
@@ -1107,12 +1054,11 @@
 
       ;; String containing semicolon followed by double dash followed by THE _comment or semicolon or end of input_.
       ;; TODO: Enable when better sql parsing solution is found in the [[sql.qp/make-nestable-sql]]].
-      #_#_
-      "SELECT 'string with \n ; -- ending on the same line';"
-      "(SELECT 'string with \n ; -- ending on the same line')"
-      #_#_
-      "SELECT 'string with \n ; -- ending on the same line';\n-- comment"
-      "(SELECT 'string with \n ; -- ending on the same line')"
+      ;; Tech debt issue: #39401
+      #_#_"SELECT 'string with \n ; -- ending on the same line';"
+        "(SELECT 'string with \n ; -- ending on the same line')"
+      #_#_"SELECT 'string with \n ; -- ending on the same line';\n-- comment"
+        "(SELECT 'string with \n ; -- ending on the same line')"
 
       ;; String containing just `--` without `;` works
       "SELECT 'string with \n -- ending on the same line';"
@@ -1128,3 +1074,60 @@
       ; --c2\n
       -- c3"
       "(SELECT ';')")))
+
+(deftest ^:parallel string-inline-value-test
+  (testing `String
+    (let [honeysql {:select [[:%count.*]]
+                    :from   [[:venues]]
+                    :where  [:= :venues/name "Barney's Beanery"]}]
+      (binding [driver/*compile-with-inline-parameters* true]
+        (is (= ["SELECT COUNT(*) FROM \"venues\" WHERE \"venues\".\"name\" = 'Barney''s Beanery'"]
+               (sql.qp/format-honeysql :sql honeysql)))))))
+
+(deftest ^:parallel OffsetDateTime-inline-value-test
+  (let [honeysql {:select [[:*]]
+                  :from   [[:venues]]
+                  :where  [:= :venues/created_at (t/offset-date-time "2017-01-01T00:00:00.000Z")]}]
+    (binding [driver/*compile-with-inline-parameters* true]
+      (is (= ["SELECT * FROM \"venues\" WHERE \"venues\".\"created_at\" = timestamp with time zone '2017-01-01 00:00:00.000 +00:00'"]
+             (sql.qp/format-honeysql :sql honeysql))))))
+
+(driver/register! ::inline-value-test, :parent :sql, :abstract? true)
+
+(defmethod sql.qp/inline-value [::inline-value-test java.time.OffsetDateTime]
+  [_driver t]
+  (format "from_iso8601_timestamp('%s')" (u.date/format t)))
+
+(deftest ^:parallel override-inline-value-test
+  (let [honeysql {:select [[:*]]
+                  :from   [[:venues]]
+                  :where  [:= :venues/created_at (t/offset-date-time "2017-01-01T00:00:00.000Z")]}]
+    (binding [driver/*compile-with-inline-parameters* true]
+      (is (= ["SELECT * FROM \"venues\" WHERE \"venues\".\"created_at\" = from_iso8601_timestamp('2017-01-01T00:00:00Z')"]
+             (sql.qp/format-honeysql ::inline-value-test honeysql))))))
+
+(defmethod sql.qp/inline-value [::inline-value-test String]
+  [_driver ^String s]
+  (format "decode(unhex('%s'), 'utf-8')" (codecs/bytes->hex (.getBytes s "UTF-8"))))
+
+(deftest ^:parallel override-inline-value-test-2
+  (let [honeysql {:select [[:*]]
+                  :from   [[:venues]]
+                  :where  [:= :venues/name "ABC"]}]
+    (binding [driver/*compile-with-inline-parameters* true]
+      (is (= ["SELECT * FROM \"venues\" WHERE \"venues\".\"name\" = decode(unhex('414243'), 'utf-8')"]
+             (sql.qp/format-honeysql ::inline-value-test honeysql))))))
+
+(deftype ^:private MyString [s])
+
+(defmethod sql.qp/inline-value [::inline-value-test MyString]
+  [_driver _s]
+  "[my-string]")
+
+(deftest ^:parallel override-inline-value-arbitrary-type-test
+  (let [honeysql {:select [[:*]]
+                  :from   [[:venues]]
+                  :where  [:= :venues/name (->MyString "ABC")]}]
+    (binding [driver/*compile-with-inline-parameters* true]
+      (is (= ["SELECT * FROM \"venues\" WHERE \"venues\".\"name\" = [my-string]"]
+             (sql.qp/format-honeysql ::inline-value-test honeysql))))))

@@ -10,7 +10,6 @@
    [metabase.query-processor.timezone :as qp.timezone]
    [metabase.task :as task]
    [metabase.util :as u]
-   [metabase.util.i18n :refer [trs]]
    [metabase.util.log :as log]
    [toucan2.core :as t2])
   (:import
@@ -29,7 +28,7 @@
   Will deindex if the model or model_index do not exist, if the model is no longer a model, or if archived."
   [model model-index]
   (or (nil? model) (nil? model-index)
-      (not (:dataset model))
+      (not= (:type model) :model)
       (:archived model)))
 
 (defn- model-index-trigger-key
@@ -41,14 +40,14 @@
   "Refresh the index on a model. Note, if the index should be removed (no longer a model, archived,
   etc, (see [[should-deindex?]])) will delete the indexing job."
   [model-index-id]
-  (let [model-index              (t2/select-one ModelIndex :id model-index-id)
-        model                    (when model-index
-                                   (t2/select-one Card :id (:model_id model-index)))]
+  (let [model-index (t2/select-one ModelIndex :id model-index-id)
+        model       (when model-index
+                      (t2/select-one Card :id (:model_id model-index)))]
     (if (should-deindex? model model-index)
       (u/ignore-exceptions
-       (let [trigger-key (model-index-trigger-key model-index-id)]
-         (task/delete-trigger! trigger-key)
-         (t2/delete! ModelIndex model-index-id)))
+        (let [trigger-key (model-index-trigger-key model-index-id)]
+          (task/delete-trigger! trigger-key)
+          (t2/delete! ModelIndex model-index-id)))
       (model-index/add-values! model-index))))
 
 (jobs/defjob ^{org.quartz.DisallowConcurrentExecution true
@@ -77,27 +76,23 @@
    (triggers/for-job (jobs/key refresh-model-index-key))
    (triggers/start-now)
    (triggers/with-schedule
-     (cron/schedule
-      (cron/cron-schedule (:schedule model-index))
-      (cron/in-time-zone (TimeZone/getTimeZone (or (driver/report-timezone)
-                                                   (qp.timezone/system-timezone-id)
-                                                   "UTC")))
-      (cron/with-misfire-handling-instruction-do-nothing)))))
+    (cron/schedule
+     (cron/cron-schedule (:schedule model-index))
+     (cron/in-time-zone (TimeZone/getTimeZone (or (driver/report-timezone)
+                                                  (qp.timezone/system-timezone-id)
+                                                  "UTC")))
+     (cron/with-misfire-handling-instruction-do-nothing)))))
 
 (defn add-indexing-job
   "Public API to start indexing a model."
   [model-index]
   (let [trigger (refresh-trigger model-index)]
-    (log/info
-     (u/format-color :green (trs "Scheduling indexing for model: {0}" (:model_id model-index))))
+    (log/info (u/format-color :green "Scheduling indexing for model: %s" (:model_id model-index)))
     (try (task/add-trigger! trigger)
          (catch ObjectAlreadyExistsException _e
-           (log/info (u/format-color :red (trs "Index already present for model: {0}"
-                                                 (:model_id model-index)))))
+           (log/info (u/format-color :red "Index already present for model: %s" (:model_id model-index))))
          (catch Exception e
-           (log/warn (trs "Error scheduling indexing for model: {0}"
-                          (:model_id model-index))
-                     e)))))
+           (log/warnf e "Error scheduling indexing for model: %s" (:model_id model-index))))))
 
 (defn remove-indexing-job
   "Public API to remove an indexing job on a model."

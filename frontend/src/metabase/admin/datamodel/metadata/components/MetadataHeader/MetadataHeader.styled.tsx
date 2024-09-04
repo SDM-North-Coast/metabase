@@ -1,9 +1,8 @@
-import { Link } from "react-router";
 import styled from "@emotion/styled";
-import { color } from "metabase/lib/colors";
+import { Link } from "react-router";
 
 export const TableSettingsLink = styled(Link)`
   &:hover {
-    color: ${color("brand")};
+    color: var(--mb-color-brand);
   }
 `;

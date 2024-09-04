@@ -1,24 +1,28 @@
 import type { ReactNode } from "react";
-import { useEffect, useCallback } from "react";
-import _ from "underscore";
 import type { Route } from "react-router";
+import { useAsync } from "react-use";
+import _ from "underscore";
 
-import Tables from "metabase/entities/tables";
-import Groups from "metabase/entities/groups";
+import { useTableListQuery } from "metabase/common/hooks";
 import Databases from "metabase/entities/databases";
-
-import type { DatabaseId, Group } from "metabase-types/api";
+import Groups from "metabase/entities/groups";
+import { isAdminGroup, isDefaultGroup } from "metabase/lib/groups";
 import { useDispatch, useSelector } from "metabase/lib/redux";
-import type Database from "metabase-lib/metadata/Database";
-import { getIsDirty, getDiff } from "../../selectors/data-permissions/diff";
-import {
-  saveDataPermissions,
-  loadDataPermissions,
-  initializeDataPermissions,
-} from "../../permissions";
-import PermissionsPageLayout from "../../components/PermissionsPageLayout/PermissionsPageLayout";
+import { getSetting } from "metabase/selectors/settings";
+import { PermissionsApi } from "metabase/services";
+import { Center, Loader } from "metabase/ui";
+import type Database from "metabase-lib/v1/metadata/Database";
+import type { DatabaseId, Group } from "metabase-types/api";
+
 import { DataPermissionsHelp } from "../../components/DataPermissionsHelp";
+import PermissionsPageLayout from "../../components/PermissionsPageLayout/PermissionsPageLayout";
 import ToolbarUpsell from "../../components/ToolbarUpsell";
+import {
+  LOAD_DATA_PERMISSIONS_FOR_GROUP,
+  restoreLoadedPermissions,
+  saveDataPermissions,
+} from "../../permissions";
+import { getDiff, getIsDirty } from "../../selectors/data-permissions/diff";
 
 type DataPermissionsPageProps = {
   children: ReactNode;
@@ -43,48 +47,60 @@ function DataPermissionsPage({
 }: DataPermissionsPageProps) {
   const isDirty = useSelector(getIsDirty);
   const diff = useSelector(state => getDiff(state, { databases, groups }));
+  const showSplitPermsModal = useSelector(state =>
+    getSetting(state, "show-updated-permission-modal"),
+  );
 
   const dispatch = useDispatch();
 
-  const loadPermissions = () => dispatch(loadDataPermissions());
+  const resetPermissions = () => dispatch(restoreLoadedPermissions());
   const savePermissions = () => dispatch(saveDataPermissions());
-  const initialize = useCallback(
-    () => dispatch(initializeDataPermissions()),
-    [dispatch],
-  );
-  const fetchTables = useCallback(
-    (dbId: DatabaseId) =>
-      dispatch(
-        Tables.actions.fetchList({
-          dbId,
-          include_hidden: true,
-          remove_inactive: true,
-        }),
-      ),
-    [dispatch],
-  );
 
-  useEffect(() => {
-    initialize();
-  }, [initialize]);
+  const { loading: isLoadingAllUsers } = useAsync(async () => {
+    const allUsers = groups.find(isDefaultGroup);
+    const result = await PermissionsApi.graphForGroup({
+      groupId: allUsers?.id,
+    });
+    await dispatch({ type: LOAD_DATA_PERMISSIONS_FOR_GROUP, payload: result });
+  }, []);
 
-  useEffect(() => {
-    if (params.databaseId == null) {
-      return;
-    }
-    fetchTables(params.databaseId);
-  }, [params.databaseId, fetchTables]);
+  const { loading: isLoadingAdminstrators } = useAsync(async () => {
+    const admins = groups.find(isAdminGroup);
+    const result = await PermissionsApi.graphForGroup({
+      groupId: admins?.id,
+    });
+    await dispatch({ type: LOAD_DATA_PERMISSIONS_FOR_GROUP, payload: result });
+  }, []);
+
+  const { isLoading: isLoadingTables } = useTableListQuery({
+    query: {
+      dbId: params.databaseId,
+      include_hidden: true,
+      remove_inactive: true,
+      skip_fields: true,
+    },
+    enabled: params.databaseId !== undefined,
+  });
+
+  if (isLoadingAllUsers || isLoadingAdminstrators || isLoadingTables) {
+    return (
+      <Center h="100%">
+        <Loader size="lg" />
+      </Center>
+    );
+  }
 
   return (
     <PermissionsPageLayout
       tab="data"
-      onLoad={loadPermissions}
+      onLoad={resetPermissions}
       onSave={savePermissions}
       diff={diff}
       isDirty={isDirty}
       route={route}
       toolbarRightContent={DATA_PERMISSIONS_TOOLBAR_CONTENT}
       helpContent={<DataPermissionsHelp />}
+      showSplitPermsModal={showSplitPermsModal}
     >
       {children}
     </PermissionsPageLayout>

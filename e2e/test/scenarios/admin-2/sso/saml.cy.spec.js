@@ -1,16 +1,22 @@
 import {
-  restore,
   describeEE,
-  typeAndBlurUsingLabel,
-  popover,
   modal,
+  popover,
+  restore,
   setTokenFeatures,
+  typeAndBlurUsingLabel,
 } from "e2e/support/helpers";
 
 import {
-  crudGroupMappingsWidget,
   checkGroupConsistencyAfterDeletingMappings,
+  crudGroupMappingsWidget,
 } from "./shared/group-mappings-widget";
+import {
+  getSamlCertificate,
+  getSuccessUi,
+  getUserProvisioningInput,
+  setupSaml,
+} from "./shared/helpers";
 
 describeEE("scenarios > admin > settings > SSO > SAML", () => {
   beforeEach(() => {
@@ -76,6 +82,17 @@ describeEE("scenarios > admin > settings > SSO > SAML", () => {
     getSamlCard().findByText("Set up").should("exist");
   });
 
+  it("should allow the user to enable/disable user provisioning", () => {
+    setupSaml();
+    cy.visit("/admin/settings/authentication/saml");
+
+    getUserProvisioningInput().label.click();
+    cy.button("Save changes").click();
+    cy.wait("@updateSamlSettings");
+
+    getSuccessUi().should("exist");
+  });
+
   describe("Group Mappings Widget", () => {
     beforeEach(() => {
       cy.intercept("GET", "/api/setting").as("getSettings");
@@ -98,20 +115,6 @@ describeEE("scenarios > admin > settings > SSO > SAML", () => {
 
 const getSamlCard = () => {
   return cy.findByText("SAML").parent().parent();
-};
-
-const getSamlCertificate = () => {
-  return cy.readFile("test_resources/sso/auth0-public-idp.cert", "utf8");
-};
-
-const setupSaml = () => {
-  getSamlCertificate().then(certificate => {
-    cy.request("PUT", "/api/setting", {
-      "saml-enabled": true,
-      "saml-identity-provider-uri": "https://example.test",
-      "saml-identity-provider-certificate": certificate,
-    });
-  });
 };
 
 const enterSamlSettings = () => {

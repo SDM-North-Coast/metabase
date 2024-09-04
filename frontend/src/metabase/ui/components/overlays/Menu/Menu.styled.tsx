@@ -1,5 +1,5 @@
-import { getStylesRef, px, rem } from "@mantine/core";
 import type { MantineThemeOverride } from "@mantine/core";
+import { getStylesRef, px, rem } from "@mantine/core";
 
 export const getMenuOverrides = (): MantineThemeOverride["components"] => ({
   Menu: {
@@ -12,19 +12,25 @@ export const getMenuOverrides = (): MantineThemeOverride["components"] => ({
       dropdown: {
         padding: "0.75rem !important",
         minWidth: "11.5rem",
+        overflow: "auto",
+        background: "var(--mb-color-background)",
+        borderColor: "var(--mb-color-border)",
       },
       item: {
-        color: theme.colors.text[2],
+        color: "var(--mb-color-text-primary)",
         fontSize: theme.fontSizes.md,
         lineHeight: "1.5rem",
         padding: theme.spacing.sm,
 
-        "&:hover, &:focus": {
-          color: theme.colors.brand[1],
-          backgroundColor: theme.colors.brand[0],
+        "&:disabled": {
+          color: theme.fn.themeColor("text-light"),
+        },
+        "&[data-hovered]": {
+          color: "var(--mb-color-text-hover)",
+          backgroundColor: "var(--mb-color-background-hover)",
 
           [`& .${getStylesRef("itemRightSection")}`]: {
-            color: theme.colors.brand[1],
+            color: "var(--mb-color-text-hover)",
           },
         },
       },
@@ -33,11 +39,11 @@ export const getMenuOverrides = (): MantineThemeOverride["components"] => ({
       },
       itemRightSection: {
         ref: getStylesRef("itemRightSection"),
-        color: theme.colors.text[0],
+        color: theme.fn.themeColor("text-light"),
         marginLeft: theme.spacing.md,
       },
       label: {
-        color: theme.colors.text[0],
+        color: theme.fn.themeColor("text-light"),
         fontSize: theme.fontSizes.sm,
         lineHeight: theme.lineHeight,
         padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
@@ -47,7 +53,7 @@ export const getMenuOverrides = (): MantineThemeOverride["components"] => ({
         marginBottom: theme.spacing.xs,
         marginLeft: theme.spacing.sm,
         marginRight: theme.spacing.sm,
-        borderTopColor: theme.colors.border[0],
+        borderTopColor: theme.fn.themeColor("border"),
       },
     }),
   },

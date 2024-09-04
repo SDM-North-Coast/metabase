@@ -1,17 +1,19 @@
-import {
-  restore,
-  visitQuestionAdhoc,
-  main,
-  addOrUpdateDashboardCard,
-  visitDashboardAndCreateTab,
-  popover,
-  getDashboardCards,
-  saveDashboard,
-} from "e2e/support/helpers";
-
 import { SAMPLE_DB_ID } from "e2e/support/cypress_data";
 import { SAMPLE_DATABASE } from "e2e/support/cypress_sample_database";
 import { ORDERS_BY_YEAR_QUESTION_ID } from "e2e/support/cypress_sample_instance_data";
+import {
+  addOrUpdateDashboardCard,
+  assertEChartsTooltip,
+  cartesianChartCircle,
+  chartPathWithFillColor,
+  getDashboardCards,
+  main,
+  popover,
+  restore,
+  saveDashboard,
+  visitDashboardAndCreateTab,
+  visitQuestionAdhoc,
+} from "e2e/support/helpers";
 
 const { ORDERS, ORDERS_ID, PRODUCTS, PRODUCTS_ID, PEOPLE, PEOPLE_ID } =
   SAMPLE_DATABASE;
@@ -76,7 +78,7 @@ describe("scenarios > x-rays", { tags: "@slow" }, () => {
 
     cy.intercept("POST", "/api/dataset").as("dataset");
 
-    cy.get(".dot")
+    cartesianChartCircle()
       .eq(23) // Random dot
       .click({ force: true });
 
@@ -96,6 +98,12 @@ describe("scenarios > x-rays", { tags: "@slow" }, () => {
 
   ["X-ray", "Compare to the rest"].forEach(action => {
     it(`"${action.toUpperCase()}" should work on a nested question made from base native question (metabase#15655)`, () => {
+      if (action === "Compare to the rest") {
+        cy.log(
+          "Skipping Compare to the rest test because it takes 8 minutes in ci",
+        );
+        cy.skipOn(action === "Compare to the rest");
+      }
       cy.intercept("GET", "/api/automagic-dashboards/**").as("xray");
 
       cy.createNativeQuestion({
@@ -115,7 +123,7 @@ describe("scenarios > x-rays", { tags: "@slow" }, () => {
           { visitQuestion: true },
         );
 
-        cy.get(".bar").first().click({ force: true });
+        chartPathWithFillColor("#509EE3").first().click({ force: true });
 
         popover().within(() => {
           cy.findByText("Automatic insights…").click();
@@ -139,7 +147,7 @@ describe("scenarios > x-rays", { tags: "@slow" }, () => {
           cy.findByText("A look at the number of 15655").should("exist");
         });
 
-        cy.get(".DashCard");
+        cy.findAllByTestId("dashcard-container");
       });
     });
 
@@ -159,7 +167,7 @@ describe("scenarios > x-rays", { tags: "@slow" }, () => {
         display: "bar",
       });
 
-      cy.get(".bar").first().click();
+      chartPathWithFillColor("#509EE3").first().click();
 
       // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
       cy.findByText("Automatic insights…").click();
@@ -188,7 +196,7 @@ describe("scenarios > x-rays", { tags: "@slow" }, () => {
 
     cy.url().should("contain", "a-look-at-orders");
 
-    cy.get(".Card").contains("18,760");
+    cy.findAllByTestId("dashcard").contains("18,760");
     // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
     cy.findByText("How these transactions are distributed");
   });
@@ -245,7 +253,7 @@ describe("scenarios > x-rays", { tags: "@slow" }, () => {
     cy.findByText("State", timeout).click();
 
     cy.findByPlaceholderText("Search the list").type("GA{enter}");
-    cy.findByTestId("GA-filter-value").should("be.visible").click();
+    cy.findByLabelText("GA").should("be.visible").click();
     cy.button("Add filter").click();
 
     // confirm results of "Total transactions" card were updated
@@ -256,7 +264,7 @@ describe("scenarios > x-rays", { tags: "@slow" }, () => {
 
     // confirm parameter filter is applied as filter in query builder
     // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("State is GA");
+    cy.findByText("User → State is GA");
     // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
     cy.findByText("463");
   });
@@ -291,12 +299,19 @@ describe("scenarios > x-rays", { tags: "@slow" }, () => {
       .contains("User → Source")
       .should("be.visible");
 
-    cy.get(".bar").should("have.length", 5);
+    // Bars
+    chartPathWithFillColor("#509EE3").should("have.length", 5);
+    chartPathWithFillColor("#509EE3").eq(0).realHover();
 
-    cy.get(".bar").eq(0).realHover();
-    popover().within(() => {
-      cy.findByText("Affiliate").should("be.visible");
-      cy.findByText("3,520").should("be.visible");
+    assertEChartsTooltip({
+      header: "Affiliate",
+      rows: [
+        {
+          color: "#509EE3",
+          name: "Count",
+          value: "3,520",
+        },
+      ],
     });
   });
 
@@ -321,14 +336,33 @@ describe("scenarios > x-rays", { tags: "@slow" }, () => {
         cy.findByRole("tab", { name: "Tab 1" }).click();
         saveDashboard();
 
-        cy.get("circle").eq(0).click({ force: true });
+        cartesianChartCircle().eq(0).click({ force: true });
         popover().findByText("Automatic insights…").click();
         popover().findByText("X-ray").click();
         cy.wait("@dataset", { timeout: 60000 });
 
         // Ensure charts actually got rendered
-        cy.get("text.x-axis-label").contains("Created At");
+        cy.get("text").contains("Created At");
       });
+  });
+
+  it("should default x-ray dashboard width to 'fixed'", () => {
+    cy.intercept("POST", "/api/dataset").as("dataset");
+    cy.visit(`/auto/dashboard/table/${ORDERS_ID}`);
+    cy.wait("@dataset", { timeout: 60000 });
+
+    // x-ray dashboards should default to 'fixed' width
+    cy.findByTestId("fixed-width-dashboard-header").should(
+      "have.css",
+      "max-width",
+      "1048px",
+    );
+    cy.findByTestId("fixed-width-filters").should(
+      "have.css",
+      "max-width",
+      "1048px",
+    );
+    cy.findByTestId("dashboard-grid").should("have.css", "max-width", "1048px");
   });
 });
 

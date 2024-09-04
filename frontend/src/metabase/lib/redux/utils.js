@@ -1,19 +1,17 @@
-// eslint-disable-next-line no-restricted-imports -- deprecated usage
-import moment from "moment-timezone";
-import _ from "underscore";
-import { getIn } from "icepick";
-import { normalize } from "normalizr";
 import { compose } from "@reduxjs/toolkit";
+import { getIn } from "icepick";
+import moment from "moment-timezone"; // eslint-disable-line no-restricted-imports -- deprecated usage
+import { normalize } from "normalizr";
+import _ from "underscore";
 
-import * as MetabaseAnalytics from "metabase/lib/analytics";
-import {
-  setRequestLoading,
-  setRequestLoaded,
-  setRequestError,
-  setRequestUnloaded,
-  setRequestPromise,
-} from "metabase/redux/requests";
 import { delay } from "metabase/lib/promise";
+import {
+  setRequestError,
+  setRequestLoaded,
+  setRequestLoading,
+  setRequestPromise,
+  setRequestUnloaded,
+} from "metabase/redux/requests";
 
 // convenience
 export { combineReducers, compose } from "@reduxjs/toolkit";
@@ -335,31 +333,6 @@ function withCachedData(
 
         return thunkCreator(...args)(dispatch, getState);
       };
-}
-
-export function withAnalytics(categoryOrFn, actionOrFn, labelOrFn, valueOrFn) {
-  // thunk decorator:
-  return thunkCreator =>
-    // thunk creator:
-    (...args) =>
-    // thunk:
-    (dispatch, getState) => {
-      function get(valueOrFn, extra = {}) {
-        if (typeof valueOrFn === "function") {
-          return valueOrFn(args, { ...extra }, getState);
-        }
-      }
-      try {
-        const category = get(categoryOrFn);
-        const action = get(actionOrFn, { category });
-        const label = get(labelOrFn, { category, action });
-        const value = get(valueOrFn, { category, action, label });
-        MetabaseAnalytics.trackStructEvent(category, action, label, value);
-      } catch (error) {
-        console.warn("withAnalytics threw an error:", error);
-      }
-      return thunkCreator(...args)(dispatch, getState);
-    };
 }
 
 export function withNormalize(schema) {

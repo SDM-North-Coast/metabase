@@ -1,12 +1,13 @@
-(ns metabase-enterprise.serialization.v2.models)
+(ns metabase-enterprise.serialization.v2.models
+  "See [[metabase.models.serialization]] for documentation.")
 
 (def data-model
   "Schema model types"
   ["Database"
    "Field"
-   "Metric"
    "Segment"
-   "Table"])
+   "Table"
+   "Channel"])
 
 (def content
   "Content model types"
@@ -32,25 +33,30 @@
    "DashboardTab"
    "Dimension"
    "ParameterCard"
+   "DashboardCardSeries"
    "TimelineEvent"])
 
 (def excluded-models
   "List of models which are not going to be serialized ever."
-  ["Activity"
+  ["ApiKey"
    "ApplicationPermissionsRevision"
    "AuditLog"
    "BookmarkOrdering"
+   "CacheConfig"
    "CardBookmark"
+   "CloudMigration"
    "CollectionBookmark"
    "CollectionPermissionGraphRevision"
    "ConnectionImpersonation"
    "DashboardBookmark"
-   "DashboardCardSeries"
+   "DataPermissions"
+   "FieldUsage"
    "GroupTableAccessPolicy"
    "HTTPAction"
    "ImplicitAction"
+   "LegacyMetric"
+   "LegacyMetricImportantField"
    "LoginHistory"
-   "MetricImportantField"
    "ModelIndex"
    "ModelIndexValue"
    "ModerationReview"
@@ -65,8 +71,11 @@
    "PulseChannelRecipient"
    "Query"
    "QueryAction"
+   "QueryAnalysis"
    "QueryCache"
    "QueryExecution"
+   "QueryField"
+   "QueryTable"
    "RecentViews"
    "Revision"
    "Secret"
@@ -74,4 +83,5 @@
    "TablePrivileges"
    "TaskHistory"
    "User"
+   "UserParameterValue"
    "ViewLog"])

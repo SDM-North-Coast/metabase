@@ -1,5 +1,5 @@
+import type { IconName } from "metabase/ui";
 import * as Lib from "metabase-lib";
-import type { IconName } from "metabase/core/components/Icon";
 
 export function getColumnIcon(column: Lib.ColumnMetadata): IconName {
   if (Lib.isPrimaryKey(column)) {
@@ -17,11 +17,7 @@ export function getColumnIcon(column: Lib.ColumnMetadata): IconName {
     return "location";
   }
 
-  if (
-    Lib.isDate(column) ||
-    Lib.isDateWithoutTime(column) ||
-    Lib.isTime(column)
-  ) {
+  if (Lib.isTemporal(column)) {
     return "calendar";
   }
 
@@ -30,12 +26,12 @@ export function getColumnIcon(column: Lib.ColumnMetadata): IconName {
   if (Lib.isBoolean(column)) {
     return "io";
   }
-  if (Lib.isString(column)) {
+  if (Lib.isStringOrStringLike(column)) {
     return "string";
   }
   if (Lib.isNumeric(column)) {
     return "int";
   }
 
-  return "unknown";
+  return "list";
 }

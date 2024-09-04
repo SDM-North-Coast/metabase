@@ -1,4 +1,5 @@
 *.class
+*.*.rej
 *.iml
 *.jar
 *.log
@@ -27,7 +28,7 @@
 /.sqlite.db
 /.devcontainer
 /backend-checksums.txt
-/backend-docs/uberdoc.html
+/backend-docs
 /build.xml
 /checkouts
 /classes
@@ -52,6 +53,7 @@
 /resources/frontend_client/embed.html
 /resources/frontend_client/index.html
 /resources/frontend_client/public.html
+/resources/embedding-sdk
 /resources/i18n/*.edn
 /resources/instance_analytics.zip
 /resources/license-backend-third-party.txt
@@ -69,6 +71,7 @@
 bin/node_modules/
 bin/release/aws-eb/metabase-aws-eb.zip
 coverage-summary.json
+junit.xml
 pom.xml
 pom.xml.asc
 profiles.clj
@@ -76,6 +79,7 @@ target/checksum.txt
 xcshareddata
 xcuserdata
 dev/src/dev/nocommit/
+dev/serialization_deltas/
 *~
 **/cypress_sample_database.json
 **/cypress_sample_instance_data.json
@@ -91,6 +95,14 @@ modules/drivers/*/.lsp/*
 !modules/drivers/*/.lsp/config.edn
 **/.clj-kondo/.cache
 
+# clj-kondo: ignore all except our defined config
+.clj-kondo/*
+!.clj-kondo/README.md
+!.clj-kondo/config.edn
+!.clj-kondo/src/
+!.clj-kondo/test/
+!.clj-kondo/macros/
+
 # Editor- or environment-specific local files
 *.code-workspace
 .java-version
@@ -100,3 +112,9 @@ modules/drivers/*/.lsp/*
 .clj-kondo/metosin/malli-types-clj
 
 .github/static-viz-sources.yaml
+
+# airgap
+/resources/airgap/
+
+# swc
+.swc/

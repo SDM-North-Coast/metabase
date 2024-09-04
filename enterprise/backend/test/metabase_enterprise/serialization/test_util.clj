@@ -7,11 +7,15 @@
    [metabase.db.connection :as mdb.connection]
    [metabase.db.data-source :as mdb.data-source]
    [metabase.models :refer [Card Collection Dashboard DashboardCard DashboardCardSeries Database
-                            Field Metric NativeQuerySnippet Pulse PulseCard Segment Table User]]
+                            Field NativeQuerySnippet Pulse PulseCard Segment Table User]]
    [metabase.models.collection :as collection]
+   [metabase.models.serialization :as serdes]
    [metabase.shared.models.visualization-settings :as mb.viz]
    [metabase.test :as mt]
    [metabase.test.data :as data]
+   [metabase.util :as u]
+   [metabase.util.files :as u.files]
+   [toucan2.connection :as t2.conn]
    [toucan2.core :as t2]
    [toucan2.tools.with-temp :as t2.with-temp]))
 
@@ -53,56 +57,57 @@
      (mt/with-temp ~model-bindings ~@body)))
 
 (defn create! [model & {:as properties}]
- (first (t2/insert-returning-instances! model (merge (t2.with-temp/with-temp-defaults model) properties))))
+  (first (t2/insert-returning-instances! model (merge (t2.with-temp/with-temp-defaults model) properties))))
+
+(defn -data-source-url [^metabase.db.data_source.DataSource data-source]
+  (.url data-source))
+
+(defmacro with-db [data-source & body]
+  `(binding [mdb.connection/*application-db* (mdb.connection/application-db :h2 ~data-source)]
+     (with-open [conn# (.getConnection mdb.connection/*application-db*)]
+       (binding [t2.conn/*current-connectable* conn#]
+         ;; TODO mt/with-empty-h2-app-db also rebinds some perms-group/* - do we want to do that too?
+         ;;   redefs not great for parallelism
+         (testing (format "\nApp DB = %s" (pr-str (-data-source-url ~data-source)))
+           ~@body)))))
 
 (defn- do-with-in-memory-h2-db [db-name-prefix f]
-  (let [db-name           (str db-name-prefix (mt/random-name))
+  (let [db-name           (str db-name-prefix "-" (mt/random-name))
         connection-string (format "jdbc:h2:mem:%s" db-name)
         data-source       (mdb.data-source/raw-connection-string->DataSource connection-string)]
     ;; DB should stay open as long as `conn` is held open.
     (with-open [_conn (.getConnection data-source)]
-      (letfn [(do-with-app-db [thunk]
-                (binding [mdb.connection/*application-db* (mdb.connection/application-db :h2 data-source)]
-                  (testing (format "\nApp DB = %s" (pr-str connection-string))
-                    (thunk))))]
-        (do-with-app-db mdb/setup-db!)
-        (f do-with-app-db)))))
+      (with-db data-source (mdb/setup-db! :create-sample-content? false)) ; skip sample content for speedy tests. this doesn't reflect production
+      (f data-source))))
 
-(defn do-with-source-and-dest-dbs [f]
-  (do-with-in-memory-h2-db
-   "source-"
-   (fn [do-with-source-db]
-     (do-with-in-memory-h2-db
-      "dest-"
-      (fn [do-with-dest-db]
-        (f do-with-source-db do-with-dest-db))))))
+(defn do-with-dbs
+  "Given a function with the given arity, create an in-memory db for each argument and then call the fn with these dbs"
+  [arity f]
+  (if (zero? arity)
+    (f)
+    (recur (dec arity)
+           (fn [& args]
+             (do-with-in-memory-h2-db
+              (str "db-" arity)
+              (fn [data-source]
+                (apply f data-source args)))))))
 
-(defmacro with-source-and-dest-dbs
-  "Creates and sets up two in-memory H2 application databases, a source database and an application database. For
-  testing load/dump/serialization stuff. To use the source DB, use [[with-source-db]], which makes binds it as the
-  current application database; [[with-dest-db]] binds the destination DB as the current application database."
-  {:style/indent 0}
-  [& body]
-  ;; this is implemented by introducing the anaphors `&do-with-source-db` and `&do-with-dest-db` which are used by
-  ;; [[with-source-db]] and [[with-dest-db]]
-  `(do-with-source-and-dest-dbs
-    (fn [~'&do-with-source-db ~'&do-with-dest-db]
-      ~@body)))
+(defmacro with-dbs
+  "Create and set up in-memory H2 application databases for each symbol in the bindings vector, each of which is then
+   bound to the corresponding data-source when executing the body. You can then use [[with-db]] to make any of these
+   data-sources the current application database.
 
-(defmacro with-source-db
-  "For use with [[with-source-and-dest-dbs]]. Makes the source DB the current application database."
-  {:style/indent 0}
-  [& body]
-  `(~'&do-with-source-db (fn [] ~@body)))
-
-(defmacro with-dest-db
-  "For use with [[with-source-and-dest-dbs]]. Makes the destination DB the current application database."
-  {:style/indent 0}
-  [& body]
-  `(~'&do-with-dest-db (fn [] ~@body)))
+   This is particularly useful for load/dump/serialization tests, where you need both a source and application db."
+  {:style/indent [:defn]}
+  [bindings & body]
+  (let [arity (count bindings)
+        bindings (mapv (fn [binding]
+                         (vary-meta binding assoc :tag 'javax.sql.DataSource))
+                       bindings)]
+    `(do-with-dbs ~arity (fn ~bindings ~@body))))
 
 (defn random-dump-dir [prefix]
-  (str (System/getProperty "java.io.tmpdir") "/" prefix (mt/random-name)))
+  (str (u.files/get-path (System/getProperty "java.io.tmpdir") prefix (mt/random-name))))
 
 (defn do-with-random-dump-dir [prefix f]
   (let [dump-dir (random-dump-dir (or prefix ""))]
@@ -160,10 +165,6 @@
                                                         "Deeply Nested Personal Collection"
                                                         :location
                                                         (format "/%d/%d/" (crowberto-pc-id) pc-nested-id)}
-                  Metric     {metric-id :id} {:name "My Metric"
-                                              :table_id table-id
-                                              :definition {:source-table table-id
-                                                           :aggregation [:sum [:field numeric-field-id nil]]}}
                   Segment    {segment-id :id} {:name "My Segment"
                                                :table_id table-id
                                                :definition {:source-table table-id
@@ -188,7 +189,7 @@
                                                                                          [:field
                                                                                           category-pk-field-id
                                                                                           {:join-alias "cat"}]]}]}}}
-                  Card       {card-arch-id :id} { ;:archived true
+                  Card       {card-arch-id :id} {;:archived true
                                                  :table_id table-id
                                                  :name "My Arch Card"
                                                  :collection_id collection-id
@@ -202,8 +203,8 @@
                                                  :name root-card-name
                                                  :dataset_query {:type :query
                                                                  :database db-id
-                                                                 :query {:source-table table-id}
-                                                                 :expressions {"Price Known" [:> [:field numeric-field-id nil] 0]}}}
+                                                                 :query {:source-table table-id
+                                                                         :expressions  {"Price Known" [:> [:field numeric-field-id nil] 0]}}}}
                   Card       {card-id-nested :id} {:table_id table-id
                                                    :name "My Nested Card"
                                                    :collection_id collection-id
@@ -238,11 +239,11 @@
                                                           :native
                                                           {:query "SELECT * FROM {{#1}} AS subquery"
                                                            :template-tags
-                                                           {"#1"{:id "72461b3b-3877-4538-a5a3-7a3041924517"
-                                                                 :name "#1"
-                                                                 :display-name "#1"
-                                                                 :type "card"
-                                                                 :card-id card-id}}}}}
+                                                           {"#1" {:id "72461b3b-3877-4538-a5a3-7a3041924517"
+                                                                  :name "#1"
+                                                                  :display-name "#1"
+                                                                  :type "card"
+                                                                  :card-id card-id}}}}}
                   DashboardCard       {dashcard-id :id} {:dashboard_id dashboard-id
                                                          :card_id card-id}
                   DashboardCard       {dashcard-top-level-click-id :id} {:dashboard_id dashboard-id
@@ -440,7 +441,6 @@
         :last-login-field-id          last-login-field-id
         :latitude-field-id            latitude-field-id
         :longitude-field-id           longitude-field-id
-        :metric-id                    metric-id
         :name-field-id                name-field-id
         :nested-snippet-id            nested-snippet-id
         :numeric-field-id             numeric-field-id
@@ -500,7 +500,6 @@
                    last-login-field-id
                    latitude-field-id
                    longitude-field-id
-                   metric-id
                    name-field-id
                    nested-snippet-id
                    numeric-field-id
@@ -529,3 +528,11 @@
 
 ;; Don't memoize as IDs change in each `with-world` context
 (alter-var-root #'names/path->context (fn [_] #'names/path->context*))
+
+(defn extract-one [model-name where]
+  (let [where (cond
+                (nil? where)    true
+                (number? where) [:= :id where]
+                (string? where) [:= :entity_id where]
+                :else           where)]
+    (u/rfirst (serdes/extract-all model-name {:where where}))))

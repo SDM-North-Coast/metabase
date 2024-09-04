@@ -5,6 +5,7 @@ redirect_from:
   - /docs/latest/users-guide
   - /docs/latest/administration-guide
   - /docs/latest/operations-guide
+  - /docs/latest/faq
 ---
 
 # Metabase documentation
@@ -15,9 +16,13 @@ Metabase is an open-source business intelligence platform. You can use Metabase 
 
 ## First steps
 
+### Metabase Cloud
+
+The easiest way to get started with Metabase is to sign up for a free trial of [Metabase Cloud](https://store.metabase.com/checkout). You get support, backups, upgrades, an SMTP server, SSL certificate, SoC2 Type 2 security auditing, and more (plus your money goes toward improving Metabase). Check out our quick overview of [cloud vs self-hosting](https://www.metabase.com/docs/latest/cloud/cloud-vs-self-hosting). If you need to, you can always switch to [self-hosting](./installation-and-operation/installing-metabase.md) Metabase at any time (or vice versa).
+
 ### [Installing Metabase](./installation-and-operation/installing-metabase.md)
 
-Run as a JAR, using Docker, or on Metabase Cloud.
+Run as a JAR, using Docker, or on [Metabase Cloud](https://store.metabase.com/checkout).
 
 ### [Setting up Metabase](./configuring-metabase/setting-up-metabase.md)
 
@@ -48,6 +53,7 @@ Metabase's reference documentation.
 - [Commands](./installation-and-operation/commands.md)
 - [Supported browsers](./installation-and-operation/supported-browsers.md)
 - [Privacy](./installation-and-operation/privacy.md)
+- [About the anonymous usage data we collect](./installation-and-operation/information-collection.md)
 
 ### Databases
 
@@ -85,6 +91,7 @@ Metabase's reference documentation.
 - [Sharing answers](./questions/sharing/answers.md)
 - [Alerts](./questions/sharing/alerts.md)
 - [Public sharing](./questions/sharing/public-links.md)
+- [Exporting data](./questions/sharing/exporting-results.md)
 
 ### Dashboards
 
@@ -100,9 +107,11 @@ Metabase's reference documentation.
 
 - [Data modeling overview](./data-modeling/start.md)
 - [Models](./data-modeling/models.md)
-- [Data model admin settings](./data-modeling/metadata-editing.md)
+- [Model persistence](./data-modeling/model-persistence.md)
+- [Table metadata admin settings](./data-modeling/metadata-editing.md)
 - [Field types](./data-modeling/field-types.md)
 - [Formatting defaults](./data-modeling/formatting.md)
+- [Working with JSON](./data-modeling/json-unfolding.md)
 - [Segments and metrics](./data-modeling/segments-and-metrics.md)
 
 ### Actions
@@ -130,13 +139,14 @@ Metabase's reference documentation.
 - [Password complexity](./people-and-groups/changing-password-complexity.md)
 - [Session expiration](./people-and-groups/changing-session-expiration.md)
 - [Google Sign-In or LDAP](./people-and-groups/google-and-ldap.md)
+- [API keys](./people-and-groups/api-keys.md)
 
 #### Paid SSO options
 
 - [JWT-based authentication](./people-and-groups/authenticating-with-jwt.md)
 - [SAML-based authentication](./people-and-groups/authenticating-with-saml.md)
   - [SAML with Auth0](./people-and-groups/saml-auth0.md)
-  - [SAML with Azure AD](./people-and-groups/saml-azure.md)
+  - [SAML with Microsoft Entra ID](./people-and-groups/saml-azure.md)
   - [SAML with Google](./people-and-groups/saml-google.md)
   - [SAML with Keycloak](./people-and-groups/saml-keycloak.md)
   - [SAML with Okta](./people-and-groups/saml-okta.md)
@@ -158,6 +168,7 @@ Metabase's reference documentation.
 - [Embedding overview](./embedding/start.md)
 - [Embedding introduction](./embedding/introduction.md)
 - [Interactive embedding](./embedding/interactive-embedding.md)
+- [Interactive embedding quick start](./embedding/interactive-embedding-quick-start-guide.md)
 - [Static embedding](./embedding/static-embedding.md)
 - [Parameters for static embeds](./embedding/static-embedding-parameters.md)
 

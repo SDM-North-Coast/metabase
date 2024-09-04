@@ -1,74 +1,63 @@
-import TippyPopoverWithTrigger from "metabase/components/PopoverWithTrigger/TippyPopoverWithTrigger";
-import * as Lib from "metabase-lib";
-import type StructuredQuery from "metabase-lib/queries/StructuredQuery";
-import { AggregationPicker } from "../SummarizeSidebar.styled";
-import { AggregationName, RemoveIcon, Root } from "./AggregationItem.styled";
+import { useCallback, useState } from "react";
 
-const STAGE_INDEX = -1;
+import { Popover } from "metabase/ui";
+import * as Lib from "metabase-lib";
+
+import { AggregationPicker } from "../SummarizeSidebar.styled";
+
+import { AggregationName, RemoveIcon, Root } from "./AggregationItem.styled";
 
 interface AggregationItemProps {
   query: Lib.Query;
+  stageIndex: number;
   aggregation: Lib.AggregationClause;
   aggregationIndex: number;
-  legacyQuery: StructuredQuery;
-  onUpdate: (nextAggregation: Lib.Aggregatable) => void;
-  onRemove: () => void;
-  onLegacyQueryChange: (nextLegacyQuery: StructuredQuery) => void;
+  onQueryChange: (query: Lib.Query) => void;
 }
 
 export function AggregationItem({
   query,
+  stageIndex,
   aggregation,
   aggregationIndex,
-  legacyQuery,
-  onUpdate,
-  onRemove,
-  onLegacyQueryChange,
+  onQueryChange,
 }: AggregationItemProps) {
-  const { displayName } = Lib.displayInfo(query, STAGE_INDEX, aggregation);
+  const [isOpened, setIsOpened] = useState(false);
+  const { displayName } = Lib.displayInfo(query, stageIndex, aggregation);
 
   const operators = Lib.selectedAggregationOperators(
-    Lib.availableAggregationOperators(query, STAGE_INDEX),
+    Lib.availableAggregationOperators(query, stageIndex),
     aggregation,
   );
 
-  const legacyClause = legacyQuery.aggregations()[aggregationIndex];
+  const handleRemove = useCallback(() => {
+    const nextQuery = Lib.removeClause(query, stageIndex, aggregation);
+    onQueryChange(nextQuery);
+  }, [query, stageIndex, aggregation, onQueryChange]);
 
   return (
-    <TippyPopoverWithTrigger
-      renderTrigger={({ onClick }) => (
+    <Popover opened={isOpened} onChange={setIsOpened}>
+      <Popover.Target>
         <Root
           aria-label={displayName}
-          onClick={onClick}
           data-testid="aggregation-item"
+          onClick={() => setIsOpened(!isOpened)}
         >
           <AggregationName>{displayName}</AggregationName>
-          <RemoveIcon name="close" onClick={onRemove} />
+          <RemoveIcon name="close" onClick={handleRemove} />
         </Root>
-      )}
-      popoverContent={({ closePopover }) => (
+      </Popover.Target>
+      <Popover.Dropdown>
         <AggregationPicker
           query={query}
-          stageIndex={STAGE_INDEX}
+          stageIndex={stageIndex}
+          clause={aggregation}
+          clauseIndex={aggregationIndex}
           operators={operators}
           hasExpressionInput={false}
-          legacyQuery={legacyQuery}
-          legacyClause={legacyClause}
-          onSelect={nextAggregation => {
-            onUpdate(nextAggregation);
-            closePopover();
-          }}
-          onSelectLegacy={legacyAggregation => {
-            onLegacyQueryChange(
-              legacyQuery.updateAggregation(
-                aggregationIndex,
-                legacyAggregation,
-              ),
-            );
-            closePopover();
-          }}
+          onQueryChange={onQueryChange}
         />
-      )}
-    />
+      </Popover.Dropdown>
+    </Popover>
   );
 }

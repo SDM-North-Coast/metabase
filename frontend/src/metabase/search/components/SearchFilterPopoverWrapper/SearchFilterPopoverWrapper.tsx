@@ -1,11 +1,13 @@
-import { t } from "ttag";
 import type { ReactNode } from "react";
-import type { StackProps } from "metabase/ui";
-import { Button, Center, Group, Loader, FocusTrap } from "metabase/ui";
+import { t } from "ttag";
+
 import type {
   FilterTypeKeys,
   SearchFilterPropTypes,
 } from "metabase/search/types";
+import type { StackProps } from "metabase/ui";
+import { Button, Center, FocusTrap, Group, Loader } from "metabase/ui";
+
 import {
   DropdownApplyButtonDivider,
   SearchPopoverContainer,
@@ -32,7 +34,7 @@ export const SearchFilterPopoverWrapper = ({
   if (isLoading) {
     return (
       <Center p="lg">
-        <Loader data-testid="loading-spinner" />
+        <Loader data-testid="loading-indicator" />
       </Center>
     );
   }

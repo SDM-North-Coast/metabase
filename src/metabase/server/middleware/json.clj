@@ -5,7 +5,7 @@
    [cheshire.factory]
    [cheshire.generate :as json.generate]
    [metabase.util.date-2 :as u.date]
-   [ring.middleware.json :as ring.json]
+   [metabase.util.log :as log]
    [ring.util.io :as rui]
    [ring.util.response :as response])
   (:import
@@ -50,25 +50,6 @@
    (write-string! json-generator (apply str "0x" (for [b (take 4 byte-ar)]
                                                    (format "%02X" b))))))
 
-
-;;; +----------------------------------------------------------------------------------------------------------------+
-;;; |                                             Parsing JSON Requests                                              |
-;;; +----------------------------------------------------------------------------------------------------------------+
-
-(defn wrap-json-body
-  "Middleware that parses JSON in the body of a request. (This is basically a copy of `ring-json-middleware`, but
-  tweaked to handle async-style calls.)"
-  ;; TODO - we should really just fork ring-json-middleware and put these changes in the fork, or submit this as a PR
-  [handler]
-  (fn
-    [request respond raise]
-    (if-let [[valid? json] (#'ring.json/read-json request {:keywords? true})]
-      (if valid?
-        (handler (assoc request :body json) respond raise)
-        (respond ring.json/default-malformed-response))
-      (handler request respond raise))))
-
-
 ;;; +----------------------------------------------------------------------------------------------------------------+
 ;;; |                                            Streaming JSON Responses                                            |
 ;;; +----------------------------------------------------------------------------------------------------------------+
@@ -80,7 +61,11 @@
    (fn [^OutputStream output-stream]
      (with-open [output-writer   (OutputStreamWriter. output-stream StandardCharsets/UTF_8)
                  buffered-writer (BufferedWriter. output-writer)]
-       (json/generate-stream response-seq buffered-writer opts)))))
+       (try
+         (json/generate-stream response-seq buffered-writer opts)
+         (catch Throwable e
+           (log/errorf "Error generating JSON response stream: %s" (ex-message e))
+           (throw e)))))))
 
 (defn- wrap-streamed-json-response* [opts response]
   (if-let [json-response (and (coll? (:body response))
@@ -102,5 +87,6 @@
   (fn [request respond raise]
     (handler
      request
-     (comp respond (partial wrap-streamed-json-response* opts))
+     (fn respond* [response]
+       (respond (wrap-streamed-json-response* opts response)))
      raise)))

@@ -1,15 +1,18 @@
+import { USERS } from "e2e/support/cypress_data";
 import {
+  createTimeline,
+  createTimelineWithEvents,
   describeWithSnowplow,
   enableTracking,
+  entityPickerModal,
   expectGoodSnowplowEvents,
   expectNoBadSnowplowEvents,
+  getFullName,
+  modal,
+  popover,
   resetSnowplow,
   restore,
-  getFullName,
-  popover,
 } from "e2e/support/helpers";
-
-import { USERS } from "e2e/support/cypress_data";
 
 const { admin } = USERS;
 
@@ -83,7 +86,7 @@ describe("scenarios > organization > timelines > collection", () => {
     });
 
     it("should search for events", () => {
-      cy.createTimelineWithEvents({
+      createTimelineWithEvents({
         events: [
           { name: "RC1" },
           { name: "RC2" },
@@ -114,7 +117,7 @@ describe("scenarios > organization > timelines > collection", () => {
 
       cy.findByLabelText("Event name").type("RC1");
 
-      getModal().within(() => {
+      modal().within(() => {
         cy.findByRole("button", { name: "calendar icon" }).click();
       });
       // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
@@ -166,7 +169,7 @@ describe("scenarios > organization > timelines > collection", () => {
 
       cy.findByLabelText("Event name").type("RC1");
 
-      getModal().within(() => {
+      modal().within(() => {
         cy.findByRole("button", { name: "calendar icon" }).click();
       });
       // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
@@ -198,7 +201,7 @@ describe("scenarios > organization > timelines > collection", () => {
 
       cy.findByLabelText("Event name").type("RC1");
 
-      getModal().within(() => {
+      modal().within(() => {
         cy.findByRole("button", { name: "calendar icon" }).click();
       });
       // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
@@ -220,7 +223,7 @@ describe("scenarios > organization > timelines > collection", () => {
     });
 
     it("should edit an event", () => {
-      cy.createTimelineWithEvents({ events: [{ name: "RC1" }] });
+      createTimelineWithEvents({ events: [{ name: "RC1" }] });
       cy.visit("/collection/root/timelines");
 
       openMenu("RC1");
@@ -235,11 +238,11 @@ describe("scenarios > organization > timelines > collection", () => {
     });
 
     it("should move an event", () => {
-      cy.createTimelineWithEvents({
+      createTimelineWithEvents({
         timeline: { name: "Releases" },
         events: [{ name: "RC1" }],
       });
-      cy.createTimelineWithEvents({
+      createTimelineWithEvents({
         timeline: { name: "Metrics" },
         events: [{ name: "RC2" }],
       });
@@ -252,7 +255,7 @@ describe("scenarios > organization > timelines > collection", () => {
       cy.findByText("Move event").click();
       // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
       cy.findByText("Releases").click();
-      getModal().button("Move").click();
+      modal().button("Move").click();
       cy.wait("@updateEvent");
       // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
       cy.findByText("RC2").should("not.exist");
@@ -267,11 +270,11 @@ describe("scenarios > organization > timelines > collection", () => {
     });
 
     it("should move an event and undo", () => {
-      cy.createTimelineWithEvents({
+      createTimelineWithEvents({
         timeline: { name: "Releases" },
         events: [{ name: "RC1" }],
       });
-      cy.createTimelineWithEvents({
+      createTimelineWithEvents({
         timeline: { name: "Metrics" },
         events: [{ name: "RC2" }],
       });
@@ -284,7 +287,7 @@ describe("scenarios > organization > timelines > collection", () => {
       cy.findByText("Move event").click();
       // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
       cy.findByText("Releases").click();
-      getModal().button("Move").click();
+      modal().button("Move").click();
       cy.wait("@updateEvent");
       // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
       cy.findByText("RC2").should("not.exist");
@@ -297,7 +300,7 @@ describe("scenarios > organization > timelines > collection", () => {
     });
 
     it("should archive an event when editing this event", () => {
-      cy.createTimelineWithEvents({
+      createTimelineWithEvents({
         timeline: { name: "Releases" },
         events: [{ name: "RC1" }, { name: "RC2" }],
       });
@@ -318,7 +321,7 @@ describe("scenarios > organization > timelines > collection", () => {
     });
 
     it("should archive an event from the timeline and undo", () => {
-      cy.createTimelineWithEvents({
+      createTimelineWithEvents({
         timeline: { name: "Releases" },
         events: [{ name: "RC1" }, { name: "RC2" }],
       });
@@ -340,7 +343,7 @@ describe("scenarios > organization > timelines > collection", () => {
     });
 
     it("should unarchive an event from the archive and undo", () => {
-      cy.createTimelineWithEvents({
+      createTimelineWithEvents({
         timeline: { name: "Releases" },
         events: [{ name: "RC1", archived: true }],
       });
@@ -368,7 +371,7 @@ describe("scenarios > organization > timelines > collection", () => {
     });
 
     it("should delete an event", () => {
-      cy.createTimelineWithEvents({
+      createTimelineWithEvents({
         timeline: { name: "Releases" },
         events: [{ name: "RC1", archived: true }],
       });
@@ -391,10 +394,10 @@ describe("scenarios > organization > timelines > collection", () => {
     });
 
     it("should allow navigating back to the list of timelines", () => {
-      cy.createTimeline({ name: "Releases" });
-      cy.createTimeline({ name: "Metrics" });
+      createTimeline({ name: "Releases" });
+      createTimeline({ name: "Metrics" });
 
-      cy.visit(`/collection/root/timelines/1`);
+      cy.visit("/collection/root/timelines/1");
       // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
       cy.findByText("Releases");
 
@@ -406,16 +409,16 @@ describe("scenarios > organization > timelines > collection", () => {
     });
 
     it("should not allow navigating back when there is only one timeline in a collection", () => {
-      cy.createTimeline({ name: "Releases" });
+      createTimeline({ name: "Releases" });
 
-      cy.visit(`/collection/root/timelines/1`);
+      cy.visit("/collection/root/timelines/1");
       // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
       cy.findByText("Releases");
       cy.icon("chevronleft").should("not.exist");
     });
 
     it("should create an additional timeline", () => {
-      cy.createTimelineWithEvents({
+      createTimelineWithEvents({
         timeline: { name: "Releases" },
         events: [{ name: "RC1" }],
       });
@@ -436,7 +439,7 @@ describe("scenarios > organization > timelines > collection", () => {
     });
 
     it("should edit a timeline", () => {
-      cy.createTimelineWithEvents({
+      createTimelineWithEvents({
         timeline: { name: "Releases" },
         events: [{ name: "RC1" }],
       });
@@ -455,18 +458,18 @@ describe("scenarios > organization > timelines > collection", () => {
     });
 
     it("should move a timeline", () => {
-      cy.createTimelineWithEvents({
+      createTimelineWithEvents({
         timeline: { name: "Events", default: true },
         events: [{ name: "RC1" }],
       });
 
       cy.visit("/collection/root/timelines");
       openMenu("Our analytics events");
-      // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-      cy.findByText("Move timeline").click();
+      popover().findByText("Move timeline").click();
 
-      getModal().within(() => {
-        cy.findByText("My personal collection").click();
+      entityPickerModal().within(() => {
+        cy.findByRole("tab", { name: /Collections/ }).click();
+        cy.findByText("Bobby Tables's Personal Collection").click();
         cy.button("Move").click();
         cy.wait("@updateTimeline");
       });
@@ -480,7 +483,7 @@ describe("scenarios > organization > timelines > collection", () => {
     });
 
     it("should archive a timeline and undo", () => {
-      cy.createTimelineWithEvents({
+      createTimelineWithEvents({
         timeline: { name: "Releases" },
         events: [{ name: "RC1" }, { name: "RC2" }],
       });
@@ -509,12 +512,12 @@ describe("scenarios > organization > timelines > collection", () => {
     });
 
     it("should support markdown in timeline description", () => {
-      cy.createTimeline({
+      createTimeline({
         name: "Releases",
         description: "[Release notes](https://metabase.test)",
       });
 
-      cy.createTimeline({
+      createTimeline({
         name: "Holidays",
         description: "[Holiday list](https://metabase.test)",
       });
@@ -527,7 +530,7 @@ describe("scenarios > organization > timelines > collection", () => {
     });
 
     it("should support markdown in event description", () => {
-      cy.createTimelineWithEvents({
+      createTimelineWithEvents({
         timeline: {
           name: "Releases",
         },
@@ -545,7 +548,7 @@ describe("scenarios > organization > timelines > collection", () => {
     });
 
     it("should archive and unarchive a timeline", () => {
-      cy.createTimelineWithEvents({
+      createTimelineWithEvents({
         timeline: { name: "Releases" },
         events: [{ name: "RC1" }, { name: "RC2" }],
       });
@@ -568,13 +571,13 @@ describe("scenarios > organization > timelines > collection", () => {
       cy.wait("@updateTimeline");
       // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
       cy.findByText("No timelines found");
-      getModal().icon("chevronleft").click();
+      modal().icon("chevronleft").click();
       // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
       cy.findByText("Releases");
     });
 
     it("should archive and delete a timeline", () => {
-      cy.createTimelineWithEvents({
+      createTimelineWithEvents({
         timeline: { name: "Releases" },
         events: [{ name: "RC1" }, { name: "RC2" }],
       });
@@ -599,7 +602,7 @@ describe("scenarios > organization > timelines > collection", () => {
       cy.wait("@deleteTimeline");
       // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
       cy.findByText("No timelines found");
-      getModal().icon("chevronleft").click();
+      modal().icon("chevronleft").click();
       // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
       cy.findByText("Our analytics events");
     });
@@ -638,7 +641,7 @@ describe("scenarios > organization > timelines > collection", () => {
     });
 
     it("should use custom date formatting settings", () => {
-      cy.createTimelineWithEvents({
+      createTimelineWithEvents({
         events: [{ name: "RC1", timestamp: "2022-10-12T18:15:30Z" }],
       });
       setFormattingSettings({
@@ -659,7 +662,7 @@ describe("scenarios > organization > timelines > collection", () => {
     });
 
     it("should use custom time formatting settings", () => {
-      cy.createTimelineWithEvents({
+      createTimelineWithEvents({
         events: [{ name: "RC1", timestamp: "2022-10-12T18:15:30Z" }],
       });
       setFormattingSettings({
@@ -670,7 +673,7 @@ describe("scenarios > organization > timelines > collection", () => {
       openMenu("RC1");
       // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
       cy.findByText("Edit event").click();
-      getModal().within(() => {
+      modal().within(() => {
         cy.findByRole("button", { name: "calendar icon" }).click();
       });
       popover().within(() => {
@@ -694,7 +697,7 @@ describe("scenarios > organization > timelines > collection", () => {
 
     it("should not allow creating new events in existing timelines", () => {
       cy.signInAsAdmin();
-      cy.createTimelineWithEvents({
+      createTimelineWithEvents({
         timeline: { name: "Releases" },
         events: [{ name: "RC1" }],
       });
@@ -743,10 +746,6 @@ describeWithSnowplow("scenarios > collections > timelines", () => {
     expectGoodSnowplowEvents(5);
   });
 });
-
-const getModal = () => {
-  return cy.get(".Modal");
-};
 
 const openMenu = name => {
   return cy.findByText(name).parent().parent().icon("ellipsis").click();

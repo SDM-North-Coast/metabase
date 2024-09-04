@@ -4,40 +4,36 @@ import _ from "underscore";
 
 import {
   COLLAPSED_ROWS_SETTING,
-  COLUMN_SPLIT_SETTING,
+  COLUMN_FORMATTING_SETTING,
+  COLUMN_SHOW_TOTALS,
   COLUMN_SORT_ORDER,
   COLUMN_SORT_ORDER_ASC,
   COLUMN_SORT_ORDER_DESC,
-  COLUMN_SHOW_TOTALS,
-  COLUMN_FORMATTING_SETTING,
+  COLUMN_SPLIT_SETTING,
   isPivotGroupColumn,
 } from "metabase/lib/data_grid";
 import { formatColumn } from "metabase/lib/formatting";
-
-import { columnSettings } from "metabase/visualizations/lib/settings/column";
-import ChartSettingsTableFormatting from "metabase/visualizations/components/settings/ChartSettingsTableFormatting";
 import { ChartSettingIconRadio } from "metabase/visualizations/components/settings/ChartSettingIconRadio";
-
+import { ChartSettingsTableFormatting } from "metabase/visualizations/components/settings/ChartSettingsTableFormatting";
+import { columnSettings } from "metabase/visualizations/lib/settings/column";
+import { isDimension } from "metabase-lib/v1/types/utils/isa";
 import type {
   Card,
   DatasetColumn,
   DatasetData,
-  Series,
   RowValue,
+  Series,
   VisualizationSettings,
 } from "metabase-types/api";
 
-import { isDimension } from "metabase-lib/types/utils/isa";
-
 import { partitions } from "./partitions";
-
+import type { PivotSetting } from "./types";
 import {
   addMissingCardBreakouts,
   isColumnValid,
   isFormattablePivotColumn,
   updateValueWithCurrentColumns,
 } from "./utils";
-import type { PivotSetting } from "./types";
 
 export const getTitleForColumn = (
   column: DatasetColumn,
@@ -199,12 +195,14 @@ export const settings = {
         return hasOnlyFormattableColumns && !columnFormat.highlight_row;
       });
     },
-    getProps: (series: Series) => ({
-      canHighlightRow: false,
-      cols: (series[0].data.cols as DatasetColumn[]).filter(
-        isFormattablePivotColumn,
-      ),
-    }),
+    getProps: (series: Series) => {
+      const cols = series[0].data?.cols ?? [];
+
+      return {
+        canHighlightRow: false,
+        cols: cols.filter(isFormattablePivotColumn),
+      };
+    },
     getHidden: ([{ data }]: [{ data: DatasetData }]) =>
       !data?.cols.some(col => isFormattablePivotColumn(col)),
   },

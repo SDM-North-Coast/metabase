@@ -1,37 +1,21 @@
-import { connect } from "react-redux";
-import { useAsyncFn } from "react-use";
+import { useState } from "react";
 import { t } from "ttag";
+
+import { ViewFooterButton } from "metabase/components/ViewFooterButton";
 import { PLUGIN_FEATURE_LEVEL_PERMISSIONS } from "metabase/plugins";
-import Tooltip from "metabase/core/components/Tooltip";
-import LoadingSpinner from "metabase/components/LoadingSpinner";
-import TippyPopoverWithTrigger from "metabase/components/PopoverWithTrigger/TippyPopoverWithTrigger";
-import type { DownloadQueryResultsOpts } from "metabase/query_builder/actions";
-import { downloadQueryResults } from "metabase/query_builder/actions";
-import type { Dataset, VisualizationSettings } from "metabase-types/api";
-import type Question from "metabase-lib/Question";
-import QueryDownloadPopover from "../QueryDownloadPopover";
-import { DownloadIcon } from "./QueryDownloadWidget.styled";
+import { Flex, Popover } from "metabase/ui";
+import type { Dataset } from "metabase-types/api";
 
-interface OwnProps {
+import { QueryDownloadPopover } from "../QueryDownloadPopover";
+import {
+  type UseDownloadDataParams,
+  useDownloadData,
+} from "../QueryDownloadPopover/use-download-data";
+
+export type QueryDownloadWidgetProps = {
   className?: string;
-  question: Question;
-  result: Dataset;
-  uuid?: string;
-  token?: string;
-  visualizationSettings?: VisualizationSettings;
-  dashcardId?: number;
-  dashboardId?: number;
-}
-
-interface DispatchProps {
-  onDownload: (opts: DownloadQueryResultsOpts) => void;
-}
-
-type QueryDownloadWidgetProps = OwnProps & DispatchProps;
-
-const mapDispatchToProps: DispatchProps = {
-  onDownload: downloadQueryResults,
-};
+} & Pick<UseDownloadDataParams, "question" | "result"> &
+  Partial<Omit<UseDownloadDataParams, "question" | "result">>;
 
 const QueryDownloadWidget = ({
   className,
@@ -42,65 +26,50 @@ const QueryDownloadWidget = ({
   uuid,
   token,
   visualizationSettings,
-  onDownload,
 }: QueryDownloadWidgetProps) => {
-  const [{ loading }, handleDownload] = useAsyncFn(
-    async (type: string) => {
-      await onDownload({
-        type,
-        question,
-        result,
-        dashboardId,
-        dashcardId,
-        uuid,
-        token,
-        visualizationSettings,
-      });
-    },
-    [question, result, uuid, token, visualizationSettings],
-  );
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+
+  const [, handleDownload] = useDownloadData({
+    question,
+    result,
+    dashboardId,
+    dashcardId,
+    uuid,
+    token,
+    visualizationSettings,
+  });
 
   return (
-    <TippyPopoverWithTrigger
-      triggerClasses={className}
-      triggerContent={
-        loading ? (
-          <Tooltip tooltip={t`Downloading…`}>
-            <LoadingSpinner size={18} />
-          </Tooltip>
-        ) : (
-          <Tooltip tooltip={t`Download full results`}>
-            <DownloadIcon
-              name="download"
-              size={20}
-              data-testid="download-button"
-            />
-          </Tooltip>
-        )
-      }
-      popoverContent={({ closePopover }) => (
+    <Popover opened={isPopoverOpen} onClose={() => setIsPopoverOpen(false)}>
+      <Popover.Target>
+        <Flex className={className}>
+          <ViewFooterButton
+            icon="download"
+            data-testid="download-button"
+            tooltipLabel={t`Download full results`}
+            onClick={() => setIsPopoverOpen(!isPopoverOpen)}
+          />
+        </Flex>
+      </Popover.Target>
+      <Popover.Dropdown p="0.75rem">
         <QueryDownloadPopover
           question={question}
           result={result}
-          onDownload={type => {
-            closePopover();
-            handleDownload(type);
+          onDownload={opts => {
+            setIsPopoverOpen(false);
+            handleDownload(opts);
           }}
         />
-      )}
-    />
+      </Popover.Dropdown>
+    </Popover>
   );
 };
 
 interface QueryDownloadWidgetOpts {
   result?: Dataset;
-  isResultDirty?: boolean;
 }
 
-QueryDownloadWidget.shouldRender = ({
-  result,
-  isResultDirty,
-}: QueryDownloadWidgetOpts) => {
+QueryDownloadWidget.shouldRender = ({ result }: QueryDownloadWidgetOpts) => {
   return (
     result &&
     !result.error &&
@@ -109,4 +78,4 @@ QueryDownloadWidget.shouldRender = ({
 };
 
 // eslint-disable-next-line import/no-default-export -- deprecated usage
-export default connect(null, mapDispatchToProps)(QueryDownloadWidget);
+export default QueryDownloadWidget;

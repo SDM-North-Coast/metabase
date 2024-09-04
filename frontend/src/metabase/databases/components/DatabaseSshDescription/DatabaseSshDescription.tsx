@@ -1,9 +1,11 @@
 import { jt, t } from "ttag";
-import MetabaseSettings from "metabase/lib/settings";
+
+import { useDocsUrl } from "metabase/common/hooks";
 import ExternalLink from "metabase/core/components/ExternalLink";
 
 const DatabaseSshDescription = (): JSX.Element => {
-  const docsUrl = MetabaseSettings.docsUrl("databases/ssh-tunnel");
+  // eslint-disable-next-line no-unconditional-metabase-links-render -- Admin settings
+  const { url: docsUrl } = useDocsUrl("databases/ssh-tunnel");
 
   return (
     <>

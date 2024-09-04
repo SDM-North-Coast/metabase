@@ -1,12 +1,9 @@
+import moment from "moment-timezone"; // eslint-disable-line no-restricted-imports -- deprecated usage
+import { msgid, ngettext, t } from "ttag";
 import _ from "underscore";
-import { t, ngettext, msgid } from "ttag";
-// eslint-disable-next-line no-restricted-imports -- deprecated usage
-import moment from "moment-timezone";
 
 import { parseTimestamp } from "metabase/lib/time";
-import { numberToWord, compareVersions } from "metabase/lib/utils";
-import { getDocsUrlForVersion } from "metabase/selectors/settings";
-
+import { compareVersions, numberToWord } from "metabase/lib/utils";
 import type {
   PasswordComplexity,
   SettingKey,
@@ -110,7 +107,6 @@ class MetabaseSettings {
    */
   on(key: SettingKey, callback: SettingListener) {
     this._listeners[key] = this._listeners[key] || [];
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     this._listeners[key]!.push(callback);
   }
 
@@ -210,13 +206,6 @@ class MetabaseSettings {
   }
 
   /**
-   * @deprecated use getSetting(state, "search-typeahead-enabled")
-   */
-  searchTypeaheadEnabled() {
-    return this.get("search-typeahead-enabled");
-  }
-
-  /**
    * @deprecated use getSetting(state, "anon-tracking-enabled")
    */
   trackingEnabled() {
@@ -227,14 +216,7 @@ class MetabaseSettings {
    * @deprecated use getSetting(state, "anon-tracking-enabled")
    */
   uploadsEnabled() {
-    return !!(this.get("uploads-enabled") && this.get("uploads-database-id"));
-  }
-
-  /**
-   * @deprecated use getSetting(state, "ga-enabled")
-   */
-  googleAnalyticsEnabled() {
-    return this.get("ga-enabled") || false;
+    return !!this.get("uploads-settings")?.db_id;
   }
 
   /**
@@ -292,16 +274,9 @@ class MetabaseSettings {
   }
 
   /**
-   * @deprecated use getDocsUrl
-   */
-  docsUrl(page = "", anchor = "") {
-    return getDocsUrlForVersion(this.get("version"), page, anchor);
-  }
-
-  /**
    * @deprecated use getLearnUrl
    */
-  
+
   //RJL 11/30/2023 - Changed to SDM Website
   learnUrl(path = "") {
     return `https://https://www.sdmnorthcoast.com/dental-market-products-services/tutorials/`;
@@ -349,10 +324,6 @@ class MetabaseSettings {
   latestVersion() {
     const { latest } = this.versionInfo();
     return latest && latest.version;
-  }
-
-  isEnterprise() {
-    return false;
   }
 
   /**
@@ -416,12 +387,6 @@ const initValues =
   typeof window !== "undefined" ? _.clone(window.MetabaseBootstrap) : null;
 
 const settings = new MetabaseSettings(initValues);
-
-if (typeof window !== "undefined") {
-  (
-    window as Window & { __metabaseSettings?: MetabaseSettings }
-  ).__metabaseSettings = settings;
-}
 
 // eslint-disable-next-line import/no-default-export -- deprecated usage
 export default settings;

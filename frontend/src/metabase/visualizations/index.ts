@@ -1,12 +1,14 @@
 import { t } from "ttag";
 import _ from "underscore";
+
 import type {
   DatasetData,
   Series,
   TransformedSeries,
 } from "metabase-types/api";
-import type { Visualization } from "./types/visualization";
+
 import type { RemappingHydratedDatasetColumn } from "./types";
+import type { Visualization } from "./types/visualization";
 
 const visualizations = new Map<string, Visualization>();
 const aliases = new Map<string, Visualization>();
@@ -56,7 +58,9 @@ export function registerVisualization(visualization: Visualization) {
   }
 }
 
-export function getVisualizationRaw(series: Series) {
+type SeriesLike = Array<{ card: { display: string } }>;
+
+export function getVisualizationRaw(series: SeriesLike) {
   return visualizations.get(series[0].card.display);
 }
 
@@ -119,6 +123,11 @@ export function canSavePng(display: string) {
   return visualization?.canSavePng ?? true;
 }
 
+export function getDefaultSize(display: string) {
+  const visualization = visualizations.get(display);
+  return visualization?.defaultSize;
+}
+
 // removes columns with `remapped_from` property and adds a `remapping` to the appropriate column
 export const extractRemappedColumns = (data: DatasetData) => {
   const cols: RemappingHydratedDatasetColumn[] = data.cols.map(col => ({
@@ -130,7 +139,7 @@ export const extractRemappedColumns = (data: DatasetData) => {
     remapping: col.remapped_to != null ? new Map() : undefined,
   }));
 
-  const rows = data.rows.map((row, rowIndex) =>
+  const rows = data.rows.map(row =>
     row.filter((value, colIndex) => {
       const col = cols[colIndex];
       if (col.remapped_from != null) {

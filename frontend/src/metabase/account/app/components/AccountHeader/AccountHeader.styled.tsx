@@ -1,12 +1,11 @@
 import styled from "@emotion/styled";
-import { color } from "metabase/lib/colors";
 
+import UserAvatar from "metabase/components/UserAvatar";
 import {
   breakpointMinMedium,
   breakpointMinSmall,
   space,
 } from "metabase/styled-components/theme";
-import UserAvatar from "metabase/components/UserAvatar";
 
 export const AccountHeaderRoot = styled.div`
   display: flex;
@@ -14,8 +13,8 @@ export const AccountHeaderRoot = styled.div`
   justify-content: center;
   align-items: center;
   padding-top: ${space(1)};
-  border-bottom: 1px solid ${color("border")};
-  background-color: ${color("white")};
+  border-bottom: 1px solid var(--mb-color-border);
+  background-color: var(--mb-color-bg-white);
 
   ${breakpointMinSmall} {
     padding-top: ${space(2)};
@@ -41,7 +40,7 @@ export const HeaderTitle = styled.h2`
 
 export const HeaderSubtitle = styled.h3`
   text-align: center;
-  color: ${color("text-medium")};
+  color: var(--mb-color-text-medium);
 `;
 
 export const HeaderAvatar = styled(UserAvatar)`

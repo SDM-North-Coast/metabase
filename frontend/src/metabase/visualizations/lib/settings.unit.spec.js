@@ -1,15 +1,13 @@
-import { ORDERS } from "metabase-types/api/mocks/presets";
-import { createMockTableColumnOrderSetting } from "metabase-types/api/mocks";
-
 // NOTE: need to load visualizations first for getSettings to work
-import "metabase/visualizations/index";
-
+import "metabase/visualizations";
 import {
+  getClickBehaviorSettings,
   getComputedSettings,
   getSettingsWidgets,
   mergeSettings,
-  getClickBehaviorSettings,
 } from "metabase/visualizations/lib/settings";
+import { createMockTableColumnOrderSetting } from "metabase-types/api/mocks";
+import { ORDERS } from "metabase-types/api/mocks/presets";
 
 describe("settings framework", () => {
   const mockObject = "[mockObject]";

@@ -1,18 +1,18 @@
 import _ from "underscore";
-import MetabaseSettings from "metabase/lib/settings";
-import { getEmailDomain } from "metabase/lib/utils";
 
-import type {
-  Channel,
-  ChannelSpec,
-  NotificationRecipient,
-  Pulse,
-  PulseParameter,
-} from "metabase-types/api";
+import { getEmailDomain } from "metabase/lib/email";
+import MetabaseSettings from "metabase/lib/settings";
 import {
   getDefaultValuePopulatedParameters,
   normalizeParameterValue,
-} from "metabase-lib/parameters/utils/parameter-values";
+} from "metabase-lib/v1/parameters/utils/parameter-values";
+import type {
+  Channel,
+  ChannelSpec,
+  Pulse,
+  PulseParameter,
+  User,
+} from "metabase-types/api";
 
 export const NEW_PULSE_TEMPLATE = {
   name: null,
@@ -39,6 +39,8 @@ export function channelIsValid(channel: Channel, channelSpec: ChannelSpec) {
         fieldsAreValid(channel, channelSpec) &&
         scheduleIsValid(channel)
       );
+    case "http":
+      return channel.channel_id && scheduleIsValid(channel);
     default:
       return false;
   }
@@ -92,7 +94,7 @@ function pulseChannelsAreValid(pulse: Pulse, channelSpecs: any) {
   );
 }
 
-export function recipientIsValid(recipient: NotificationRecipient) {
+export function recipientIsValid(recipient: User) {
   if (recipient.id) {
     return true;
   }
@@ -101,7 +103,7 @@ export function recipientIsValid(recipient: NotificationRecipient) {
   const allowedDomains = MetabaseSettings.subscriptionAllowedDomains();
   return (
     _.isEmpty(allowedDomains) ||
-    (recipientDomain && allowedDomains.includes(recipientDomain))
+    !!(recipientDomain && allowedDomains.includes(recipientDomain))
   );
 }
 
@@ -178,7 +180,10 @@ export function getDefaultChannel(channelSpecs: ChannelSpecs) {
   }
 }
 
-export function createChannel(channelSpec: ChannelSpec) {
+export function createChannel(
+  channelSpec: ChannelSpec,
+  opts?: Partial<Channel>,
+): Channel {
   const details = {};
 
   return {
@@ -190,6 +195,7 @@ export function createChannel(channelSpec: ChannelSpec) {
     schedule_day: "mon",
     schedule_hour: 8,
     schedule_frame: "first",
+    ...opts,
   };
 }
 

@@ -1,14 +1,20 @@
+import userEvent from "@testing-library/user-event";
 import type { ComponentPropsWithoutRef } from "react";
 import _ from "underscore";
-import userEvent from "@testing-library/user-event";
-import { render, screen, getIcon, queryIcon } from "__support__/ui";
 
+import {
+  getIcon,
+  queryIcon,
+  renderWithProviders,
+  screen,
+} from "__support__/ui";
 import type { Card, Series } from "metabase-types/api";
 import {
   createMockCard,
   createMockColumn,
   createMockDataset,
 } from "metabase-types/api/mocks";
+
 import ChartCaption from "./ChartCaption";
 
 type Props = ComponentPropsWithoutRef<typeof ChartCaption>;
@@ -50,7 +56,7 @@ const setup = (props: Partial<Props> = {}) => {
     width = 200,
   } = props;
 
-  render(
+  renderWithProviders(
     <ChartCaption
       series={series}
       onChangeCardAndRun={onChangeCardAndRun}
@@ -62,13 +68,13 @@ const setup = (props: Partial<Props> = {}) => {
 };
 
 describe("ChartCaption", () => {
-  it("shouldn't render without title", () => {
+  it("should render without a title (metabase#36788)", () => {
     setup();
 
-    expect(screen.queryByTestId("legend-caption")).not.toBeInTheDocument();
+    expect(screen.getByTestId("legend-caption")).toBeInTheDocument();
   });
 
-  it("should render with title", () => {
+  it("should render with a title", () => {
     setup({
       series: getSeries({ card: createMockCard({ name: "card name" }) }),
       settings: { "card.description": "description" },
@@ -77,13 +83,13 @@ describe("ChartCaption", () => {
     expect(screen.getByTestId("legend-caption")).toBeInTheDocument();
   });
 
-  it("should render markdown in description", () => {
+  it("should render markdown in description", async () => {
     setup({
       series: getSeries({ card: createMockCard({ name: "card name" }) }),
       settings: { "card.description": "[link](https://metabase.com)" },
     });
 
-    userEvent.hover(getIcon("info"));
+    await userEvent.hover(getIcon("info"));
 
     const tooltipContent = screen.getByRole("link");
     expect(tooltipContent).toBeInTheDocument();

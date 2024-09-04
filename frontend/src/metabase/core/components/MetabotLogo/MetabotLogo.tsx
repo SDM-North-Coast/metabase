@@ -1,13 +1,15 @@
 import type { Ref } from "react";
 import { forwardRef } from "react";
 import { t } from "ttag";
+
 import { LogoRoot } from "./MetabotLogo.styled";
 
-export type MetabotVariant = "happy" | "sad";
+export type MetabotVariant = "happy" | "sad" | "cool";
 
 const urlByVariant = {
   happy: "app/assets/img/metabot-happy.svg",
   sad: "app/assets/img/metabot-sad.svg",
+  cool: "app/assets/img/metabot-shades.svg",
 };
 
 export interface MetabotLogoProps {

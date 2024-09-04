@@ -20,6 +20,7 @@ export const createMockUser = (opts?: Partial<User>): User => ({
   date_joined: new Date().toISOString(),
   first_login: new Date().toISOString(),
   last_login: new Date().toISOString(),
+  sso_source: null,
   ...opts,
 });
 
@@ -31,6 +32,7 @@ export const createMockUserListResult = (
   last_name: "Tableton",
   common_name: "Testy Tableton",
   email: "user@metabase.test",
+  personal_collection_id: 2,
   ...opts,
 });
 

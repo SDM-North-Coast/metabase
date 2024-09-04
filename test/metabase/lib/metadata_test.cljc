@@ -1,11 +1,12 @@
 (ns metabase.lib.metadata-test
   (:require
+   #?@(:cljs ([metabase.test-runner.assert-exprs.approximately-equal]))
    [clojure.test :refer [are deftest is testing]]
    [metabase.lib.core :as lib]
    [metabase.lib.metadata :as lib.metadata]
    [metabase.lib.test-metadata :as meta]
-   [metabase.lib.test-util :as lib.tu]
-   #?@(:cljs ([metabase.test-runner.assert-exprs.approximately-equal]))))
+   [metabase.lib.test-metadata.graph-provider :as meta.graph-provider]
+   [metabase.lib.test-util :as lib.tu]))
 
 (comment lib/keep-me)
 #?(:cljs (comment metabase.test-runner.assert-exprs.approximately-equal/keep-me))
@@ -63,3 +64,22 @@
      :cljs
      ;; `Integer/MAX_VALUE`, but I don't know what the Cljs way to do this
      (is (nil? (lib.metadata/table-or-card lib.tu/metadata-provider-with-card 2147483647)))))
+
+(deftest ^:parallel bulk-metadata-preserve-order-test
+  (testing "bulk-metadata should return things in the same order as the IDs passed in"
+    (are [ids expected] (= expected
+                           (map :name (lib.metadata/bulk-metadata meta/metadata-provider :metadata/table (map meta/id ids))))
+      [:venues :orders :people]
+      ["VENUES" "ORDERS" "PEOPLE"]
+
+      [:people :orders :venues]
+      ["PEOPLE" "ORDERS" "VENUES"])))
+
+(deftest ^:parallel editable?-test
+  (let [query lib.tu/query-with-join
+        metadata-graph (.-metadata-graph (:lib/metadata query))
+        restricted-metadata-graph (update metadata-graph :tables #(into [] (remove (comp #{"CATEGORIES"} :name)) %))
+        restricted-provider (meta.graph-provider/->SimpleGraphMetadataProvider restricted-metadata-graph)
+        restritcted-query (assoc query :lib/metadata restricted-provider)]
+    (is (lib.metadata/editable? query))
+    (is (not (lib.metadata/editable? restritcted-query)))))

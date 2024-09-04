@@ -9,7 +9,8 @@
    [metabase.query-processor :as qp]
    [metabase.query-processor.card-test :as qp.card-test]
    [metabase.query-processor.dashboard :as qp.dashboard]
-   [metabase.test :as mt]))
+   [metabase.test :as mt]
+   [toucan2.core :as t2]))
 
 ;; there are more tests in [[metabase.api.dashboard-test]]
 
@@ -17,13 +18,14 @@
   ;; TODO -- we shouldn't do the perms checks if there is no current User context. It seems like API-level perms check
   ;; stuff doesn't belong in the Dashboard QP namespace
   (binding [api/*current-user-permissions-set* (atom #{"/"})]
-    (apply qp.dashboard/run-query-for-dashcard-async
-     :dashboard-id dashboard-id
-     :card-id      card-id
-     :dashcard-id  dashcard-id
-     :run          (fn [query info]
-                     (qp/process-query (assoc query :async? false) info))
-     options)))
+    (apply qp.dashboard/process-query-for-dashcard
+           :dashboard-id dashboard-id
+           :card-id      card-id
+           :dashcard-id  dashcard-id
+           :make-run     (constantly
+                          (fn run [query info]
+                            (qp/process-query (assoc query :info info))))
+           options)))
 
 (deftest resolve-parameters-validation-test
   (api.dashboard-test/with-chain-filter-fixtures [{{dashboard-id :id} :dashboard
@@ -48,7 +50,7 @@
              #"Invalid parameter type :number/!= for parameter \"_PRICE_\".*"
              (resolve-params [{:id "_PRICE_", :value 4, :type :number/!=}]))))))
   (testing "Resolves new operator type arguments without error (#25031)"
-    (mt/dataset sample-dataset
+    (mt/dataset test-data
       (let [query (mt/native-query {:query         "select COUNT(*) from \"ORDERS\" where true [[AND quantity={{qty_locked}}]]"
                                     :template-tags {"qty_locked"
                                                     {:id           "_query_id_"
@@ -96,31 +98,31 @@
       (is (= 100 (count (mt/rows (run-query-for-dashcard dashboard-id card-id-1 dashcard-id-1))))))
 
     (testing "A 404 error should be thrown if the card-id is not valid for the dashboard"
-        (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                              #"Not found"
-                              (run-query-for-dashcard dashboard-id (* card-id-1 2) dashcard-id-1))))
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"Not found"
+                            (run-query-for-dashcard dashboard-id (* card-id-1 2) dashcard-id-1))))
 
     (testing "A 404 error should be thrown if the dashcard-id is not valid for the dashboard"
-        (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                              #"Not found"
-                              (run-query-for-dashcard dashboard-id card-id-1 (* dashcard-id-1 2)))))
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"Not found"
+                            (run-query-for-dashcard dashboard-id card-id-1 (* dashcard-id-1 2)))))
 
     (testing "A 404 error should be thrown if the dashcard-id is not valid for the card"
-        (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                              #"Not found"
-                              (run-query-for-dashcard dashboard-id card-id-1 dashcard-id-2))))
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"Not found"
+                            (run-query-for-dashcard dashboard-id card-id-1 dashcard-id-2))))
 
     (testing "Sanity check that a card-id in a dashboard card series executes successfully"
       (is (= 100 (count (mt/rows (run-query-for-dashcard dashboard-id card-id-3 dashcard-id-3))))))
 
     (testing "A 404 error should be thrown if the card-id is not valid for the dashcard series"
-        (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                              #"Not found"
-                              (run-query-for-dashcard dashboard-id card-id-2 dashcard-id-3))))))
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"Not found"
+                            (run-query-for-dashcard dashboard-id card-id-2 dashcard-id-3))))))
 
-(deftest default-value-precedence-test-field-filters
+(deftest ^:parallel default-value-precedence-test-field-filters
   (testing "If both Dashboard and Card have default values for a Field filter parameter, Card defaults should take precedence\n"
-    (mt/dataset sample-dataset
+    (mt/dataset test-data
       (mt/with-temp
         [Card {card-id :id} {:dataset_query {:database (mt/id)
                                              :type     :native
@@ -167,9 +169,58 @@
                            :parameters [{:id    "abc123"
                                          :value nil}])))))))))
 
+(deftest ^:parallel execute-card-with-filter-stage-test
+  (testing "GET /api/card/:id/query with parameters with default values"
+    (mt/with-temp
+      [Card {card-id :id} {:database_id   (mt/id)
+                           :table_id      (mt/id :venues)
+                           :dataset_query (mt/mbql-query venues
+                                            {:aggregation  [:count]
+                                             :breakout     [$category_id
+                                                            $price]})}
+       Dashboard {dashboard-id :id} {:parameters
+                                     [{:slug      "venue_id"
+                                       :id        "_VENUE_ID_"
+                                       :name      "venue_id"
+                                       :type      "id"}
+                                      {:slug      "count"
+                                       :id        "_COUNT_"
+                                       :name      "count"
+                                       :type      "number/>="}]}
+       DashboardCard {dashcard-id :id} {:dashboard_id       dashboard-id
+                                        :card_id            card-id
+                                        :parameter_mappings [{:parameter_id "_VENUE_ID_"
+                                                              :card_id      card-id
+                                                              :target       [:dimension
+                                                                             [:field (mt/id :venues :id) {:base-type "type/BigInteger"}]
+                                                                             {:stage-number -2}]}
+                                                             {:parameter_id "_COUNT_"
+                                                              :card_id      card-id
+                                                              :target       [:dimension
+                                                                             [:field "count" {:base-type "type/Integer"}]
+                                                                             {:stage-number -1}]}]}]
+      (are [count-filter rows] (= rows
+                                  (mt/formatted-rows [str int int]
+                                                     (run-query-for-dashcard
+                                                      dashboard-id card-id dashcard-id
+                                                      :parameters [{:id    "_VENUE_ID_"
+                                                                    :target [:dimension
+                                                                             [:field "venue_id" {:base-type "type/BigInteger"}]
+                                                                             {:stage-number -2}]
+                                                                    :type  "id"
+                                                                    :value 2}
+                                                                   {:id    "_COUNT_"
+                                                                    :target [:dimension
+                                                                             [:field "count" {:base-type "type/Integer"}]
+                                                                             {:stage-number -1}]
+                                                                    :type  "number/>="
+                                                                    :value count-filter}])))
+        1 [["11" 2 1]]
+        2 []))))
+
 (deftest default-value-precedence-test-raw-values
   (testing "If both Dashboard and Card have default values for a raw value parameter, Card defaults should take precedence\n"
-    (mt/dataset sample-dataset
+    (mt/dataset test-data
       (mt/with-temp
         [Card {card-id :id} {:dataset_query {:database (mt/id)
                                              :type     :native
@@ -216,7 +267,7 @@
 (deftest do-not-apply-unconnected-filters-for-same-card-test
   (testing (str "If the same Card is added to a Dashboard multiple times but with different filters, only apply the "
                 "filters for the DashCard we're running a query for (#19494)")
-    (mt/dataset sample-dataset
+    (mt/dataset test-data
       (mt/with-temp
         [Card      {card-id :id}      {:dataset_query (mt/mbql-query products {:aggregation [[:count]]})}
          Dashboard {dashboard-id :id} {:parameters [{:name "Category (DashCard 1)"
@@ -260,7 +311,7 @@
 
 (deftest field-filters-should-work-if-no-value-is-specified-test
   (testing "Field Filters should not apply if no value is specified (metabase#20493)"
-    (mt/dataset sample-dataset
+    (mt/dataset test-data
       (let [query (mt/native-query {:query         "SELECT COUNT(*) FROM \"PRODUCTS\" WHERE {{cat}}"
                                     :template-tags {"cat" {:id           "__cat__"
                                                            :name         "cat"
@@ -309,7 +360,7 @@
 
 (deftest field-filters-with-default-if-no-value-is-specified-test
   (testing "Field Filters work differently if a default on the card parameter is specified"
-    (mt/dataset sample-dataset
+    (mt/dataset test-data
       (let [query (mt/native-query {:query         "SELECT COUNT(*) FROM \"PRODUCTS\" WHERE {{cat}}"
                                     :template-tags {"cat" {:id           "__cat__"
                                                            :name         "cat"
@@ -358,12 +409,12 @@
 
 (deftest ignore-default-values-in-request-parameters-test
   (testing "Parameters passed in from the request with only default values (but no actual values) should get ignored (#20516)"
-    (mt/dataset sample-dataset
+    (mt/dataset test-data
       (mt/with-temp [Card {card-id :id} {:name          "Orders"
                                          :dataset_query (mt/mbql-query products
-                                                                       {:fields   [$id $title $category]
-                                                                        :order-by [[:asc $id]]
-                                                                        :limit    2})}
+                                                          {:fields   [$id $title $category]
+                                                           :order-by [[:asc $id]]
+                                                           :limit    2})}
                      Dashboard {dashboard-id :id} {:name       "20516 Dashboard"
                                                    :parameters [{:name    "Category"
                                                                  :slug    "category"
@@ -402,3 +453,17 @@
                                                         :type    "category"
                                                         :value   nil
                                                         :default ["Gizmo"]}])))))))))
+
+(deftest running-a-query-for-dashcard-sets-last-viewed-at
+  (mt/test-helpers-set-global-values!
+    (mt/dataset test-data
+      (mt/with-temp [:model/Dashboard {dashboard-id :id} {:last_viewed_at #t "2000-01-01"}
+                     :model/Card {card-id :id} {:dataset_query (mt/native-query
+                                                                 {:query "SELECT COUNT(*) FROM \"ORDERS\""
+                                                                  :template-tags {}})}
+                     :model/DashboardCard {dashcard-id :id} {:card_id card-id
+                                                             :dashboard_id dashboard-id}]
+        (let [original-last-viewed-at (t2/select-one-fn :last_viewed_at :model/Dashboard dashboard-id)]
+          (mt/with-temporary-setting-values [synchronous-batch-updates true]
+            (run-query-for-dashcard dashboard-id card-id dashcard-id)
+            (is (not= original-last-viewed-at (t2/select-one-fn :last_viewed_at :model/Dashboard :id dashboard-id)))))))))

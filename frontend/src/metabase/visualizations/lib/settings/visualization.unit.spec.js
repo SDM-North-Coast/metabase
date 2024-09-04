@@ -1,11 +1,11 @@
 import icepick from "icepick";
-import registerVisualizations from "metabase/visualizations/register";
+
+import { DateTimeColumn, NumberColumn } from "__support__/visualizations";
 import {
   getComputedSettingsForSeries,
   getStoredSettingsForSeries,
 } from "metabase/visualizations/lib/settings/visualization";
-
-import { DateTimeColumn, NumberColumn } from "__support__/visualizations";
+import registerVisualizations from "metabase/visualizations/register";
 
 registerVisualizations();
 
@@ -134,22 +134,6 @@ describe("visualization_settings", () => {
         const data = { rows: new Array(10).fill([1]) };
         const settings = getComputedSettingsForSeries([{ card, data }]);
         expect(settings["graph.show_values"]).toBe(false);
-      });
-    });
-    describe("table.columns", () => {
-      it("should include fieldRef in default table.columns", () => {
-        const card = { visualization_settings: {} };
-        const cols = [
-          NumberColumn({
-            name: "some number",
-            field_ref: ["field", 123, null],
-          }),
-        ];
-        const {
-          "table.columns": [setting],
-        } = getComputedSettingsForSeries([{ card, data: { cols } }]);
-
-        expect(setting.fieldRef).toEqual(["field", 123, null]);
       });
     });
   });

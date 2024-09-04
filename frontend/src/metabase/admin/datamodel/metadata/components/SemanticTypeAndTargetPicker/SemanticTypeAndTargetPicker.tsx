@@ -1,14 +1,17 @@
-import { useCallback } from "react";
 import cx from "classnames";
+import { useCallback } from "react";
 import { t } from "ttag";
+
 import { currency } from "cljs/metabase.shared.util.currency";
-import * as MetabaseCore from "metabase/lib/core";
-import { trackStructEvent } from "metabase/lib/analytics";
 import type { SelectChangeEvent } from "metabase/core/components/Select";
 import Select, { Option } from "metabase/core/components/Select";
+import AdminS from "metabase/css/admin.module.css";
+import CS from "metabase/css/core/index.css";
+import * as MetabaseCore from "metabase/lib/core";
 import { getGlobalSettingsForColumn } from "metabase/visualizations/lib/settings/column";
+import type Field from "metabase-lib/v1/metadata/Field";
 import type { FieldFormattingSettings, FieldId } from "metabase-types/api";
-import type Field from "metabase-lib/metadata/Field";
+
 import FieldSeparator from "../FieldSeparator";
 
 const TYPE_OPTIONS = [
@@ -69,8 +72,6 @@ const SemanticTypeAndTargetPicker = ({
       } else {
         onUpdateField(field, { semantic_type: semanticType });
       }
-
-      trackStructEvent("Data Model", "Update Field Special-Type", semanticType);
     },
     [field, onUpdateField],
   );
@@ -80,7 +81,6 @@ const SemanticTypeAndTargetPicker = ({
       onUpdateField(field, {
         settings: { ...field.settings, currency },
       });
-      trackStructEvent("Data Model", "Update Currency Type", currency);
     },
     [field, onUpdateField],
   );
@@ -88,15 +88,17 @@ const SemanticTypeAndTargetPicker = ({
   const handleChangeTarget = useCallback(
     ({ target: { value: fk_target_field_id } }: SelectChangeEvent<FieldId>) => {
       onUpdateField(field, { fk_target_field_id });
-      trackStructEvent("Data Model", "Update Field Target");
     },
     [field, onUpdateField],
   );
 
   return (
-    <div className={cx(hasSeparator ? "flex align-center" : null)}>
+    <div
+      data-testid="semantic-type-target-picker"
+      className={hasSeparator ? cx(CS.flex, CS.alignCenter) : undefined}
+    >
       <Select
-        className={cx("TableEditor-field-semantic-type mt0", className)}
+        className={cx(AdminS.TableEditorFieldSemanticType, CS.mt0, className)}
         value={field.semantic_type}
         onChange={handleChangeSemanticType}
         options={TYPE_OPTIONS}
@@ -104,13 +106,15 @@ const SemanticTypeAndTargetPicker = ({
         optionSectionFn={getTypeOptionSection}
         placeholder={t`Select a semantic type`}
         searchProp="name"
+        globalSearch
       />
       {showCurrencyTypeSelect && hasSeparator && <FieldSeparator />}
       {showCurrencyTypeSelect && (
         <Select
           className={cx(
-            "TableEditor-field-target inline-block",
-            hasSeparator ? "mt0" : "mt1",
+            AdminS.TableEditorFieldTarget,
+            CS.inlineBlock,
+            hasSeparator ? CS.mt0 : CS.mt1,
             className,
           )}
           value={getFieldCurrency(field)}
@@ -121,9 +125,11 @@ const SemanticTypeAndTargetPicker = ({
         >
           {currency.map(([_, c]: CurrencyOption[]) => (
             <Option name={c.name} value={c.code} key={c.code}>
-              <span className="flex full align-center">
+              <span className={cx(CS.flex, CS.full, CS.alignCenter)}>
                 <span>{c.name}</span>
-                <span className="text-bold text-light ml1">{c.symbol}</span>
+                <span className={cx(CS.textBold, CS.textLight, CS.ml1)}>
+                  {c.symbol}
+                </span>
               </span>
             </Option>
           ))}
@@ -132,10 +138,14 @@ const SemanticTypeAndTargetPicker = ({
       {showFKTargetSelect && hasSeparator && <FieldSeparator />}
       {showFKTargetSelect && (
         <Select
+          buttonProps={{
+            "data-testid": "fk-target-select",
+          }}
           disabled={!hasIdFields}
           className={cx(
-            "TableEditor-field-target text-wrap",
-            hasSeparator ? "mt0" : "mt1",
+            AdminS.TableEditorFieldTarget,
+            CS.textWrap,
+            hasSeparator ? CS.mt0 : CS.mt1,
             className,
           )}
           placeholder={getFkFieldPlaceholder(field, idFields)}

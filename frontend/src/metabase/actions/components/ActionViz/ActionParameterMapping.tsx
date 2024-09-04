@@ -1,29 +1,27 @@
-import { useCallback, useState, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { t } from "ttag";
 
+import { sortActionParams } from "metabase/actions/utils";
+import EmptyState from "metabase/components/EmptyState";
 import type { SelectChangeEvent } from "metabase/core/components/Select";
 import Select from "metabase/core/components/Select";
-import EmptyState from "metabase/components/EmptyState";
-
 import { setParameterMapping } from "metabase/dashboard/actions";
-
+import { useDispatch } from "metabase/lib/redux";
+import type Question from "metabase-lib/v1/Question";
 import type {
   ActionDashboardCard,
   ActionParametersMapping,
   Dashboard,
-  WritebackParameter,
-  WritebackAction,
   Parameter,
   ParameterTarget,
+  WritebackAction,
+  WritebackParameter,
 } from "metabase-types/api";
-import { useDispatch } from "metabase/lib/redux";
-import { sortActionParams } from "metabase/actions/utils";
-import type Question from "metabase-lib/Question";
 
 import {
-  ParameterFormSection,
-  ParameterFormLabel,
   ParameterFormBadge,
+  ParameterFormLabel,
+  ParameterFormSection,
 } from "./ActionParameterMapping.styled";
 import {
   getParameterDefaultValue,
@@ -63,12 +61,12 @@ export const ActionParameterMappingForm = ({
   }, [action]);
 
   const handleParameterChange = useCallback(
-    (dashboardParameterId, target) => {
+    (dashboardParameterId: any, target: ParameterTarget) => {
       dispatch(
         setParameterMapping(
           dashboardParameterId,
           dashcard.id,
-          undefined, // this is irrelevant for action parameters
+          -1, // this is irrelevant for action parameters
           target,
         ),
       );

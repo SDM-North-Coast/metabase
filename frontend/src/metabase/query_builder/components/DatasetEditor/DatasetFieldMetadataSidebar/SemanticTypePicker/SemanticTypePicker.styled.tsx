@@ -1,14 +1,12 @@
-import styled from "@emotion/styled";
 import { css } from "@emotion/react";
+import styled from "@emotion/styled";
 
 import { color } from "metabase/lib/colors";
-
-import { Icon } from "metabase/core/components/Icon";
+import { Icon } from "metabase/ui";
 
 export const FieldTypeIcon = styled(Icon)`
   color: ${props =>
     props.name === "ellipsis" ? color("text-white") : color("brand")};
-
   margin-right: 6px;
 
   ${props =>
@@ -16,7 +14,7 @@ export const FieldTypeIcon = styled(Icon)`
     css`
       border-radius: 0.3em;
       padding: 0.2em;
-      background-color: ${color("text-dark")};
+      background-color: var(--mb-color-text-dark);
     `}
 `;
 

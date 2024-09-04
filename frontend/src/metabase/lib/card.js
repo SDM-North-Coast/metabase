@@ -1,8 +1,6 @@
-import { equals, copy } from "metabase/lib/utils";
-
-import { b64hash_to_utf8, utf8_to_b64url } from "metabase/lib/encoding";
 import Questions from "metabase/entities/questions";
-import * as Q_DEPRECATED from "metabase-lib/queries/utils";
+import { b64hash_to_utf8, utf8_to_b64url } from "metabase/lib/encoding";
+import { equals } from "metabase/lib/utils";
 
 export function createCard(name = null) {
   return {
@@ -11,15 +9,6 @@ export function createCard(name = null) {
     visualization_settings: {},
     dataset_query: {},
   };
-}
-
-// start a new card using the given query type and optional database and table selections
-export function startNewCard(type, databaseId, tableId) {
-  // create a brand new card to work from
-  const card = createCard();
-  card.dataset_query = Q_DEPRECATED.createQuery(type, databaseId, tableId);
-
-  return card;
 }
 
 // load a card either by ID or from a base64 serialization.  if both are present then they are merged, which the serialized version taking precedence
@@ -52,16 +41,11 @@ export async function loadCard(cardId, { dispatch, getState }) {
 }
 
 function getCleanCard(card) {
-  const dataset_query = copy(card.dataset_query);
-  if (dataset_query.query) {
-    dataset_query.query = Q_DEPRECATED.cleanQuery(dataset_query.query);
-  }
-
   return {
     name: card.name,
     collectionId: card.collectionId,
     description: card.description,
-    dataset_query: dataset_query,
+    dataset_query: card.dataset_query,
     display: card.display,
     displayIsLocked: card.displayIsLocked,
     parameters: card.parameters,
@@ -69,6 +53,7 @@ function getCleanCard(card) {
     dashcardId: card.dashcardId,
     visualization_settings: card.visualization_settings,
     original_card_id: card.original_card_id,
+    type: card.type,
   };
 }
 

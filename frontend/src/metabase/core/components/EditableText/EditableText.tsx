@@ -1,20 +1,22 @@
 import type {
   ChangeEvent,
-  KeyboardEvent,
+  FocusEvent,
+  FocusEventHandler,
   HTMLAttributes,
-  Ref,
+  KeyboardEvent,
   MouseEvent,
+  Ref,
 } from "react";
-import { forwardRef, useCallback, useEffect, useState, useRef } from "react";
-
+import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import { usePrevious } from "react-use";
 
 import Markdown from "metabase/core/components/Markdown";
+
 import { EditableTextArea, EditableTextRoot } from "./EditableText.styled";
 
 export type EditableTextAttributes = Omit<
   HTMLAttributes<HTMLDivElement>,
-  "onChange"
+  "onChange" | "onFocus" | "onBlur"
 >;
 
 export interface EditableTextProps extends EditableTextAttributes {
@@ -26,8 +28,8 @@ export interface EditableTextProps extends EditableTextAttributes {
   isDisabled?: boolean;
   isMarkdown?: boolean;
   onChange?: (value: string) => void;
-  onFocus?: () => void;
-  onBlur?: () => void;
+  onFocus?: FocusEventHandler<HTMLTextAreaElement>;
+  onBlur?: FocusEventHandler<HTMLTextAreaElement>;
   "data-testid"?: string;
 }
 
@@ -73,7 +75,7 @@ const EditableText = forwardRef(function EditableText(
   }, [isInFocus, isMarkdown]);
 
   const handleBlur = useCallback(
-    e => {
+    (event: FocusEvent<HTMLTextAreaElement>) => {
       setIsInFocus(false);
 
       if (!isOptional && !inputValue) {
@@ -83,7 +85,7 @@ const EditableText = forwardRef(function EditableText(
         onChange?.(inputValue);
       }
 
-      onBlur?.();
+      onBlur?.(event);
     },
     [inputValue, submitValue, isOptional, onChange, onBlur, setIsInFocus],
   );

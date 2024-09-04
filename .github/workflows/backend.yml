@@ -6,14 +6,11 @@ on:
       - "master"
       - "release-**"
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref && github.ref || github.run_id }}
   cancel-in-progress: true
-
-env:
-  CLJ_KONDO_VERSION: "2023.09.07"
 
 jobs:
   files-changed:
@@ -24,9 +21,9 @@ jobs:
       backend_all: ${{ steps.changes.outputs.backend_all }}
       frontend_sources: ${{ steps.changes.outputs.frontend_sources }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Test which files changed
-        uses: dorny/paths-filter@v2.11.1
+        uses: dorny/paths-filter@v3.0.0
         id: changes
         with:
           token: ${{ github.token }}
@@ -41,7 +38,7 @@ jobs:
     outputs:
       static_viz: ${{ steps.static_viz.outputs.static_viz }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Prepare front-end environment
         uses: ./.github/actions/prepare-frontend
       - name: Prepare back-end environment
@@ -51,38 +48,17 @@ jobs:
       - name: Build static-viz frontend
         run: yarn build-static-viz
       - name: Upload Static Viz Bundle Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: static-viz-bundle-${{ github.sha }}
           path: resources/frontend_client/app/dist
 
       - name: Check for static viz changes
-        uses: dorny/paths-filter@v2.11.1
+        uses: dorny/paths-filter@v3.0.0
         id: static_viz
         with:
           token: ${{ github.token }}
           filters: .github/static-viz-sources.yaml
-
-  be-linter-cloverage:
-    needs: files-changed
-    if: github.ref_name == 'master' && needs.files-changed.outputs.backend_all == 'true'
-    runs-on: ubuntu-22.04
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v3
-      - name: Prepare back-end environment
-        uses: ./.github/actions/prepare-backend
-        with:
-          m2-cache-key: "cloverage"
-      - name: Build static viz frontend
-        run: yarn build-static-viz
-      - name: Collect the test coverage
-        run: clojure -X:dev:ci:ee:ee-dev:test:cloverage
-      - name: Upload coverage to codecov.io
-        uses: codecov/codecov-action@v3
-        with:
-          files: ./target/coverage/codecov.json
-          flags: back-end
 
   be-linter-clj-kondo:
     needs: [files-changed, static-viz-files-changed]
@@ -91,19 +67,12 @@ jobs:
       (needs.files-changed.outputs.backend_all == 'true' || needs.static-viz-files-changed.outputs.static_viz == 'true')
     runs-on: ubuntu-22.04
     timeout-minutes: 10
-    env:
-      DOWNLOAD_URL: https://github.com/clj-kondo/clj-kondo/releases/download
     steps:
-      - uses: actions/checkout@v3
-      - name: Install clj-kondo
-        run: |
-          curl -OL ${DOWNLOAD_URL}/v${CLJ_KONDO_VERSION}/clj-kondo-${CLJ_KONDO_VERSION}-linux-static-amd64.zip
-          curl -OL ${DOWNLOAD_URL}/v${CLJ_KONDO_VERSION}/clj-kondo-${CLJ_KONDO_VERSION}-linux-static-amd64.zip.sha256
-          cat clj-kondo-${CLJ_KONDO_VERSION}-linux-static-amd64.zip.sha256 >> SHA256sum.txt
-          echo " clj-kondo-${CLJ_KONDO_VERSION}-linux-static-amd64.zip" >> SHA256sum.txt
-          sha256sum -c SHA256sum.txt
-          unzip -d /usr/local/bin clj-kondo-${CLJ_KONDO_VERSION}-linux-static-amd64.zip
-      - run: clj-kondo --version
+      - uses: actions/checkout@v4
+      - name: Prepare back-end environment
+        uses: ./.github/actions/prepare-backend
+        with:
+          m2-cache-key: 'kondo'
       - name: Run clj-kondo
         run: ./bin/kondo.sh
 
@@ -116,7 +85,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Prepare back-end environment
         uses: ./.github/actions/prepare-backend
         with:
@@ -137,7 +106,7 @@ jobs:
     name: be-tests-java-11-ee-pre-check
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Prepare front-end environment
         uses: ./.github/actions/prepare-frontend
       - name: Prepare back-end environment
@@ -178,7 +147,7 @@ jobs:
         edition: [oss, ee]
         java-version: [11, 17, 21]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Prepare front-end environment
         uses: ./.github/actions/prepare-frontend
       - name: Prepare back-end environment
@@ -192,18 +161,32 @@ jobs:
         run: yarn build-static-viz
       - name: Download Static Viz Bundle Artifact
         if: needs.static-viz-files-changed.outputs.static_viz == 'true'
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: static-viz-bundle-${{ github.sha }}
           path: resources/frontend_client/app/dist
 
       - name: Run tests
+        id: run-java-tests
         if: matrix.java-version != 21
         run: clojure -X:dev:ci:test:${{ matrix.edition }}:${{ matrix.edition }}-dev
 
-      - name: Run tests using Java 21 on `master` only
+      - name: If using Java 21, only run tests on `master`
+        id: run-java-tests-21
         if: matrix.java-version == 21 && github.ref_name == 'master'
         run: clojure -X:dev:ci:test:${{ matrix.edition }}:${{ matrix.edition }}-dev
+
+      - name: Upload Test Results
+        uses: ./.github/actions/upload-test-results
+        if: always() && (steps.run-java-tests.conclusion != 'skipped' || steps.run-java-tests-21.conclusion != 'skipped')
+        with:
+          input-path: ./target/junit/
+          output-name: be-tests-java-${{ matrix.java-version }}-${{ matrix.edition }}
+          bucket: ${{ vars.AWS_S3_TEST_RESULTS_BUCKET }}
+          aws-access-key-id: ${{ secrets.AWS_TEST_RESULTS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_TEST_RESULTS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+          trunk-api-token: ${{ secrets.TRUNK_API_TOKEN }}
 
       - name: Publish Test Report (JUnit)
         uses: dorny/test-reporter@v1
@@ -248,7 +231,7 @@ jobs:
       matrix:
         java-version: [11, 17, 21]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Prepare backend
         uses: ./.github/actions/prepare-backend
         with:
@@ -271,3 +254,18 @@ jobs:
     steps:
       - run: |
           echo "Didn't run due to conditional filtering"
+
+  be-cljfmt:
+    needs: [files-changed]
+    if: |
+      !cancelled() && needs.files-changed.outputs.backend_all == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare back-end environment
+        uses: ./.github/actions/prepare-backend
+        with:
+          m2-cache-key: 'cljfmt'
+      - name: Run cljfmt
+        run: clojure -T:cljfmt check

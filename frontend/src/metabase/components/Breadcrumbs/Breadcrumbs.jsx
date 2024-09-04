@@ -1,11 +1,12 @@
-import { Component } from "react";
+import cx from "classnames";
 import PropTypes from "prop-types";
+import { Component } from "react";
 import { Link } from "react-router";
 
-import cx from "classnames";
-import { Icon } from "metabase/core/components/Icon";
 import { Ellipsified } from "metabase/core/components/Ellipsified";
-import S from "./Breadcrumbs.css";
+import { Icon } from "metabase/ui";
+
+import S from "./Breadcrumbs.module.css";
 
 // TODO: merge with BrowserCrumbs
 
@@ -50,7 +51,7 @@ export default class Breadcrumbs extends Component {
               <Ellipsified
                 key={index}
                 tooltip={breadcrumb[0]}
-                tooltipMaxWidth="100%"
+                tooltipMaxWidth="auto"
                 className={cx(
                   breadcrumbClass,
                   breadcrumb.length > 1 ? S.breadcrumbPath : S.breadcrumbPage,

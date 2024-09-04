@@ -1,15 +1,16 @@
-import { forwardRef, useCallback } from "react";
-import type { FocusEvent, Ref } from "react";
 import { useField } from "formik";
-import { Select } from "metabase/ui";
+import type { FocusEvent, Ref } from "react";
+import { forwardRef, useCallback } from "react";
+
 import type { SelectProps } from "metabase/ui";
+import { Select } from "metabase/ui";
 
 export interface FormSelectProps extends Omit<SelectProps, "value" | "error"> {
   name: string;
   nullable?: boolean;
 }
 
-export const FormSelect = forwardRef(function FormNumberInput(
+export const FormSelect = forwardRef(function FormSelect(
   { name, nullable, onChange, onBlur, ...props }: FormSelectProps,
   ref: Ref<HTMLInputElement>,
 ) {

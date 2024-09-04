@@ -1,38 +1,34 @@
-import { useRef, useMemo } from "react";
-import { t } from "ttag";
+import { useMemo, useRef } from "react";
 import { connect } from "react-redux";
+import { t } from "ttag";
 
-import type {
-  Dashboard,
-  ActionDashboardCard,
-  VisualizationSettings,
-} from "metabase-types/api";
-
+import ActionViz from "metabase/actions/components/ActionViz";
+import { ConnectedActionDashcardSettings } from "metabase/actions/components/ActionViz/ActionDashcardSettings";
+import { isActionDashCard } from "metabase/actions/utils";
+import ModalWithTrigger from "metabase/components/ModalWithTrigger";
 import Button from "metabase/core/components/Button";
-import { Form, FormProvider } from "metabase/forms";
-import FormInput from "metabase/core/components/FormInput";
-import FormSelect from "metabase/core/components/FormSelect";
 import { Ellipsified } from "metabase/core/components/Ellipsified";
 import {
   FieldLabel,
   FieldLabelContainer,
 } from "metabase/core/components/FormField/FormField.styled";
-
-import ModalWithTrigger from "metabase/components/ModalWithTrigger";
-import Sidebar from "metabase/dashboard/components/Sidebar";
-
-import { ConnectedActionDashcardSettings } from "metabase/actions/components/ActionViz/ActionDashcardSettings";
-import ActionViz from "metabase/actions/components/ActionViz";
-
+import FormInput from "metabase/core/components/FormInput";
+import FormSelect from "metabase/core/components/FormSelect";
 import { closeSidebar } from "metabase/dashboard/actions";
-import { isActionDashCard } from "metabase/actions/utils";
+import { Sidebar } from "metabase/dashboard/components/Sidebar";
+import { Form, FormProvider } from "metabase/forms";
+import type {
+  ActionDashboardCard,
+  Dashboard,
+  VisualizationSettings,
+} from "metabase-types/api";
 
 import {
+  ChangeActionContainer,
   Heading,
   SidebarBody,
-  SidebarHeader,
   SidebarFooter,
-  ChangeActionContainer,
+  SidebarHeader,
 } from "./ActionSidebar.styled";
 
 const buttonVariantOptions = ActionViz.settings["button.variant"].props.options;
@@ -48,7 +44,7 @@ interface ActionSidebarProps {
   onClose: () => void;
 }
 
-export function ActionSidebarFn({
+export function ActionSidebar({
   dashboard,
   dashcardId,
   onUpdateVisualizationSettings,
@@ -150,4 +146,7 @@ export function ActionSidebarFn({
   );
 }
 
-export const ActionSidebar = connect(null, mapDispatchToProps)(ActionSidebarFn);
+export const ActionSidebarConnected = connect(
+  null,
+  mapDispatchToProps,
+)(ActionSidebar);

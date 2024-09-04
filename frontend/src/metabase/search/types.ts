@@ -1,13 +1,13 @@
 import type { Location } from "history";
 import type { ComponentType } from "react";
 
+import type { SearchFilterKeys } from "metabase/search/constants";
+import type { IconName } from "metabase/ui";
 import type {
-  EnabledSearchModelType,
+  EnabledSearchModel,
   SearchResult,
   UserId,
 } from "metabase-types/api";
-import type { IconName } from "metabase/core/components/Icon";
-import type { SearchFilterKeys } from "metabase/search/constants";
 
 export interface WrappedResult extends SearchResult {
   getUrl: () => string;
@@ -20,13 +20,14 @@ export interface WrappedResult extends SearchResult {
   getCollection: () => SearchResult["collection"];
 }
 
-export type TypeFilterProps = EnabledSearchModelType[];
+export type TypeFilterProps = EnabledSearchModel[];
 export type CreatedByFilterProps = UserId[];
 export type CreatedAtFilterProps = string | null;
 export type LastEditedByProps = UserId[];
 export type LastEditedAtFilterProps = string | null;
 export type VerifiedFilterProps = true | null;
 export type NativeQueryFilterProps = true | null;
+export type SearchTrashedItemsFilterProps = true | undefined;
 
 export type SearchFilterPropTypes = {
   [SearchFilterKeys.Type]: TypeFilterProps;
@@ -36,6 +37,7 @@ export type SearchFilterPropTypes = {
   [SearchFilterKeys.LastEditedBy]: LastEditedByProps;
   [SearchFilterKeys.LastEditedAt]: LastEditedAtFilterProps;
   [SearchFilterKeys.NativeQuery]: NativeQueryFilterProps;
+  [SearchFilterKeys.SearchTrashedItems]: SearchTrashedItemsFilterProps;
 };
 
 export type FilterTypeKeys = keyof SearchFilterPropTypes;

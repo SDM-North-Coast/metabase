@@ -1,15 +1,3 @@
-import {
-  restore,
-  modal,
-  popover,
-  filterWidget,
-  showDashboardCardActions,
-  visitDashboard,
-  addOrUpdateDashboardCard,
-  sidebar,
-  getDashboardCard,
-} from "e2e/support/helpers";
-
 import { SAMPLE_DB_ID } from "e2e/support/cypress_data";
 import { SAMPLE_DATABASE } from "e2e/support/cypress_sample_database";
 import {
@@ -17,6 +5,29 @@ import {
   ORDERS_DASHBOARD_ID,
   ORDERS_QUESTION_ID,
 } from "e2e/support/cypress_sample_instance_data";
+import {
+  addOrUpdateDashboardCard,
+  assertQueryBuilderRowCount,
+  assertTooltipRow,
+  chartPathWithFillColor,
+  echartsContainer,
+  echartsTooltip,
+  editDashboard,
+  entityPickerModal,
+  filterWidget,
+  getDashboardCard,
+  main,
+  modal,
+  popover,
+  queryBuilderHeader,
+  queryBuilderMain,
+  restore,
+  saveDashboard,
+  showDashboardCardActions,
+  sidebar,
+  tooltipHeader,
+  visitDashboard,
+} from "e2e/support/helpers";
 
 const {
   ORDERS,
@@ -56,9 +67,12 @@ describe("scenarios > dashboard > dashboard drill", () => {
         cy.get("input").first().type("/foo/{{my_number}}/{{my_param}}", {
           parseSpecialCharSequences: false,
         });
-        cy.get("input").last().type("column value: {{my_number}}", {
-          parseSpecialCharSequences: false,
-        });
+        cy.get("input")
+          .last()
+          .type("column value: {{my_number}}", {
+            parseSpecialCharSequences: false,
+          })
+          .blur();
         cy.findByText("Done").click();
       });
 
@@ -161,59 +175,47 @@ describe("scenarios > dashboard > dashboard drill", () => {
 
   it("should handle question click through on a table", () => {
     createDashboardWithQuestion({}, dashboardId => visitDashboard(dashboardId));
-    cy.icon("pencil").click();
+
+    cy.findByLabelText("Edit dashboard").click();
     showDashboardCardActions();
-    cy.findByTestId("dashboardcard-actions-panel").within(() => {
-      cy.icon("click").click();
+    cy.findByLabelText("Click behavior").click();
+
+    sidebar().within(() => {
+      // Configuring on-click behavior for MY_NUMBER column
+      cy.findByText("MY_NUMBER").click();
+      cy.findByText("Go to a custom destination").click();
+      cy.findByText("Saved question").click();
     });
 
-    // configure a dashboard target for the "MY_NUMBER" column
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("On-click behavior for each column")
-      .parent()
-      .parent()
-      // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-      .within(() => cy.findByText("MY_NUMBER").click());
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("Go to a custom destination").click();
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("Saved question").click();
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("Orders").click();
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("Orders → User ID").click();
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    popover().within(() => cy.findByText("MY_NUMBER").click());
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("Products → Category").click();
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    popover().within(() => cy.findByText("My Param").click());
+    modal().findByText("Orders").click();
 
-    // set the text template
-    cy.findByPlaceholderText("E.x. Details for {{Column Name}}").type(
-      "num: {{my_number}}",
-      { parseSpecialCharSequences: false },
-    );
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("Save").click();
+    sidebar().findByText("User ID").click();
+    popover().findByText("MY_NUMBER").click();
+
+    sidebar().findByText("Product → Category").click();
+    popover().findByText("My Param").click();
+
+    sidebar()
+      .findByLabelText(/Customize link text/)
+      .type("num: {{my_number}}", {
+        parseSpecialCharSequences: false,
+      });
+
+    cy.findByTestId("edit-bar").button("Save").click();
 
     // wait to leave editing mode and set a param value
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("You're editing this dashboard.").should("not.exist");
+    main().findByText("You're editing this dashboard.").should("not.exist");
     setParamValue("My Param", "Widget");
 
     // click on table value
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("num: 111").click();
+    cy.findByTestId("dashcard").findByText("num: 111").click();
 
-    // show filtered question
-    cy.findAllByText("Orders");
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("User ID is 111");
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("Category is Widget");
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    cy.findByText("Showing 5 rows");
+    queryBuilderHeader().findByText("Orders").should("be.visible");
+    cy.findByTestId("qb-filters-panel").within(() => {
+      cy.findByText("User ID is 111").should("be.visible");
+      cy.findByText("Product → Category is Widget").should("be.visible");
+    });
+    assertQueryBuilderRowCount(5);
   });
 
   it("should handle dashboard click through on a table", () => {
@@ -250,8 +252,10 @@ describe("scenarios > dashboard > dashboard drill", () => {
       .parent()
       // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
       .within(() => cy.findByText("Dashboard").click());
-    // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-    modal().within(() => cy.findByText("end dash").click());
+    entityPickerModal().within(() => {
+      cy.findByRole("tab", { name: /Dashboards/ }).click();
+      cy.findByText("end dash").click();
+    });
     // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
     cy.findByText("Available filters")
       .parent()
@@ -285,33 +289,34 @@ describe("scenarios > dashboard > dashboard drill", () => {
   it("should open the same dashboard when a custom URL click behavior points to the same dashboard (metabase#22702)", () => {
     createDashboardWithQuestion({}, dashboardId => {
       visitDashboard(dashboardId);
-      cy.icon("pencil").click();
+      editDashboard();
       showDashboardCardActions();
-      cy.findByTestId("dashboardcard-actions-panel").within(() => {
-        cy.icon("click").click();
-      });
+      cy.findByTestId("dashboardcard-actions-panel")
+        .icon("click")
+        .should("be.visible")
+        .click();
 
-      cy.findByText("On-click behavior for each column")
-        .parent()
-        .parent()
-        .within(() => cy.findByText("MY_NUMBER").click());
-      cy.findByText("Go to a custom destination").click();
-      cy.findByText("URL").click();
+      sidebar().within(() => {
+        cy.findByText("MY_NUMBER").click();
+        cy.findByText("Go to a custom destination").click();
+        cy.findByText("URL").click();
+      });
 
       modal().within(() => {
         cy.get("input")
           .first()
-          .type(`/dashboard/${dashboardId}?my_param=Aaron Hand`);
-        cy.get("input").last().type("Click behavior");
-        cy.findByText("Done").click();
+          .type(`/dashboard/${dashboardId}?my_param=Aaron Hand`, { delay: 0 });
+        cy.get("input").last().type("Click behavior", { delay: 0 }).blur();
+        cy.button("Done").click();
       });
 
-      cy.findByText("Save").click();
+      saveDashboard();
 
-      cy.findByText("Click behavior").click();
+      cy.findByTestId("dashcard").findByText("Click behavior").click();
+      cy.get("fieldset").should("contain", "Aaron Hand");
 
       cy.location("pathname").should("eq", `/dashboard/${dashboardId}`);
-      cy.location("search").should("eq", "?my_param=Aaron%20Hand");
+      cy.location("search").should("eq", "?my_param=Aaron+Hand");
     });
   });
 
@@ -413,26 +418,34 @@ describe("scenarios > dashboard > dashboard drill", () => {
     });
 
     it("when clicking on the field value (metabase#13062-1)", () => {
-      // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-      cy.findByText("xavier").click();
-      // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-      cy.findByText("=").click();
+      cy.findByTestId("dashcard").findByText("xavier").click();
+      popover().findByText("Is xavier").click();
 
-      // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-      cy.findByText("Reviewer is xavier");
-      // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-      cy.findByText("Rating is 2 selections");
-      // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-      cy.contains("Reprehenderit non error"); // xavier's review
+      cy.findByTestId("qb-filters-panel").within(() => {
+        cy.findByText("Reviewer is xavier").should("be.visible");
+        cy.findByText("Rating is equal to 2 selections").should("be.visible");
+      });
+
+      // xavier's review
+      queryBuilderMain()
+        .contains("Reprehenderit non error")
+        .should("be.visible");
+
+      assertQueryBuilderRowCount(1);
     });
 
     it("when clicking on the card title (metabase#13062-2)", () => {
-      // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-      cy.findByText(questionDetails.name).click();
-      // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-      cy.findByText("Rating is 2 selections");
-      // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
-      cy.contains("Ad perspiciatis quis et consectetur."); // 5 star review
+      cy.findByTestId("dashcard").findByText(questionDetails.name).click();
+      cy.findByTestId("qb-filters-panel")
+        .findByText("Rating is equal to 2 selections")
+        .should("be.visible");
+
+      // Sample review body
+      queryBuilderMain()
+        .contains("Ad perspiciatis quis et consectetur.")
+        .should("be.visible");
+
+      assertQueryBuilderRowCount(907);
     });
   });
 
@@ -485,7 +498,7 @@ describe("scenarios > dashboard > dashboard drill", () => {
     visitDashboard(ORDERS_DASHBOARD_ID);
     cy.findAllByTestId("column-header").contains("ID").click().click();
 
-    cy.get(".Table-ID").contains(PK_VALUE).first().click();
+    cy.get(".test-Table-ID").contains(PK_VALUE).first().click();
 
     cy.wait("@dataset");
 
@@ -627,18 +640,54 @@ describe("scenarios > dashboard > dashboard drill", () => {
           `/api/dashboard/${DASHBOARD_ID}/dashcard/*/card/${QUESTION_ID}/query`,
         ).as("cardQuery");
 
-        cy.get(".bar")
+        chartPathWithFillColor("#509EE3")
           .eq(14) // August 2023 (Total of 12 reviews, 9 unique days)
-          .click({ force: true });
+          .click();
 
         cy.wait("@cardQuery");
         cy.url().should("include", "2023-08");
-        cy.get(".bar").should("have.length", 1);
+        chartPathWithFillColor("#509EE3").should("have.length", 1);
         // Since hover doesn't work in Cypress we can't assert on the popover that's shown when one hovers the bar
         // But when this issue gets fixed, Y-axis should definitely show "12" (total count of reviews)
-        cy.get(".axis.y").contains("12");
+        echartsContainer().get("text").contains("12");
       });
     });
+  });
+
+  it("should keep card's display when doing zoom drill-through from dashboard (metabase#38307)", () => {
+    cy.intercept("POST", "/api/dataset").as("dataset");
+    cy.intercept("/api/dashboard/*/dashcard/*/card/*/query").as(
+      "dashcardQuery",
+    );
+
+    const questionDetails = {
+      name: "38307",
+      query: {
+        "source-table": REVIEWS_ID,
+        aggregation: [["count"]],
+        breakout: [["field", REVIEWS.CREATED_AT, { "temporal-unit": "month" }]],
+      },
+      display: "bar",
+    };
+
+    const dashboardDetails = {
+      name: "38307",
+    };
+
+    cy.createQuestionAndDashboard({ questionDetails, dashboardDetails }).then(
+      ({ body: { dashboard_id } }) => {
+        visitDashboard(dashboard_id);
+
+        // click the first bar on the card's graph and do a zoom drill-through
+        chartPathWithFillColor("#509EE3").eq(0).click();
+        cy.findByText("See this month by week").click();
+
+        cy.wait("@dataset");
+
+        // check that the display is still a bar chart by checking that a .bar element exists
+        chartPathWithFillColor("#509EE3").should("exist");
+      },
+    );
   });
 
   it("should not hide custom formatting when click behavior is enabled (metabase#14597)", () => {
@@ -711,7 +760,7 @@ describe("scenarios > dashboard > dashboard drill", () => {
         // Edit "Visualization options"
         showDashboardCardActions();
         cy.icon("palette").click();
-        cy.get(".Modal").within(() => {
+        modal().within(() => {
           cy.findByText("Reset to defaults").click();
           cy.button("Done").click();
         });
@@ -719,7 +768,7 @@ describe("scenarios > dashboard > dashboard drill", () => {
         cy.button("Save").click();
         cy.findByText("You're editing this dashboard.").should("not.exist");
         cy.log("Reported failing on v0.38.0 - link gets dropped");
-        cy.get(".DashCard").findAllByText(LINK_NAME);
+        cy.findByTestId("dashcard-container").findAllByText(LINK_NAME);
       });
     });
   });
@@ -787,17 +836,19 @@ describe("scenarios > dashboard > dashboard drill", () => {
       });
     });
     cy.findByTextEnsureVisible("Quantity");
-    cy.get(".Table-ID")
+    cy.get(".test-Table-ID")
       .first()
       // Mid-point check that this cell actually contains ID = 1
-      .contains("3")
+      .contains("1")
       .click();
 
     cy.wait("@dataset").then(xhr => {
       expect(xhr.response.body.error).to.not.exist;
     });
-    cy.findByTestId("object-detail");
-    cy.findAllByText("37.65");
+    cy.findByTestId("object-detail").within(() => {
+      cy.findByText("Subtotal");
+      cy.findByText("37.65");
+    });
   });
 
   it("should display correct tooltip value for multiple series charts on dashboard (metabase#15612)", () => {
@@ -835,19 +886,18 @@ describe("scenarios > dashboard > dashboard drill", () => {
 
           visitDashboard(DASHBOARD_ID);
 
-          cy.get(".bar").first().trigger("mousemove");
+          const assertTooltipValues = () =>
+            echartsTooltip().within(() => {
+              tooltipHeader().should("have.text", 1);
+              assertTooltipRow("15612_1", { color: "#88BF4D", value: "5" });
+              assertTooltipRow("15612_2", { color: "#98D9D9", value: "10" });
+            });
 
-          popover().within(() => {
-            testPairedTooltipValues("AXIS", "1");
-            testPairedTooltipValues("VALUE", "5");
-          });
+          chartPathWithFillColor("#88BF4D").first().trigger("mousemove");
+          assertTooltipValues();
 
-          cy.get(".bar").last().trigger("mousemove");
-
-          popover().within(() => {
-            testPairedTooltipValues("AXIS", "1");
-            testPairedTooltipValues("VALUE", "10");
-          });
+          chartPathWithFillColor("#98D9D9").first().trigger("mousemove");
+          assertTooltipValues();
         });
       });
     });
@@ -923,29 +973,29 @@ describe("scenarios > dashboard > dashboard drill", () => {
 
       drillThroughCardTitle("Orders");
 
-      cy.findByTestId("TableInteractive-root").within(() => {
-        cy.findByText("37.65");
-        cy.findByText("110.93");
+      queryBuilderMain().within(() => {
+        cy.findByText("37.65").should("be.visible");
+        cy.findByText("110.93").should("be.visible");
         cy.findByText("52.72").should("not.exist");
       });
 
-      cy.findByTestId("question-row-count").findByText("Showing 2 rows");
+      assertQueryBuilderRowCount(2);
 
-      postDrillAssertion();
+      postDrillAssertion("ID is 2 selections");
     });
 
     it("should correctly drill-through on Products filter (metabase#11503-2)", () => {
       setFilterValue(productsIdFilter.name);
 
       drillThroughCardTitle("Orders");
-      cy.findByTestId("TableInteractive-root").within(() => {
+      queryBuilderMain().within(() => {
         cy.findByText("37.65").should("not.exist");
-        cy.findAllByText("105.12");
+        cy.findAllByText("105.12").should("have.length", 17);
       });
 
-      cy.findByTestId("question-row-count").findByText("Showing 191 rows");
+      assertQueryBuilderRowCount(191);
 
-      postDrillAssertion();
+      postDrillAssertion("Product → ID is 2 selections");
     });
 
     function setFilterValue(filterName) {
@@ -955,14 +1005,14 @@ describe("scenarios > dashboard > dashboard drill", () => {
       cy.findByText("2 selections");
     }
 
-    function postDrillAssertion() {
-      cy.findByText("ID is 2 selections").click();
+    function postDrillAssertion(filterName) {
+      cy.findByTestId("qb-filters-panel").findByText(filterName).click();
       popover().within(() => {
-        cy.get("li")
-          .should("have.length", 3) // The third one is an input field
-          .and("contain", "1")
+        cy.findAllByRole("combobox")
+          .last()
+          .should("contain", "1")
           .and("contain", "2");
-        cy.findByText("Update filter");
+        cy.button("Update filter").should("be.visible");
       });
     }
   });
@@ -1046,8 +1096,4 @@ function setParamValue(paramName, text) {
 function drillThroughCardTitle(title) {
   cy.findByTestId("legend-caption").contains(title).click();
   cy.contains(`Started from ${title}`);
-}
-
-function testPairedTooltipValues(val1, val2) {
-  cy.contains(val1).closest("td").siblings("td").findByText(val2);
 }

@@ -1,13 +1,15 @@
 /* eslint-disable react/prop-types */
-import SyncedParametersList from "metabase/parameters/components/SyncedParametersList/SyncedParametersList";
-import { ACE_ELEMENT_ID } from "metabase/query_builder/components/NativeQueryEditor/constants";
+import CS from "metabase/css/core/index.css";
 import DataSourceSelectors from "metabase/query_builder/components/NativeQueryEditor/DataSourceSelectors";
+import { ACE_ELEMENT_ID } from "metabase/query_builder/components/NativeQueryEditor/constants";
+import { SyncedParametersList } from "metabase/query_builder/components/SyncedParametersList";
 
 const MockNativeQueryEditor = ({
   canChangeDatabase = true,
   editorContext = "question",
   isNativeEditorOpen,
   query,
+  question,
   readOnly,
   setDatasetQuery,
   setParameterValue,
@@ -17,7 +19,7 @@ const MockNativeQueryEditor = ({
   };
 
   const onDatabaseIdChange = databaseId => {
-    if (query.databaseId() !== databaseId) {
+    if (question.databaseId() !== databaseId) {
       setDatasetQuery(query.setDatabaseId(databaseId).setDefaultCollection());
     }
   };
@@ -35,6 +37,7 @@ const MockNativeQueryEditor = ({
         <DataSourceSelectors
           isNativeEditorOpen={isNativeEditorOpen}
           query={query}
+          question={question}
           readOnly={readOnly}
           setDatabaseId={onDatabaseIdChange}
           setTableId={onTableIdChange}
@@ -45,7 +48,7 @@ const MockNativeQueryEditor = ({
         <textarea value={query.queryText()} onChange={onChange} />
       )}
       <SyncedParametersList
-        className="mt1"
+        className={CS.mt1}
         parameters={query.question().parameters()}
         setParameterValue={setParameterValue}
         commitImmediately

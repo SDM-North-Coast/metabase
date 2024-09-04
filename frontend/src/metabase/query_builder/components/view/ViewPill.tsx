@@ -1,13 +1,16 @@
 import cx from "classnames";
-import { Icon } from "metabase/core/components/Icon";
-import type { IconName } from "metabase/core/components/Icon";
-import { color as c, alpha } from "metabase/lib/colors";
+
+import CS from "metabase/css/core/index.css";
+import { alpha, color as c } from "metabase/lib/colors";
+import type { IconName } from "metabase/ui";
+import { Icon } from "metabase/ui";
 
 export interface ViewPillProps {
   className?: string;
   color?: string;
   invert?: boolean;
   icon?: IconName;
+  removeButtonLabel?: string;
   children?: React.ReactNode;
   style?: React.CSSProperties;
   onClick?: React.MouseEventHandler<HTMLSpanElement>;
@@ -20,6 +23,7 @@ function ViewPill({
   color = c("brand"),
   invert,
   children,
+  removeButtonLabel,
   onClick,
   onRemove,
   icon,
@@ -28,9 +32,16 @@ function ViewPill({
   return (
     <span
       {...props}
-      className={cx("rounded flex align-center text-bold", className, {
-        "cursor-pointer": onClick,
-      })}
+      className={cx(
+        CS.rounded,
+        CS.flex,
+        CS.alignCenter,
+        CS.textBold,
+        className,
+        {
+          [CS.cursorPointer]: onClick,
+        },
+      )}
       style={{
         height: 22,
         paddingLeft: icon ? 5 : 8,
@@ -43,14 +54,16 @@ function ViewPill({
       onClick={onClick}
     >
       {icon && (
-        <Icon name={icon} size={12} className={cx({ mr1: !!children })} />
+        <Icon name={icon} size={12} className={cx({ [CS.ml1]: !!children })} />
       )}
       {children}
       {onRemove && (
         <Icon
           name="close"
           size={12}
-          className="ml1"
+          className={CS.ml1}
+          role="button"
+          aria-label={removeButtonLabel}
           onClick={e => {
             e.stopPropagation();
             onRemove();

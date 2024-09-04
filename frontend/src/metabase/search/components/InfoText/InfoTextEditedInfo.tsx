@@ -1,13 +1,15 @@
 import dayjs from "dayjs";
 import { t } from "ttag";
 import { isNull } from "underscore";
-import { useUserListQuery } from "metabase/common/hooks/use-user-list-query";
-import type { UserListResult } from "metabase-types/api";
+
+import { useUserListQuery } from "metabase/common/hooks";
 import Tooltip from "metabase/core/components/Tooltip";
-import { isNotNull } from "metabase/lib/types";
 import { getRelativeTime } from "metabase/lib/time";
+import { isNotNull } from "metabase/lib/types";
 import type { WrappedResult } from "metabase/search/types";
 import { Text } from "metabase/ui";
+import type { UserListResult } from "metabase-types/api";
+
 import {
   LastEditedInfoText,
   LastEditedInfoTooltip,
@@ -24,7 +26,7 @@ const LoadingText = () => (
 );
 
 const InfoTextSeparator = (
-  <Text span size="sm" mx="xs" c="text.1">
+  <Text span size="sm" mx="xs" c="text-medium">
     •
   </Text>
 );
@@ -57,7 +59,7 @@ export const InfoTextEditedInfo = ({
 
   const { prefix, timestamp, userId } = isUpdated
     ? {
-        prefix: t`Updated`,
+        prefix: result.archived ? t`Deleted` : t`Updated`,
         timestamp: result.last_edited_at,
         userId: result.last_editor_id,
       }
@@ -90,7 +92,7 @@ export const InfoTextEditedInfo = ({
       const formattedDuration = timestamp && getRelativeTime(timestamp);
       return (
         <Tooltip tooltip={<LastEditedInfoTooltip {...lastEditedInfoData} />}>
-          <Text span size="sm" c="text.1" truncate>
+          <Text span size="sm" c="text-medium" truncate>
             {formattedDuration}
           </Text>
         </Tooltip>

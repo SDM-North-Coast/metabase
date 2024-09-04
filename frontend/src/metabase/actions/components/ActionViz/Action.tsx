@@ -1,32 +1,37 @@
 import { useCallback, useMemo } from "react";
-import { t } from "ttag";
 import { connect } from "react-redux";
+import { t } from "ttag";
+
+import { useQuestionQuery } from "metabase/common/hooks";
 import Tooltip from "metabase/core/components/Tooltip";
 import {
   executeRowAction,
   reloadDashboardCards,
 } from "metabase/dashboard/actions";
-import { getEditingDashcardId } from "metabase/dashboard/selectors";
+import {
+  getEditingDashcardId,
+  getParameterValues,
+} from "metabase/dashboard/selectors";
+import { getActionIsEnabledInDatabase } from "metabase/dashboard/utils";
 import type { VisualizationProps } from "metabase/visualizations/types";
 import type {
   ActionDashboardCard,
   Dashboard,
-  ParametersForActionExecution,
   ParameterValueOrArray,
+  ParametersForActionExecution,
   WritebackAction,
 } from "metabase-types/api";
 import type { Dispatch, State } from "metabase-types/store";
-import { getActionIsEnabledInDatabase } from "metabase/dashboard/utils";
-import { useQuestionQuery } from "metabase/common/hooks";
+
+import { FullContainer } from "./ActionButton.styled";
+import ActionButtonView from "./ActionButtonView";
+import ActionVizForm from "./ActionVizForm";
 import {
   getDashcardParamValues,
   getMappedActionParameters,
   getNotProvidedActionParameters,
   shouldShowConfirmation,
 } from "./utils";
-import ActionVizForm from "./ActionVizForm";
-import ActionButtonView from "./ActionButtonView";
-import { FullContainer } from "./ActionButton.styled";
 
 interface OwnProps {
   dashcard: ActionDashboardCard;
@@ -137,6 +142,7 @@ const ConnectedActionComponent = connect()(ActionComponent);
 
 function mapStateToProps(state: State, props: ActionProps) {
   return {
+    parameterValues: getParameterValues(state),
     isEditingDashcard: getEditingDashcardId(state) === props.dashcard.id,
   };
 }
@@ -186,7 +192,7 @@ function getErrorTooltip({
     return t`Actions are not enabled for this database`;
   }
 
-  return t`Something's gone wrong`;
+  return t`Something’s gone wrong`;
 }
 
 // eslint-disable-next-line import/no-default-export -- deprecated usage

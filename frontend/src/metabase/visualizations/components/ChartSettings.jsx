@@ -1,47 +1,42 @@
 /* eslint-disable react/prop-types */
-import { Component } from "react";
-
-import * as React from "react";
 import { assocIn } from "icepick";
-import _ from "underscore";
+import { Component } from "react";
+import * as React from "react";
 import { t } from "ttag";
+import _ from "underscore";
 
 import Button from "metabase/core/components/Button";
 import Radio from "metabase/core/components/Radio";
-
-import Visualization from "metabase/visualizations/components/Visualization";
-
-import { getSettingsWidgetsForSeries } from "metabase/visualizations/lib/settings/visualization";
-import { updateSeriesColor } from "metabase/visualizations/lib/series";
-import * as MetabaseAnalytics from "metabase/lib/analytics";
+import CS from "metabase/css/core/index.css";
 import {
-  getVisualizationTransformed,
   extractRemappings,
+  getVisualizationTransformed,
 } from "metabase/visualizations";
+import Visualization from "metabase/visualizations/components/Visualization";
+import { updateSeriesColor } from "metabase/visualizations/lib/series";
 import {
-  updateSettings,
   getClickBehaviorSettings,
   getComputedSettings,
   getSettingsWidgets,
+  updateSettings,
 } from "metabase/visualizations/lib/settings";
-
-import { keyForSingleSeries } from "metabase/visualizations/lib/settings/series";
 import { getSettingDefinitionsForColumn } from "metabase/visualizations/lib/settings/column";
-import { getColumnKey } from "metabase-lib/queries/utils/get-column-key";
-
-import ChartSettingsWidgetList from "./ChartSettingsWidgetList";
-import ChartSettingsWidgetPopover from "./ChartSettingsWidgetPopover";
+import { keyForSingleSeries } from "metabase/visualizations/lib/settings/series";
+import { getSettingsWidgetsForSeries } from "metabase/visualizations/lib/settings/visualization";
+import { getColumnKey } from "metabase-lib/v1/queries/utils/column-key";
 
 import {
-  SectionContainer,
-  SectionWarnings,
-  ChartSettingsRoot,
+  ChartSettingsFooterRoot,
+  ChartSettingsListContainer,
   ChartSettingsMenu,
   ChartSettingsPreview,
-  ChartSettingsListContainer,
+  ChartSettingsRoot,
   ChartSettingsVisualizationContainer,
-  ChartSettingsFooterRoot,
+  SectionContainer,
+  SectionWarnings,
 } from "./ChartSettings.styled";
+import ChartSettingsWidgetList from "./ChartSettingsWidgetList";
+import ChartSettingsWidgetPopover from "./ChartSettingsWidgetPopover";
 
 // section names are localized
 const DEFAULT_TAB_PRIORITY = [t`Data`];
@@ -119,8 +114,6 @@ class ChartSettings extends Component {
   };
 
   handleResetSettings = () => {
-    MetabaseAnalytics.trackStructEvent("Chart Settings", "Reset Settings");
-
     const originalCardSettings =
       this.props.dashcard.card.visualization_settings;
     const clickBehaviorSettings = getClickBehaviorSettings(this._getSettings());
@@ -213,16 +206,23 @@ class ChartSettings extends Component {
     ).some(widget => !widget.hidden);
   }
 
-  getStyleWidget = () => {
-    const widgets = this._getWidgets();
+  getStyleWidget = widgets => {
     const series = this._getTransformedSeries();
     const settings = this._getComputedSettings();
     const { currentWidget } = this.state;
     const seriesSettingsWidget =
       currentWidget && widgets.find(widget => widget.id === "series_settings");
 
+    const display = series?.[0]?.card?.display;
+    // In the pie the chart, clicking on the "measure" settings menu will only
+    // open a formatting widget, and we don't want the style widget (used only
+    // for dimension) to override that
+    if (display === "pie" && currentWidget?.id === "column_settings") {
+      return null;
+    }
+
     //We don't want to show series settings widget for waterfall charts
-    if (series?.[0]?.card?.display === "waterfall" || !seriesSettingsWidget) {
+    if (display === "waterfall" || !seriesSettingsWidget) {
       return null;
     }
 
@@ -262,8 +262,7 @@ class ChartSettings extends Component {
     return null;
   };
 
-  getFormattingWidget = () => {
-    const widgets = this._getWidgets();
+  getFormattingWidget = widgets => {
     const { currentWidget } = this.state;
     const widget =
       currentWidget && widgets.find(widget => widget.id === currentWidget.id);
@@ -388,7 +387,7 @@ class ChartSettings extends Component {
       <ChartSettingsRoot className={className}>
         <ChartSettingsMenu data-testid="chartsettings-sidebar">
           {showSectionPicker && sectionPicker}
-          <ChartSettingsListContainer className="scroll-show">
+          <ChartSettingsListContainer className={CS.scrollShow}>
             <ChartSettingsWidgetList
               widgets={visibleWidgets}
               extraWidgetProps={extraWidgetProps}
@@ -400,7 +399,7 @@ class ChartSettings extends Component {
             <SectionWarnings warnings={this.state.warnings} size={20} />
             <ChartSettingsVisualizationContainer>
               <Visualization
-                className="spread"
+                className={CS.spread}
                 rawSeries={rawSeries}
                 showTitle
                 isEditing
@@ -422,9 +421,10 @@ class ChartSettings extends Component {
         )}
         <ChartSettingsWidgetPopover
           anchor={popoverRef}
-          widgets={[this.getFormattingWidget(), this.getStyleWidget()].filter(
-            widget => !!widget,
-          )}
+          widgets={[
+            this.getStyleWidget(widgets),
+            this.getFormattingWidget(widgets),
+          ].filter(widget => !!widget)}
           handleEndShowWidget={this.handleEndShowWidget}
         />
       </ChartSettingsRoot>
@@ -438,19 +438,11 @@ const ChartSettingsFooter = ({ onDone, onCancel, onReset }) => (
       <Button
         borderless
         icon="refresh"
-        data-metabase-event="Chart Settings;Reset"
         onClick={onReset}
       >{t`Reset to defaults`}</Button>
     )}
-    <Button
-      onClick={onCancel}
-      data-metabase-event="Chart Settings;Cancel"
-    >{t`Cancel`}</Button>
-    <Button
-      primary
-      onClick={onDone}
-      data-metabase-event="Chart Settings;Done"
-    >{t`Done`}</Button>
+    <Button onClick={onCancel}>{t`Cancel`}</Button>
+    <Button primary onClick={onDone}>{t`Done`}</Button>
   </ChartSettingsFooterRoot>
 );
 

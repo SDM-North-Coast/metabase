@@ -1,44 +1,41 @@
 {
   "teams": [
     {
-      "name": "Querying Components",
-      "label": ".Team/QueryingComponents",
+      "name": "Querying",
+      "label": ".Team/Querying",
+      "projectUrl": "https://github.com/orgs/metabase/projects/97/views/1",
       "members": [
         "ranquild",
-        "uladzimirdev",
         "kamilmielnik",
-        "oleggromov"
+        "nemanjaglumac",
+        "romeovs",
+        "bshepherdson",
+        "metamben",
+        "lbrdnk",
+        "appleby",
+        "uladzimirdev"
       ]
+    },
+    {
+      "name": "Drivers",
+      "label": ".Team/Drivers",
+      "members": ["snoe"]
     },
     {
       "name": "Embedding",
       "label": ".Team/Embedding",
-      "members": [
-        "WiNloSt",
-        "deniskaber",
-        "oisincoveney",
-        "npretto"
-      ]
+      "projectUrl": "https://github.com/orgs/metabase/projects/88/views/1",
+      "members": ["WiNloSt", "deniskaber", "oisincoveney", "npretto", "heypoom"]
     },
     {
       "name": "BEC",
       "label": ".Team/BackendComponents",
+      "projectUrl": "https://github.com/orgs/metabase/projects/50/views/1",
       "members": [
         "tsmacdonald",
         "qnkhuat",
-        "calherries",
-        "piranha"
-      ]
-    },
-    {
-      "name": "Query Processor",
-      "label": ".Team/QueryProcessor",
-      "members": [
-        "camsaul",
-        "snoe",
-        "bshepherdson",
-        "metamben",
-        "lbrdnk"
+        "piranha",
+        "crisptrutski"
       ]
     },
     {
@@ -47,11 +44,11 @@
       "members": [
         "noahmoss",
         "escherize",
-        "qwef",
-        "iethree",
         "npfitz",
-        "shaunlebron",
-        "johnswanson"
+        "johnswanson",
+        "rafpaf",
+        "sloansparger",
+        "iethree"
       ]
     },
     {
@@ -60,10 +57,15 @@
       "members": [
         "alxnddr",
         "EmmadUsmani",
-        "JesseSDevaney",
         "kulyk",
-        "markbastian",
         "adam-james-v"
+      ]
+    },
+    {
+      "name": "DevEx",
+      "label": ".Team/DevEx",
+      "members": [
+        "camsaul"
       ]
     }
   ]

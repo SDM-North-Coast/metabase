@@ -1,13 +1,14 @@
 import type { HTMLAttributes } from "react";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { t } from "ttag";
-import { Icon } from "metabase/core/components/Icon";
+
+import { Icon } from "metabase/ui";
 
 import {
-  ToasterContainer,
-  ToasterMessage,
   ToasterButton,
+  ToasterContainer,
   ToasterDismiss,
+  ToasterMessage,
 } from "./Toaster.styled";
 
 export interface ToasterProps extends HTMLAttributes<HTMLAnchorElement> {

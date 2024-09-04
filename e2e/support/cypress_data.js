@@ -7,7 +7,7 @@ import { ORDERS_PRODUCTS_ACCESS } from "./test_roles";
  * For that reason, we have some sanity checks in the `default.cy.snap.js` spec.
  *
  * SAMPLE_DB_TABLES contains only the references to the four main tables ids in sample database.
- * We need these references to avoid circular dependecy issue in custom commands and e2e helpers.
+ * We need these references to avoid circular dependency issue in custom commands and e2e helpers.
  * That is the only place they should be used. NEVER use them in tests!
  *
  * USER_GROUPS
@@ -25,15 +25,15 @@ export const SAMPLE_DB_SCHEMA_ID = "1:PUBLIC";
 // Use only for e2e helpers and custom commands. Never in e2e tests directly!
 export const SAMPLE_DB_TABLES = {
   // old tables
-  STATIC_PRODUCTS_ID: 1,
-  STATIC_ORDERS_ID: 2,
-  STATIC_PEOPLE_ID: 5,
-  STATIC_REVIEWS_ID: 8,
+  STATIC_PRODUCTS_ID: 8,
+  STATIC_ORDERS_ID: 5,
+  STATIC_PEOPLE_ID: 3,
+  STATIC_REVIEWS_ID: 4,
   // new tables
-  STATIC_ACCOUNTS_ID: 7,
-  STATIC_ANALYTIC_EVENTS_ID: 3,
-  STATIC_FEEDBACK_ID: 4,
-  STATIC_INVOICES_ID: 6,
+  STATIC_ACCOUNTS_ID: 6,
+  STATIC_ANALYTIC_EVENTS_ID: 1,
+  STATIC_FEEDBACK_ID: 2,
+  STATIC_INVOICES_ID: 7,
 };
 
 // All users and admin groups are the defaults that come with Metabase.

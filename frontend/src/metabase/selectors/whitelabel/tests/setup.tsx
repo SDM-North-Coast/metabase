@@ -3,13 +3,14 @@
 import { setupEnterprisePlugins } from "__support__/enterprise";
 import { mockSettings } from "__support__/settings";
 import { renderWithProviders } from "__support__/ui";
+import type { LoadingMessage, TokenFeatures } from "metabase-types/api";
 import { createMockTokenFeatures } from "metabase-types/api/mocks";
 import { createMockState } from "metabase-types/store/mocks";
-import type { LoadingMessage, TokenFeatures } from "metabase-types/api";
 
 export interface SetupOpts {
   loadingMessage?: LoadingMessage;
   applicationName?: string;
+  showMetabaseLinks?: boolean;
   tokenFeatures?: Partial<TokenFeatures>;
   hasEnterprisePlugins?: boolean;
 }
@@ -17,6 +18,7 @@ export interface SetupOpts {
 export function setup({
   loadingMessage = "doing-science",
   applicationName = "Metabase",
+  showMetabaseLinks = true,
   tokenFeatures = {},
   hasEnterprisePlugins = false,
 }: SetupOpts = {}) {
@@ -25,6 +27,7 @@ export function setup({
       "loading-message": loadingMessage,
       "application-name": applicationName,
       "token-features": createMockTokenFeatures(tokenFeatures),
+      "show-metabase-links": showMetabaseLinks,
     }),
   });
 

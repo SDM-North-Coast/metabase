@@ -48,9 +48,8 @@
   "The first day of the week varies by locale, but Metabase has a setting that overrides it.
   In CLJS, Moment is already configured with that setting."
   []
-  (-> (moment/weekdays 0)
-      (.toLowerCase)
-      keyword))
+  (nth [:sunday :monday :tuesday :wednesday :thursday :friday :saturday]
+       (.firstDayOfWeek (moment/localeData))))
 
 (def default-options
   "The default map of options - empty in CLJS."
@@ -58,19 +57,20 @@
 
 ;;; ------------------------------------------------ to-range --------------------------------------------------------
 (defn- apply-offset
-    [^moment/Moment value offset-n offset-unit]
-      (.add
-            (moment value)
-                offset-n
-                    (name offset-unit)))
+  [^moment/Moment value offset-n offset-unit]
+  (.add
+   (moment value)
+   offset-n
+   (name offset-unit)))
 
 (defmethod common/to-range :default [^moment/Moment value {:keys [n unit]}]
-  (let [^moment/Moment c1 (.clone value)
-        ^moment/Moment c2 (.clone value)]
-    [(.startOf c1 (name unit))
-     (cond-> c2
-       (> n 1) (.add (dec n) (name unit))
-       :always ^moment/Moment (.endOf (name unit)))]))
+  (let [^moment/Moment c1       (.clone value)
+        ^moment/Moment c2       (.clone value)
+        ^moment/Moment adjusted (if (> n 1)
+                                  (.add c2 (dec n) (name unit))
+                                  c2)]
+    [(.startOf c1       (name unit))
+     (.endOf   adjusted (name unit))]))
 
 ;; NB: Only the :default for to-range is needed in CLJS, since Moment's startOf and endOf methods are doing the work.
 
@@ -160,48 +160,62 @@
 
 ;;; ------------------------------------------------ arithmetic ------------------------------------------------------
 
+(declare unit-diff)
+
 (defn day-diff
   "Returns the time elapsed between `before` and `after` in days."
-  [^moment/Moment before ^moment/Moment after]
-  (.diff after before "day"))
+  [before after]
+  (unit-diff :day before after))
 
 (defn- coerce-local-date-time [input]
   (-> input
       common/drop-trailing-time-zone
       (moment/utc moment/ISO_8601)))
 
+(defn ^:private format-extraction-unit
+  "Formats a date-time value given the temporal extraction unit.
+  If unit is not supported, returns nil."
+  [t unit]
+  (case unit
+    :day-of-week     (.format t "dddd")
+    :month-of-year   (.format t "MMM")
+    :minute-of-hour  (.format t "m")
+    :hour-of-day     (.format t "h A")
+    :day-of-month    (.format t "D")
+    :day-of-year     (.format t "DDD")
+    :week-of-year    (.format t "w")
+    :quarter-of-year (.format t "[Q]Q")
+    nil))
+
 (defn format-unit
-  "Formats a temporal-value (iso date/time string, int for hour/minute) given the temporal-bucketing unit.
+  "Formats a temporal-value (iso date/time string, int for extraction units) given the temporal-bucketing unit.
    If unit is nil, formats the full date/time.
    Time input formatting is only defined with time units."
-  [input unit]
-  (if (string? input)
-    (let [time? (common/matches-time? input)
-          date? (common/matches-date? input)
-          date-time? (common/matches-date-time? input)
-          t (cond
-              ;; Anchor to an arbitrary date since time inputs are only defined for
-              ;; :hour-of-day and :minute-of-hour.
-              time? (moment/utc (str "2023-01-01T" input) moment/ISO_8601)
-              (or date? date-time?) (coerce-local-date-time input))]
-      (if (and t (.isValid t))
-        (case unit
-          :day-of-week (.format t "dddd")
-          :month-of-year (.format t "MMM")
-          :minute-of-hour (.format t "m")
-          :hour-of-day (.format t "h A")
-          :day-of-month (.format t "D")
-          :day-of-year (.format t "DDD")
-          :week-of-year (.format t "w")
-          :quarter-of-year (.format t "[Q]Q")
+  ;; This third argument is needed for the JVM side; it can be ignored here.
+  ([input unit _locale] (format-unit input unit))
+  ([input unit]
+   (if (string? input)
+     (let [time? (common/matches-time? input)
+           date? (common/matches-date? input)
+           date-time? (common/matches-date-time? input)
+           t (cond
+               ;; Anchor to an arbitrary date since time inputs are only defined for
+               ;; :hour-of-day and :minute-of-hour.
+               time? (moment/utc (str "2023-01-01T" input) moment/ISO_8601)
+               (or date? date-time?) (coerce-local-date-time input))]
+       (if (and t (.isValid t))
+         (or
+          (format-extraction-unit t unit)
           (cond
             time? (.format t "h:mm A")
             date? (.format t "MMM D, YYYY")
             date-time? (.format t "MMM D, YYYY, h:mm A")))
-        input))
-    (if (= unit :hour-of-day)
-      (str (cond (zero? input) "12" (<= input 12) input :else (- input 12)) " " (if (<= input 11) "AM" "PM"))
-      (str input))))
+         input))
+     (if (= unit :hour-of-day)
+       (str (cond (zero? input) "12" (<= input 12) input :else (- input 12)) " " (if (<= input 11) "AM" "PM"))
+       (or
+        (format-extraction-unit (common/number->timestamp input {:unit unit}) unit)
+        (str input))))))
 
 (defn format-diff
   "Formats a time difference between two temporal values.
@@ -282,3 +296,133 @@
                                             :offset-n offset-n
                                             :offset-unit offset-unit}))]
      (apply format-diff date-ranges))))
+
+(def ^:private temporal-formats
+  {:offset-date-time {:regex   common/offset-datetime-regex
+                      :formats #js ["yyyy-MM-DDTHH:mm:ss.SSS[Z]"
+                                    "yyyy-MM-DDTHH:mm:ss[Z]"
+                                    "yyyy-MM-DDTHH:mm[Z]"
+                                    "yyyy-MM-DDTHH[Z]"]}
+   :local-date-time  {:regex   common/local-datetime-regex
+                      :formats #js ["yyyy-MM-DDTHH:mm:ss.SSS"
+                                    "yyyy-MM-DDTHH:mm:ss"
+                                    "yyyy-MM-DDTHH:mm"
+                                    "yyyy-MM-DDTHH"]}
+   :local-date       {:regex   common/local-date-regex
+                      :formats #js ["yyyy-MM-DD"
+                                    "yyyy-MM"
+                                    "yyyy"]}
+   :offset-time      {:regex   common/offset-time-regex
+                      :formats #js ["HH:mm:ss.SSS[Z]"
+                                    "HH:mm:ss[Z]"
+                                    "HH:mm[Z]"
+                                    "HH[Z]"]}
+   :local-time       {:regex   common/local-time-regex
+                      :formats #js ["HH:mm:ss.SSS"
+                                    "HH:mm:ss"
+                                    "HH:mm"
+                                    "HH"]}})
+
+(defn- iso-8601->moment+type
+  [s]
+  (some (fn [[value-type {:keys [regex formats]}]]
+          (when (re-matches regex s)
+            (let [parsed (moment/parseZone s formats #_strict? true)]
+              (when (.isValid parsed)
+                [parsed value-type]))))
+        temporal-formats))
+
+(defmulti ^:private moment+type->iso-8601
+  {:arglists '([moment+type])}
+  (fn [[_t value-type]]
+    value-type))
+
+(defmethod moment+type->iso-8601 :offset-date-time
+  [[^moment/Moment t _value-type]]
+  (let [format-string (cond
+                        (pos? (.milliseconds t)) "yyyy-MM-DDTHH:mm:ss.SSS[Z]"
+                        (pos? (.seconds t))      "yyyy-MM-DDTHH:mm:ss[Z]"
+                        :else                    "yyyy-MM-DDTHH:mm[Z]")]
+    (.format t format-string)))
+
+(defmethod moment+type->iso-8601 :local-date-time
+  [[^moment/Moment t _value-type]]
+  (let [format-string (cond
+                        (pos? (.milliseconds t)) "yyyy-MM-DDTHH:mm:ss.SSS"
+                        (pos? (.seconds t))      "yyyy-MM-DDTHH:mm:ss"
+                        :else                    "yyyy-MM-DDTHH:mm")]
+    (.format t format-string)))
+
+(defmethod moment+type->iso-8601 :local-date
+  [[^moment/Moment t _value-type]]
+  (.format t "yyyy-MM-DD"))
+
+(defmethod moment+type->iso-8601 :offset-time
+  [[^moment/Moment t _value-type]]
+  (let [format-string (cond
+                        (pos? (.milliseconds t)) "HH:mm:ss.SSS[Z]"
+                        (pos? (.seconds t))      "HH:mm:ss[Z]"
+                        :else                    "HH:mm[Z]")]
+    (.format t format-string)))
+
+(defmethod moment+type->iso-8601 :local-time
+  [[^moment/Moment t _value-type]]
+  (let [format-string (cond
+                        (pos? (.milliseconds t)) "HH:mm:ss.SSS"
+                        (pos? (.seconds t))      "HH:mm:ss"
+                        :else                    "HH:mm")]
+    (.format t format-string)))
+
+(defn- ->moment ^moment/Moment [t]
+  (if (instance? js/Date t)
+    (moment/utc t)
+    t))
+
+(defn unit-diff
+  "Return the number of `unit`s between two temporal values `before` and `after`, e.g. maybe there are 32 `:day`s
+  between Jan 1st and Feb 2nd."
+  [unit before after]
+  (let [^moment/Moment before (if (string? before)
+                                (first (iso-8601->moment+type before))
+                                (->moment before))
+        ^moment/Moment after  (if (string? after)
+                                (first (iso-8601->moment+type after))
+                                (->moment after))]
+    (.diff after before (name unit))))
+
+(defn truncate
+  "ClojureScript implementation of [[metabase.shared.util.time/truncate]]; supports both Moment.js instances and ISO-8601
+  strings."
+  [t unit]
+  (if (string? t)
+    (let [[t value-type] (iso-8601->moment+type t)
+          t              (truncate t unit)]
+      (moment+type->iso-8601 [t value-type]))
+    (let [^moment/Moment t (->moment t)]
+      (.startOf t (name unit)))))
+
+(defn add
+  "ClojureScript implementation of [[metabase.shared.util.time/add]]; supports both Moment.js instances and ISO-8601 strings."
+  [t unit amount]
+  (if (string? t)
+    (let [[t value-type] (iso-8601->moment+type t)
+          t              (add t unit amount)]
+      (moment+type->iso-8601 [t value-type]))
+    (let [^moment/Moment t (->moment t)]
+      (.add t amount (name unit)))))
+
+(defn format-for-base-type
+  "ClojureScript implementation of [[metabase.shared.util.time/format-for-base-type]]; format a temporal value as an
+  ISO-8601 string appropriate for a value of the given `base-type`, e.g. a `:type/Time` gets formatted as a
+  `HH:mm:ss.SSS` string."
+  [t base-type]
+  (if (string? t)
+    t
+    (let [t          (->moment t)
+          value-type (condp #(isa? %2 %1) base-type
+                       :type/TimeWithTZ     :offset-time
+                       :type/Time           :local-time
+                       :type/DateTimeWithTZ :offset-date-time
+                       :type/DateTime       :local-date-time
+                       :type/Date           :local-date)]
+      (moment+type->iso-8601 [t value-type]))))

@@ -7,10 +7,8 @@ display: table
 archived: false
 collection_id: vG58R8k-QddHWA7_47umn
 collection_preview: true
-collection_position: 11
+collection_position: 12
 query_type: query
-dataset: true
-cache_ttl: null
 database_id: Internal Metabase Database
 table_id:
 - Internal Metabase Database
@@ -51,6 +49,50 @@ result_metadata:
   - user_id
   name: user_id
   semantic_type: type/PK
+  settings: null
+  visibility_type: normal
+- base_type: type/Text
+  coercion_strategy: null
+  description: null
+  display_name: Entity Qualified ID
+  effective_type: type/Text
+  field_ref:
+  - field
+  - - Internal Metabase Database
+    - public
+    - v_users
+    - entity_qualified_id
+  - null
+  fk_target_field_id: null
+  id:
+  - Internal Metabase Database
+  - public
+  - v_users
+  - entity_qualified_id
+  name: entity_qualified_id
+  semantic_type: null
+  settings: null
+  visibility_type: normal
+- base_type: type/Text
+  coercion_strategy: null
+  description: ''
+  display_name: Type
+  effective_type: type/Text
+  field_ref:
+  - field
+  - - Internal Metabase Database
+    - public
+    - v_users
+    - type
+  - null
+  fk_target_field_id: null
+  id:
+  - Internal Metabase Database
+  - public
+  - v_users
+  - type
+  name: type
+  semantic_type: type/Category
   settings: null
   visibility_type: normal
 - base_type: type/Text
@@ -306,4 +348,7 @@ serdes/meta:
 - id: 0wVIfjBJWclD0lKeABYYl
   label: people
   model: Card
+archived_directly: false
 metabase_version: null
+source_card_id: null
+type: model

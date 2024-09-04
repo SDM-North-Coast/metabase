@@ -1,8 +1,6 @@
 import styled from "@emotion/styled";
-import { color } from "metabase/lib/colors";
-import { Icon } from "metabase/core/components/Icon";
+
 import Button from "metabase/core/components/Button";
-import ExternalLink from "metabase/core/components/ExternalLink";
 
 export const Container = styled.div`
   width: 472px;
@@ -19,32 +17,15 @@ export const ExpressionFieldWrapper = styled.div`
 export const FieldLabel = styled.label`
   display: flex;
   margin-bottom: 0.5rem;
-
   font-weight: 700;
   font-size: 0.83em;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-
-  color: ${color("text-light")};
-`;
-
-export const InfoLink = styled(ExternalLink)`
-  margin-left: 4px;
-
-  &:hover,
-  :focus {
-    color: ${color("brand")};
-  }
-`;
-
-export const StyledFieldTitleIcon = styled(Icon)`
-  width: 12px;
-  height: 12px;
+  color: var(--mb-color-text-light);
 `;
 
 export const Footer = styled.div`
   padding: 0.5rem 1.5rem 1.5rem;
-
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -57,7 +38,6 @@ export const RemoveLink = styled(Button)`
 
 export const ActionButtonsWrapper = styled.div`
   margin-left: auto;
-
   display: flex;
   gap: 1rem;
 `;

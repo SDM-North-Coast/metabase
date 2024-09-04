@@ -1,7 +1,9 @@
 import { css } from "@emotion/react";
 import styled from "@emotion/styled";
-import { Icon } from "metabase/core/components/Icon";
+
 import { color, lighten } from "metabase/lib/colors";
+import { Icon } from "metabase/ui";
+
 import type { AlertVariant } from "./Alert";
 
 export interface AlertRootProps {
@@ -11,12 +13,12 @@ export interface AlertRootProps {
 
 const colorsByVariant = {
   border: {
-    info: color("bg-medium"),
+    info: "var(--mb-color-bg-medium)",
     error: color("error"),
     warning: color("warning"),
   },
   background: {
-    info: color("bg-light"),
+    info: "var(--mb-color-bg-light)",
     error: lighten("error", 0.4),
     warning: lighten("warning", 0.5),
   },
@@ -32,7 +34,7 @@ export const AlertRoot = styled.div<AlertRootProps>`
   align-items: center;
   padding: 1.25rem 1rem;
   line-height: 1.4rem;
-  color: ${color("text-dark")};
+  color: var(--mb-color-text-dark);
   ${props =>
     props.hasBorder
       ? css`
@@ -54,7 +56,7 @@ export const AlertIcon = styled(Icon)<AlertIconProps>`
 `;
 
 export const AlertLink = styled.a`
-  color: ${color("brand")};
+  color: var(--mb-color-brand);
   cursor: pointer;
   font-weight: bold;
 `;

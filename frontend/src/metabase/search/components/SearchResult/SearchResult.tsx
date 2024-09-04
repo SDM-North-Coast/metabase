@@ -4,25 +4,27 @@ import { useCallback } from "react";
 import { push } from "react-router-redux";
 
 import { useDispatch } from "metabase/lib/redux";
-import { Group, Text, Loader } from "metabase/ui";
 import { isSyncCompleted } from "metabase/lib/syncing";
-
+import { PLUGIN_MODERATION } from "metabase/plugins";
+import { trackSearchClick } from "metabase/search/analytics";
 import type { WrappedResult } from "metabase/search/types";
-import { Icon } from "metabase/core/components/Icon";
+import { Group, Icon, Loader } from "metabase/ui";
+import type { SearchContext } from "metabase-types/api";
+
 import { InfoText } from "../InfoText";
-import { ItemIcon } from "./components";
 
 import {
   DescriptionDivider,
   DescriptionSection,
   LoadingSection,
-  ModerationIcon,
   ResultNameSection,
   ResultTitle,
   SearchResultContainer,
+  SearchResultDescription,
   XRayButton,
   XRaySection,
 } from "./SearchResult.styled";
+import { ItemIcon } from "./components";
 
 export function SearchResult({
   result,
@@ -30,12 +32,18 @@ export function SearchResult({
   showDescription = true,
   isSelected = false,
   onClick,
+  className,
+  index,
+  context = "search-app",
 }: {
   result: WrappedResult;
   compact?: boolean;
   showDescription?: boolean;
   onClick?: (result: WrappedResult) => void;
   isSelected?: boolean;
+  className?: string;
+  index: number;
+  context?: SearchContext;
 }) {
   const { name, model, description, moderated_status }: WrappedResult = result;
 
@@ -76,12 +84,13 @@ export function SearchResult({
       onClick(result);
       return;
     }
-
+    trackSearchClick("item", index, context);
     onChangeLocation(result.getUrl());
   };
 
   return (
     <SearchResultContainer
+      className={className}
       data-testid="search-result-item"
       component="button"
       onClick={handleClick}
@@ -108,9 +117,32 @@ export function SearchResult({
           >
             {name}
           </ResultTitle>
-          <ModerationIcon status={moderated_status} filled size={14} />
+          <PLUGIN_MODERATION.ModerationStatusIcon
+            status={moderated_status}
+            filled
+            size={14}
+          />
         </Group>
         <InfoText showLinks={!onClick} result={result} isCompact={compact} />
+        {description && showDescription && (
+          <DescriptionSection>
+            <Group noWrap spacing="sm" data-testid="result-description">
+              <DescriptionDivider
+                size="md"
+                color="focus"
+                orientation="vertical"
+              />
+              <SearchResultDescription
+                dark
+                unwrapDisallowed
+                unstyleLinks
+                allowedElements={[]}
+              >
+                {description}
+              </SearchResultDescription>
+            </Group>
+          </DescriptionSection>
+        )}
       </ResultNameSection>
       {isLoading && (
         <LoadingSection px="xs">
@@ -121,26 +153,6 @@ export function SearchResult({
         <XRaySection>
           <XRayButton leftIcon={<Icon name="bolt" />} onClick={onXRayClick} />
         </XRaySection>
-      )}
-      {description && showDescription && (
-        <DescriptionSection>
-          <Group noWrap spacing="sm">
-            <DescriptionDivider
-              size="md"
-              color="focus.0"
-              orientation="vertical"
-            />
-            <Text
-              data-testid="result-description"
-              color="text.1"
-              align="left"
-              size="sm"
-              lineClamp={2}
-            >
-              {description}
-            </Text>
-          </Group>
-        </DescriptionSection>
       )}
     </SearchResultContainer>
   );

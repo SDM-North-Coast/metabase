@@ -1,6 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { color } from "metabase/lib/colors";
+
+import { renderWithProviders } from "__support__/ui";
+import type { ParameterValueOrArray } from "metabase-types/api";
+import { createMockDashboardState } from "metabase-types/store/mocks";
 
 import { Text } from "../Text";
 
@@ -20,8 +23,19 @@ const defaultProps = {
   isMobile: false,
 };
 
-const setup = (options = {}) => {
-  render(<Text {...defaultProps} {...options} />);
+interface SetupOpts {
+  settings?: Settings;
+  parameterValues?: Record<string, ParameterValueOrArray>;
+}
+
+const setup = ({ parameterValues, ...options }: SetupOpts = {}) => {
+  renderWithProviders(<Text {...defaultProps} {...options} />, {
+    storeInitialState: {
+      dashboard: createMockDashboardState({
+        parameterValues,
+      }),
+    },
+  });
 };
 
 describe("Text", () => {
@@ -97,8 +111,8 @@ describe("Text", () => {
           "You can use Markdown here, and include variables {{like_this}}",
         );
         expect(screen.getByTestId("editing-dashboard-text-container"))
-          .toHaveStyle(`border: 1px solid ${color("brand")};
-                        color: ${color("text-light")};`);
+          .toHaveStyle(`border: 1px solid var(--mb-color-brand);
+                        color: var(--mb-color-text-light);`);
       });
 
       it("should preview with text when it has content", () => {
@@ -115,27 +129,31 @@ describe("Text", () => {
     });
 
     describe("Edit/Focused", () => {
-      it("should display and focus textarea when clicked", () => {
+      it("should display and focus textarea when clicked", async () => {
         const options = {
           settings: getSettingsWithText(""),
           isEditing: true,
         };
         setup(options);
 
-        userEvent.click(screen.getByTestId("editing-dashboard-text-preview"));
+        await userEvent.click(
+          screen.getByTestId("editing-dashboard-text-preview"),
+        );
         expect(
           screen.getByTestId("editing-dashboard-text-input"),
         ).toHaveFocus();
       });
 
-      it("should have input placeholder when it has no content", () => {
+      it("should have input placeholder when it has no content", async () => {
         const options = {
           settings: getSettingsWithText(""),
           isEditing: true,
         };
         setup(options);
 
-        userEvent.click(screen.getByTestId("editing-dashboard-text-preview"));
+        await userEvent.click(
+          screen.getByTestId("editing-dashboard-text-preview"),
+        );
         expect(
           screen.getByPlaceholderText(
             "You can use Markdown here, and include variables {{like_this}}",
@@ -143,15 +161,38 @@ describe("Text", () => {
         ).toBeInTheDocument();
       });
 
-      it("should render input text when it has content", () => {
+      it("should render input text when it has content", async () => {
         const options = {
           settings: getSettingsWithText("text text text"),
           isEditing: true,
         };
         setup(options);
 
-        userEvent.click(screen.getByTestId("editing-dashboard-text-preview"));
+        await userEvent.click(
+          screen.getByTestId("editing-dashboard-text-preview"),
+        );
         expect(screen.getByDisplayValue("text text text")).toBeInTheDocument();
+      });
+
+      it("should call onUpdateVisualizationSettings on blur", async () => {
+        const mockOnUpdateVisualizationSettings = jest.fn();
+        const options = {
+          settings: getSettingsWithText("text"),
+          isEditing: true,
+          onUpdateVisualizationSettings: mockOnUpdateVisualizationSettings,
+        };
+        setup(options);
+
+        await userEvent.click(
+          screen.getByTestId("editing-dashboard-text-preview"),
+        );
+        await userEvent.type(screen.getByRole("textbox"), "foo");
+        await userEvent.tab();
+
+        expect(mockOnUpdateVisualizationSettings).toHaveBeenCalledTimes(1);
+        expect(mockOnUpdateVisualizationSettings).toHaveBeenCalledWith({
+          text: "textfoo",
+        });
       });
     });
   });

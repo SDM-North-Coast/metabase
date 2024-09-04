@@ -1,9 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { renderWithProviders, screen } from "__support__/ui";
+
 import TableBrowser from "./TableBrowser";
-
-const DatabaseLink = () => <div />;
-
-jest.mock("metabase/entities/databases", () => ({ Link: DatabaseLink }));
 
 describe("TableBrowser", () => {
   it("should render synced tables", () => {
@@ -11,7 +8,7 @@ describe("TableBrowser", () => {
       getTable({ id: 1, name: "Orders", initial_sync_status: "complete" }),
     ];
 
-    render(
+    renderWithProviders(
       <TableBrowser
         tables={tables}
         getTableUrl={getTableUrl}
@@ -21,7 +18,7 @@ describe("TableBrowser", () => {
 
     expect(screen.getByText("Orders")).toBeInTheDocument();
     expect(screen.getByLabelText("bolt_filled icon")).toBeInTheDocument();
-    expect(screen.queryByTestId("loading-spinner")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("loading-indicator")).not.toBeInTheDocument();
   });
 
   it.each(["incomplete", "complete"])(
@@ -33,7 +30,7 @@ describe("TableBrowser", () => {
         getTable({ id: 1, name: "Orders", initial_sync_status: "incomplete" }),
       ];
 
-      render(
+      renderWithProviders(
         <TableBrowser
           database={database}
           tables={tables}
@@ -46,7 +43,7 @@ describe("TableBrowser", () => {
       expect(
         screen.queryByLabelText("bolt_filled icon"),
       ).not.toBeInTheDocument();
-      expect(screen.getByTestId("loading-spinner")).toBeInTheDocument();
+      expect(screen.getByTestId("loading-indicator")).toBeInTheDocument();
     },
   );
 
@@ -59,7 +56,7 @@ describe("TableBrowser", () => {
       getTable({ id: 1, name: "Orders", initial_sync_status: "aborted" }),
     ];
 
-    render(
+    renderWithProviders(
       <TableBrowser
         database={database}
         tables={tables}
@@ -70,7 +67,7 @@ describe("TableBrowser", () => {
 
     expect(screen.getByText("Orders")).toBeInTheDocument();
     expect(screen.getByLabelText("bolt_filled icon")).toBeInTheDocument();
-    expect(screen.queryByTestId("loading-spinner")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("loading-indicator")).not.toBeInTheDocument();
   });
 });
 

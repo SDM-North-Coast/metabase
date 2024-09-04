@@ -1,5 +1,10 @@
 import type { ComponentStory } from "@storybook/react";
-import { DEFAULT } from "metabase/static-viz/components/FunnelChart/stories-data";
+
+import {
+  DEFAULT,
+  DUPLICATED_STEPS,
+} from "metabase/static-viz/components/FunnelChart/stories-data";
+
 import FunnelChart from "./FunnelChart";
 
 export default {
@@ -13,3 +18,6 @@ const Template: ComponentStory<typeof FunnelChart> = args => {
 
 export const Default = Template.bind({});
 Default.args = DEFAULT;
+
+export const WithDuplicatedSteps = Template.bind({});
+WithDuplicatedSteps.args = DUPLICATED_STEPS;

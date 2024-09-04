@@ -1,38 +1,41 @@
 /* eslint-disable react/prop-types */
-import { createRef, Component } from "react";
-import PropTypes from "prop-types";
-import { Link } from "react-router";
 import { bindActionCreators } from "@reduxjs/toolkit";
+import cx from "classnames";
+import PropTypes from "prop-types";
+import { Component, createRef } from "react";
 import { connect } from "react-redux";
+import { Link } from "react-router";
 import { t } from "ttag";
 import _ from "underscore";
-import cx from "classnames";
 
-import title from "metabase/hoc/Title";
-import * as MetabaseAnalytics from "metabase/lib/analytics";
-import MetabaseSettings from "metabase/lib/settings";
-import AdminLayout from "metabase/components/AdminLayout";
-import { NotFound } from "metabase/containers/ErrorPages";
-
-import { prepareAnalyticsValue } from "metabase/admin/settings/utils";
 import ErrorBoundary from "metabase/ErrorBoundary";
+import { UpsellSSO } from "metabase/admin/upsells";
+import { AdminLayout } from "metabase/components/AdminLayout";
+import { NotFound } from "metabase/components/ErrorPages";
+import SaveStatus from "metabase/components/SaveStatus";
+import AdminS from "metabase/css/admin.module.css";
+import CS from "metabase/css/core/index.css";
+import title from "metabase/hoc/Title";
+import MetabaseSettings from "metabase/lib/settings";
+import { Box } from "metabase/ui";
 
 import {
-  getSettings,
-  getSettingValues,
-  getDerivedSettingValues,
-  getSections,
   getActiveSection,
   getActiveSectionName,
+  getDerivedSettingValues,
   getNewVersionAvailable,
+  getSections,
+  getSettingValues,
+  getSettings,
 } from "../../../selectors";
 import {
   initializeSettings,
-  updateSetting,
   reloadSettings,
+  updateSetting,
 } from "../../../settings";
-import { SettingsSection } from "./SettingsSection";
+
 import { NewVersionIndicator } from "./SettingsEditor.styled";
+import { SettingsSection } from "./SettingsSection";
 
 const mapStateToProps = (state, props) => {
   return {
@@ -77,7 +80,14 @@ class SettingsEditor extends Component {
     this.props.initializeSettings();
   }
 
-  updateSetting = async (setting, newValue) => {
+  /**
+   * @param {Object} setting
+   * @param {*} newValue
+   * @param {Object} options - allows external callers in setting's that user custom components to hook into the success or failure of the update
+   * @param {function} [options.onChanged] - callback fired after the setting has been updated
+   * @param {function} [options.onError] - callback fired after the setting has failed to update
+   */
+  updateSetting = async (setting, newValue, options) => {
     const { settingValues, updateSetting, reloadSettings, dispatch } =
       this.props;
 
@@ -87,14 +97,17 @@ class SettingsEditor extends Component {
 
     // TODO: mutation bad!
     setting.value = newValue;
+
+    const handlerParams = [
+      oldValue,
+      newValue,
+      settingValues,
+      this.handleChangeSetting,
+    ];
+
     try {
       if (setting.onBeforeChanged) {
-        await setting.onBeforeChanged(
-          oldValue,
-          newValue,
-          settingValues,
-          this.handleChangeSetting,
-        );
+        await setting.onBeforeChanged(...handlerParams);
       }
 
       if (!setting.disableDefaultUpdate) {
@@ -102,12 +115,11 @@ class SettingsEditor extends Component {
       }
 
       if (setting.onChanged) {
-        await setting.onChanged(
-          oldValue,
-          newValue,
-          settingValues,
-          this.handleChangeSetting,
-        );
+        await setting.onChanged(...handlerParams);
+      }
+
+      if (options?.onChanged) {
+        await options.onChanged(...handlerParams);
       }
 
       if (setting.disableDefaultUpdate) {
@@ -120,26 +132,21 @@ class SettingsEditor extends Component {
         }
       }
 
-      this.saveStatusRef.current.setSaved();
-
-      const value = prepareAnalyticsValue(setting);
-
-      MetabaseAnalytics.trackStructEvent(
-        "General Settings",
-        setting.display_name || setting.key,
-        value,
-        // pass the actual value if it's a number
-        typeof value === "number" && value,
-      );
+      if (setting.key === "application-colors") {
+        this.saveStatusRef.current.setSaved(
+          t`Changes saved. Please refresh the page to see them`,
+        );
+      } else {
+        this.saveStatusRef.current.setSaved();
+      }
     } catch (error) {
+      console.error(error);
       const message =
         error && (error.message || (error.data && error.data.message));
       this.saveStatusRef.current.setSaveError(message);
-      MetabaseAnalytics.trackStructEvent(
-        "General Settings",
-        setting.display_name,
-        "error",
-      );
+      if (options?.onError) {
+        options.onError(error, message);
+      }
     }
   };
 
@@ -181,6 +188,7 @@ class SettingsEditor extends Component {
     }
     return (
       <SettingsSection
+        tabs={activeSection.tabs}
         settingElements={activeSection.settings}
         settingValues={settingValues}
         derivedSettingValues={derivedSettingValues}
@@ -209,12 +217,12 @@ class SettingsEditor extends Component {
         const [sectionNamePrefix] = activeSectionName.split("/");
 
         const classes = cx(
-          "AdminList-item",
-          "flex",
-          "align-center",
-          "justify-between",
-          "no-decoration",
-          { selected: slug === sectionNamePrefix },
+          AdminS.AdminListItem,
+          CS.flex,
+          CS.alignCenter,
+          CS.noDecoration,
+          CS.justifyBetween,
+          { [AdminS.selected]: slug === sectionNamePrefix },
         );
 
         // if this is the Updates section && there is a new version then lets add a little indicator
@@ -229,7 +237,11 @@ class SettingsEditor extends Component {
 
         return (
           <li key={slug}>
-            <Link to={"/admin/settings/" + slug} className={classes}>
+            <Link
+              data-testid="settings-sidebar-link"
+              to={"/admin/settings/" + slug}
+              className={classes}
+            >
               <span>{section.name}</span>
               {newVersionIndicator}
             </Link>
@@ -239,22 +251,37 @@ class SettingsEditor extends Component {
     );
 
     return (
-      <aside className="MetadataEditor-table-list AdminList flex-no-shrink">
-        <ul className="AdminList-items pt1">
+      <aside className={cx(AdminS.AdminList, CS.flexNoShrink)}>
+        <ul className={CS.pt1} data-testid="admin-list-settings-items">
           <ErrorBoundary>{renderedSections}</ErrorBoundary>
         </ul>
       </aside>
     );
   }
 
+  renderUpsell() {
+    const upsell =
+      this.props.activeSectionName === "authentication" ? (
+        <UpsellSSO source="authentication-sidebar" />
+      ) : null;
+
+    if (!upsell) {
+      return null;
+    }
+
+    return <Box style={{ flexShrink: 0 }}>{upsell}</Box>;
+  }
+
   render() {
     return (
       <AdminLayout
-        saveStatusRef={this.saveStatusRef}
-        title={t`Settings`}
         sidebar={this.renderSettingsSections()}
+        upsell={this.renderUpsell()}
       >
-        <ErrorBoundary>{this.renderSettingsPane()}</ErrorBoundary>
+        <Box w="100%">
+          <SaveStatus ref={this.saveStatusRef} />
+          <ErrorBoundary>{this.renderSettingsPane()}</ErrorBoundary>
+        </Box>
       </AdminLayout>
     );
   }

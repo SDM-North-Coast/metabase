@@ -1,13 +1,17 @@
 import { useCallback } from "react";
 import { t } from "ttag";
+
 import Tooltip from "metabase/core/components/Tooltip";
+import type { QueryModalType } from "metabase/query_builder/constants";
 import { MODAL_TYPES } from "metabase/query_builder/constants";
-import type Question from "metabase-lib/Question";
-import NativeQuery from "metabase-lib/queries/NativeQuery";
+import * as Lib from "metabase-lib";
+import type Question from "metabase-lib/v1/Question";
+import type NativeQuery from "metabase-lib/v1/queries/NativeQuery";
+
 import { PreviewButton, PreviewButtonIcon } from "./PreviewQueryButton.styled";
 
 interface PreviewQueryButtonProps {
-  onOpenModal?: (modalType: string) => void;
+  onOpenModal?: (modalType: QueryModalType) => void;
 }
 
 export const PreviewQueryButton = ({
@@ -31,11 +35,11 @@ interface PreviewQueryButtonOpts {
 }
 
 PreviewQueryButton.shouldRender = ({ question }: PreviewQueryButtonOpts) => {
-  const query = question.query();
+  const { isNative } = Lib.queryDisplayInfo(question.query());
 
   return (
+    isNative &&
     question.canRun() &&
-    query instanceof NativeQuery &&
-    query.hasVariableTemplateTags()
+    (question.legacyQuery() as NativeQuery).hasVariableTemplateTags()
   );
 };

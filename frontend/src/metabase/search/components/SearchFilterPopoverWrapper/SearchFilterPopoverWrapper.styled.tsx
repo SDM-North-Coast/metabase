@@ -1,5 +1,6 @@
-import styled from "@emotion/styled";
 import { css } from "@emotion/react";
+import styled from "@emotion/styled";
+
 import { Stack } from "metabase/ui";
 
 export const SearchPopoverContainer = styled(Stack)`
@@ -9,10 +10,10 @@ export const SearchPopoverContainer = styled(Stack)`
 export const DropdownApplyButtonDivider = styled.hr<{ width?: string }>`
   border-width: 1px 0 0 0;
   border-style: solid;
-  ${({ theme, width }) => {
+  ${({ width }) => {
     const dividerWidth = width ?? "100%";
     return css`
-      border-color: ${theme.colors.border[0]};
+      border-color: var(--mb-color-border);
       width: ${dividerWidth};
     `;
   }}

@@ -4,7 +4,7 @@ import type {
   FieldDimension,
   FieldFingerprint,
   FieldGlobalFingerprint,
-  FieldValuesResult,
+  GetFieldValuesResponse,
   NumberFieldFingerprint,
   TextFieldFingerprint,
 } from "metabase-types/api";
@@ -19,7 +19,7 @@ export const createMockField = (opts?: Partial<Field>): Field => ({
   table_id: 1,
 
   base_type: "type/Text",
-  semantic_type: "type/Text",
+  semantic_type: null,
   fk_target_field_id: null,
 
   active: true,
@@ -31,7 +31,7 @@ export const createMockField = (opts?: Partial<Field>): Field => ({
   coercion_strategy: null,
   fingerprint: null,
 
-  has_field_values: "list",
+  has_field_values: "none",
   has_more_values: false,
 
   last_analyzed: new Date().toISOString(),
@@ -41,8 +41,8 @@ export const createMockField = (opts?: Partial<Field>): Field => ({
 });
 
 export const createMockFieldValues = (
-  opts?: Partial<FieldValuesResult>,
-): FieldValuesResult => ({
+  opts?: Partial<GetFieldValuesResponse>,
+): GetFieldValuesResponse => ({
   field_id: 1,
   values: [],
   has_more_values: false,

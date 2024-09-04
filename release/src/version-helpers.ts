@@ -1,4 +1,6 @@
-import { compare as compareVersions, coerce } from "semver";
+import { coerce, compare as compareVersions } from "semver";
+
+import type { GithubProps, Tag } from "./types";
 
 // https://regexr.com/7l1ip
 export const isValidVersionString = (versionString: string) => {
@@ -34,6 +36,11 @@ export const getCanonicalVersion = (
   return edition === "ee"
     ? getEnterpriseVersion(versionString)
     : getOSSVersion(versionString);
+};
+
+export const getGenericVersion = (versionString: string) => {
+  // turn v0.88.0 into 88.0
+  return getOSSVersion(versionString).replace(/v0\./, "");
 };
 
 export const getVersionType = (versionString: string) => {
@@ -80,6 +87,16 @@ export const getReleaseBranch = (versionString: string) => {
   return `release-x.${majorVersion}.x`;
 };
 
+export const getVersionFromReleaseBranch = (branch: string) => {
+  const match = /release-x\.(\d+)\.x$/.exec(branch);
+
+  if (!match) {
+    throw new Error(`Invalid release branch: ${branch}`);
+  }
+  const majorVersion = match[1];
+  return `v0.${majorVersion}.0`;
+}
+
 export const isLatestVersion = (thisVersion: string, allVersions: string[]) => {
   if (isRCVersion(thisVersion)) {
     return false;
@@ -114,6 +131,9 @@ export const versionRequirements: Record<
   45: { java: 11, node: 14 },
   46: { java: 11, node: 16 },
   47: { java: 11, node: 18 },
+  48: { java: 11, node: 18 },
+  49: { java: 11, node: 18 },
+  50: { java: 11, node: 18 },
 };
 
 export const getBuildRequirements = (version: string) => {
@@ -152,7 +172,6 @@ export const getNextVersions = (versionString: string): string[] => {
   // minor releases -> next minor release
   const [major, minor] = versionString
     .replace(/(v1|v0)\./, "")
-    .replace(/.0$/, "")
     .split(".")
     .map(Number);
 
@@ -170,3 +189,105 @@ export const getNextVersions = (versionString: string): string[] => {
 
   return [];
 };
+
+// our milestones don't have the v prefix or a .0 suffix
+export const getMilestoneName = (version: string) => {
+  return getOSSVersion(version)
+    .replace(/^v/, "")
+    .replace(/-rc\d+$/i, "") // RC versions use the major version milestone
+    .replace(/\.0$/, "");
+};
+
+// for auto-setting milestones, we don't ever want to auto-set a patch milestone
+// which we release VERY rarely
+export function ignorePatches(version: string) {
+  return version.split('.').length < 4;
+}
+
+export function isPatchVersion(version: string) {
+  // v0.50.20.1
+  return version.split('.').length === 4;
+}
+
+const normalizeVersionForSorting = (version: string) =>
+  version.replace(/^(v?)(0|1)\./, '');
+
+export function versionSort(a: string, b: string) {
+  const [aMajor, aMinor, aPatch] = normalizeVersionForSorting(a).split('.').map(Number);
+  const [bMajor, bMinor, bPatch] = normalizeVersionForSorting(b).split('.').map(Number);
+
+
+  if (aMajor !== bMajor) {
+    return aMajor - bMajor;
+  }
+
+  if (aMinor !== bMinor) {
+    return aMinor - bMinor;
+  }
+
+  if (aPatch !== bPatch) {
+    return (aPatch ?? 0) - (bPatch ?? 0);
+  }
+
+  return 0;
+}
+
+export function getLastReleaseFromTags({tags, ignorePatches = false}: { tags: Tag[], ignorePatches?: boolean }) {
+  return tags
+    .map(tag => tag.ref.replace('refs/tags/', ''))
+    .filter(tag => !isRCVersion(tag)) // we want to ignore RC tags because release notes should be cumulative
+    .filter(ignorePatches ? v => !isPatchVersion(v) :  () => true)
+    .sort(versionSort)
+    .reverse()[0];
+}
+
+/**
+ * queries the github api to get all release version tags,
+ * optionally filtered by a major version, and can optionally exclude patch versions
+ */
+export async function getLastReleaseTag({
+  github,
+  owner,
+  repo,
+  version = '',
+  ignorePatches = false,
+}: GithubProps & { version?: string, ignorePatches?: boolean }) {
+  const tags =  await github.paginate(github.rest.git.listMatchingRefs, {
+    owner,
+    repo,
+    ref: `tags/v0.${version ? getMajorVersion(version) : ''}`,
+  });
+
+  const lastRelease = getLastReleaseFromTags({ tags, ignorePatches });
+
+  return lastRelease;
+}
+
+export const findNextPatchVersion = (version: string) => {
+  if (!isValidVersionString(version) || isRCVersion(version)) {
+    throw new Error(`Invalid version string: ${version}`);
+  }
+
+  const [major, minor, patch] = version
+    .replace(/(v1|v0)\./, "")
+    .split(".")
+    .map(Number);
+
+  return `v0.${major}.${minor ?? 0}.${(patch ?? 0) + 1}`;
+}
+
+export const getNextPatchVersion = async ({
+  github,
+  owner,
+  repo,
+  majorVersion,
+}: GithubProps & { majorVersion: number }) => {
+  const lastRelease = await getLastReleaseTag({
+    github, owner, repo,
+    version: `v0.${majorVersion.toString()}.0`,
+  });
+
+  const nextPatch = findNextPatchVersion(lastRelease);
+
+  return nextPatch;
+}

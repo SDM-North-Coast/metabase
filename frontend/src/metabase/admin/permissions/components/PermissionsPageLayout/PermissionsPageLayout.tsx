@@ -1,36 +1,48 @@
+import cx from "classnames";
 import type { ReactNode } from "react";
 import { useCallback } from "react";
-import { t } from "ttag";
-import { push } from "react-router-redux";
 import type { Route } from "react-router";
+import { push } from "react-router-redux";
+import { t } from "ttag";
 
-import Button from "metabase/core/components/Button";
-import fitViewport from "metabase/hoc/FitViewPort";
+import {
+  CloseSidebarButton,
+  FullHeightContainer,
+  PermissionPageContent,
+  PermissionPageRoot,
+  PermissionPageSidebar,
+  TabsContainer,
+  ToolbarButtonsContainer,
+} from "metabase/admin/permissions/components/PermissionsPageLayout/PermissionsPageLayout.styled";
+import { getIsHelpReferenceOpen } from "metabase/admin/permissions/selectors/help-reference";
 import { LeaveConfirmationModal } from "metabase/components/LeaveConfirmationModal";
 import Modal from "metabase/components/Modal";
 import ModalContent from "metabase/components/ModalContent";
-
-import type { PermissionsGraph } from "metabase-types/api";
+import Button from "metabase/core/components/Button";
+import CS from "metabase/css/core/index.css";
+import fitViewport from "metabase/hoc/FitViewPort";
+import { useToggle } from "metabase/hooks/use-toggle";
 import { useDispatch, useSelector } from "metabase/lib/redux";
+import { updateUserSetting } from "metabase/redux/settings";
+import type { IconName } from "metabase/ui";
 import {
-  FullHeightContainer,
-  TabsContainer,
-  PermissionPageRoot,
-  PermissionPageContent,
-  PermissionPageSidebar,
-  CloseSidebarButton,
-  ToolbarButtonsContainer,
-} from "metabase/admin/permissions/components/PermissionsPageLayout/PermissionsPageLayout.styled";
-import type { IconName } from "metabase/core/components/Icon";
-import { getIsHelpReferenceOpen } from "metabase/admin/permissions/selectors/help-reference";
+  Group,
+  Button as NewButton,
+  Modal as NewModal,
+  Text,
+} from "metabase/ui";
+import type { PermissionsGraph } from "metabase-types/api";
+
 import {
   clearSaveError as clearPermissionsSaveError,
   toggleHelpReference,
 } from "../../permissions";
+import { showRevisionChangedModal } from "../../selectors/data-permissions/revision";
+import { LegacyPermissionsModal } from "../LegacyPermissionsModal/LegacyPermissionsModal";
 import { ToolbarButton } from "../ToolbarButton";
-import { PermissionsTabs } from "./PermissionsTabs";
 
 import { PermissionsEditBar } from "./PermissionsEditBar";
+import { PermissionsTabs } from "./PermissionsTabs";
 
 type PermissionsPageTab = "data" | "collections";
 type PermissionsPageLayoutProps = {
@@ -48,6 +60,7 @@ type PermissionsPageLayoutProps = {
   navigateToTab: (tab: string) => void;
   helpContent?: ReactNode;
   toolbarRightContent?: ReactNode;
+  showSplitPermsModal?: boolean;
 };
 
 const CloseSidebarButtonWithDefault = ({
@@ -68,8 +81,13 @@ function PermissionsPageLayout({
   route,
   toolbarRightContent,
   helpContent,
+  showSplitPermsModal: _showSplitPermsModal = false,
 }: PermissionsPageLayoutProps) {
+  const [showSplitPermsModal, { turnOff: disableSplitPermsModal }] =
+    useToggle(_showSplitPermsModal);
+
   const saveError = useSelector(state => state.admin.permissions.saveError);
+  const showRefreshModal = useSelector(showRevisionChangedModal);
 
   const isHelpReferenceOpen = useSelector(getIsHelpReferenceOpen);
   const dispatch = useDispatch();
@@ -81,6 +99,13 @@ function PermissionsPageLayout({
   const handleToggleHelpReference = useCallback(() => {
     dispatch(toggleHelpReference());
   }, [dispatch]);
+
+  const handleDimissSplitPermsModal = () => {
+    disableSplitPermsModal();
+    dispatch(
+      updateUserSetting({ key: "show-updated-permission-modal", value: false }),
+    );
+  };
 
   return (
     <PermissionPageRoot>
@@ -100,8 +125,8 @@ function PermissionsPageLayout({
             formModal
             onClose={clearSaveError}
           >
-            <p className="mb4">{saveError}</p>
-            <div className="ml-auto">
+            <p className={CS.mb4}>{saveError}</p>
+            <div className={cx(CS.mlAuto)}>
               <Button onClick={clearSaveError}>{t`OK`}</Button>
             </div>
           </ModalContent>
@@ -109,13 +134,13 @@ function PermissionsPageLayout({
 
         <LeaveConfirmationModal isEnabled={isDirty} route={route} />
 
-        <TabsContainer className="border-bottom">
+        <TabsContainer className={CS.borderBottom}>
           <PermissionsTabs tab={tab} onChangeTab={navigateToTab} />
           <ToolbarButtonsContainer>
             {toolbarRightContent}
             {helpContent && !isHelpReferenceOpen && (
               <ToolbarButton
-                text={t`Permission help`}
+                text={t`Permissions help`}
                 icon="info"
                 onClick={handleToggleHelpReference}
               />
@@ -132,6 +157,28 @@ function PermissionsPageLayout({
           {helpContent}
         </PermissionPageSidebar>
       )}
+      <NewModal
+        title="Someone just changed permissions"
+        opened={showRefreshModal}
+        size="lg"
+        padding="2.5rem"
+        withCloseButton={false}
+        onClose={() => true}
+      >
+        <Text mb="1rem">
+          To edit permissions, you need to start from the latest version. Please
+          refresh the page.
+        </Text>
+        <Group position="right">
+          <NewButton onClick={() => location.reload()} variant="filled">
+            Refresh the page
+          </NewButton>
+        </Group>
+      </NewModal>
+      <LegacyPermissionsModal
+        isOpen={showSplitPermsModal}
+        onClose={handleDimissSplitPermsModal}
+      />
     </PermissionPageRoot>
   );
 }

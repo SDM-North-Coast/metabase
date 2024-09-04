@@ -1,54 +1,116 @@
+import { SAMPLE_DATABASE } from "e2e/support/cypress_sample_database";
 import {
-  restore,
-  popover,
   clearFilterWidget,
-  filterWidget,
+  dashboardParametersDoneButton,
+  dashboardSaveButton,
   editDashboard,
+  ensureDashboardCardHasText,
+  filterWidget,
+  getDashboardCard,
+  popover,
+  resetFilterWidgetToDefault,
+  restore,
   saveDashboard,
+  selectDashboardFilter,
   setFilter,
+  toggleFilterWidgetValues,
+  toggleRequiredParameter,
   visitDashboard,
 } from "e2e/support/helpers";
-import {
-  ORDERS_DASHBOARD_ID,
-  ORDERS_DASHBOARD_DASHCARD_ID,
-} from "e2e/support/cypress_sample_instance_data";
 
-import { applyFilterByType } from "../native-filters/helpers/e2e-field-filter-helpers";
+import {
+  applyFilterByType,
+  selectDefaultValueFromPopover,
+} from "../native-filters/helpers/e2e-field-filter-helpers";
+
 import { DASHBOARD_TEXT_FILTERS } from "./shared/dashboard-filters-text-category";
+
+const { ORDERS_ID } = SAMPLE_DATABASE;
 
 describe("scenarios > dashboard > filters > text/category", () => {
   beforeEach(() => {
     restore();
     cy.signInAsAdmin();
 
-    visitDashboard(ORDERS_DASHBOARD_ID);
-
-    editDashboard();
+    cy.createQuestionAndDashboard({
+      questionDetails: {
+        query: { "source-table": ORDERS_ID, limit: 5 },
+      },
+      cardDetails: {
+        size_x: 24,
+        size_y: 8,
+      },
+    }).then(({ body: { id, dashboard_id } }) => {
+      cy.wrap(id).as("dashCardId");
+      visitDashboard(dashboard_id);
+      editDashboard();
+    });
   });
 
-  it(`should work when set through the filter widget`, () => {
-    Object.entries(DASHBOARD_TEXT_FILTERS).forEach(([filter]) => {
-      cy.log(`Make sure we can connect ${filter} filter`);
-      setFilter("Text or Category", filter);
+  it("should drill to a question with multi-value 'contains' filter applied (metabase#42999)", () => {
+    setFilter("Text or Category", "Contains");
+    cy.findAllByRole("radio", { name: "Multiple values" }).should("be.checked");
+    cy.findByTestId("visualization-root").findByText("Select…").click();
+    popover().contains("Source").click();
+    saveDashboard();
+    waitDashboardCardQuery();
+
+    filterWidget().eq(0).click();
+    applyFilterByType("Contains", "oo,aa");
+    waitDashboardCardQuery();
+
+    getDashboardCard().findByText("test question").click();
+
+    cy.location("href").should("contain", "/question#");
+    cy.findByTestId("filter-pill").should(
+      "contain.text",
+      "User → Source contains 2 selections",
+    );
+    cy.findByTestId("app-bar").should(
+      "contain.text",
+      "Started from test question",
+    );
+  });
+
+  it("should work when set through the filter widget", () => {
+    DASHBOARD_TEXT_FILTERS.forEach(({ operator, single }) => {
+      cy.log(`Make sure we can connect ${operator} filter`);
+      setFilter("Text or Category", operator);
+      cy.findAllByRole("radio", { name: "Multiple values" }).should(
+        "be.checked",
+      );
+
+      if (single) {
+        cy.findAllByRole("radio", { name: "A single value" })
+          .click()
+          .should("be.checked");
+      }
 
       cy.findByText("Select…").click();
       popover().contains("Source").click();
     });
-
     saveDashboard();
+    waitDashboardCardQuery();
 
-    Object.entries(DASHBOARD_TEXT_FILTERS).forEach(
-      ([filter, { value, representativeResult }], index) => {
+    DASHBOARD_TEXT_FILTERS.forEach(
+      (
+        { operator, value, representativeResult, single, negativeAssertion },
+        index,
+      ) => {
         filterWidget().eq(index).click();
-        applyFilterByType(filter, value);
+        applyFilterByType(operator, value);
+        waitDashboardCardQuery();
+        filterWidget()
+          .eq(index)
+          .contains(single ? value.replace(/"/g, "") : /\d selections/);
 
-        cy.log(`Make sure ${filter} filter returns correct result`);
-        cy.get(".Card").within(() => {
-          cy.contains(representativeResult);
-        });
+        cy.log(`Make sure ${operator} filter returns correct result`);
+        cy.findByTestId("dashcard")
+          .should("contain", representativeResult)
+          .and("not.contain", negativeAssertion);
 
         clearFilterWidget(index);
-        cy.wait(`@dashcardQuery${ORDERS_DASHBOARD_DASHCARD_ID}`);
+        waitDashboardCardQuery();
       },
     );
   });
@@ -64,9 +126,11 @@ describe("scenarios > dashboard > filters > text/category", () => {
     popover().contains("Source").click();
 
     saveDashboard();
-    filterWidget().click();
+    waitDashboardCardQuery();
 
+    filterWidget().click();
     applyFilterByType(filterType, filterValue);
+    waitDashboardCardQuery();
 
     filterWidget().click();
     cy.log("uncheck all values");
@@ -74,6 +138,7 @@ describe("scenarios > dashboard > filters > text/category", () => {
     popover().within(() => {
       cy.findByText(filterValue).click();
       cy.button("Update filter").click();
+      waitDashboardCardQuery();
     });
 
     filterWidget().within(() => {
@@ -81,7 +146,7 @@ describe("scenarios > dashboard > filters > text/category", () => {
     });
   });
 
-  it(`should work when set as the default filter which (if cleared) should not be preserved on reload (metabase#13960)`, () => {
+  it("should work when set as the default filter which (if cleared) should not be preserved on reload (metabase#13960)", () => {
     setFilter("Text or Category", "Is");
 
     // eslint-disable-next-line no-unscoped-text-selectors -- deprecated usage
@@ -100,32 +165,79 @@ describe("scenarios > dashboard > filters > text/category", () => {
     popover().contains("User ID").click();
 
     saveDashboard();
-    cy.wait(`@dashcardQuery${ORDERS_DASHBOARD_DASHCARD_ID}`);
+    waitDashboardCardQuery();
 
-    cy.location("search").should("eq", "?text=Organic&id=");
-    cy.get(".Card").within(() => {
-      cy.contains("39.58");
-    });
+    cy.location("search").should("eq", "?id=&text=Organic");
+    cy.findByTestId("dashcard").contains("39.58");
 
     // This part reproduces metabase#13960
     // Remove default filter (category)
     cy.get("fieldset .Icon-close").click();
-    cy.wait(`@dashcardQuery${ORDERS_DASHBOARD_DASHCARD_ID}`);
+    waitDashboardCardQuery();
 
-    cy.location("search").should("eq", "?text=&id=");
+    cy.location("search").should("eq", "?id=&text=");
 
     filterWidget().contains("ID").click();
     cy.findByPlaceholderText("Enter an ID").type("4{enter}").blur();
     cy.button("Add filter").click();
-    cy.wait(`@dashcardQuery${ORDERS_DASHBOARD_DASHCARD_ID}`);
+    waitDashboardCardQuery();
 
-    cy.location("search").should("eq", "?text=&id=4");
+    cy.location("search").should("eq", "?id=4&text=");
 
     cy.reload();
-    cy.wait(`@dashcardQuery${ORDERS_DASHBOARD_DASHCARD_ID}`);
+    waitDashboardCardQuery();
 
-    cy.location("search").should("eq", "?text=&id=4");
+    cy.location("search").should("eq", "?id=4&text=");
     filterWidget().contains("Text");
     filterWidget().contains("Arnold Adams");
   });
+
+  it("should support being required", () => {
+    setFilter("Text or Category", "Is");
+    selectDashboardFilter(cy.findByTestId("dashcard"), "Source");
+
+    // Can't save without a default value
+    toggleRequiredParameter();
+    dashboardSaveButton().should("be.disabled");
+    dashboardSaveButton().realHover();
+    cy.findByRole("tooltip").should(
+      "contain.text",
+      'The "Text" parameter requires a default value but none was provided.',
+    );
+
+    // Can't close sidebar without a default value
+    dashboardParametersDoneButton().should("be.disabled");
+    dashboardParametersDoneButton().realHover();
+    cy.findByRole("tooltip").should(
+      "contain.text",
+      "The parameter requires a default value but none was provided.",
+    );
+
+    // Updates the filter value
+    selectDefaultValueFromPopover("Twitter", { buttonLabel: "Update filter" });
+    saveDashboard();
+    waitDashboardCardQuery();
+    ensureDashboardCardHasText("37.65");
+
+    // Resets the value back by clicking widget icon
+    toggleFilterWidgetValues(["Google", "Organic"], {
+      buttonLabel: "Update filter",
+    });
+    waitDashboardCardQuery();
+    resetFilterWidgetToDefault();
+    waitDashboardCardQuery();
+    filterWidget().findByText("Twitter");
+
+    // Removing value resets back to default
+    toggleFilterWidgetValues(["Twitter"], {
+      buttonLabel: "Set to default",
+    });
+    filterWidget().findByText("Twitter");
+  });
 });
+
+function waitDashboardCardQuery() {
+  cy.get("@dashCardId").then(id => {
+    cy.wait(`@dashcardQuery${id}`);
+  });
+}

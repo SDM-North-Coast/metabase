@@ -1,9 +1,10 @@
 /* eslint-disable react/prop-types */
 import { Component } from "react";
-
 import _ from "underscore";
+
 import AccordionList from "metabase/core/components/AccordionList";
-import { Icon } from "metabase/core/components/Icon";
+import CS from "metabase/css/core/index.css";
+import { Icon } from "metabase/ui";
 
 export default class ParameterTargetList extends Component {
   props;
@@ -22,7 +23,7 @@ export default class ParameterTargetList extends Component {
 
     return (
       <AccordionList
-        className="text-brand"
+        className={CS.textBrand}
         maxHeight={this.props.maxHeight || 600}
         sections={sections}
         onChange={item => this.props.onChange(item.target)}

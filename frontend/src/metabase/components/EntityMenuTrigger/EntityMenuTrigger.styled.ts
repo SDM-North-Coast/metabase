@@ -1,6 +1,5 @@
 import styled from "@emotion/styled";
 
-import { color } from "metabase/lib/colors";
 import Button from "metabase/core/components/Button";
 
 export interface EntityMenuIconButtonProps {
@@ -22,7 +21,9 @@ export const EntityMenuIconButton = styled(Button)<EntityMenuIconButtonProps>`
   &:hover {
     ${({ hover }) => (hover?.color ? `color: ${hover.color}` : null)};
     background-color: ${({ hover }) =>
-      hover?.backgroundColor ? hover.backgroundColor : color("bg-medium")};
+      hover?.backgroundColor
+        ? hover.backgroundColor
+        : "var(--mb-color-bg-medium)"};
   }
 `;
 

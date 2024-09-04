@@ -1,16 +1,18 @@
-import type { ReactNode } from "react";
+import cx from "classnames";
 import { useState } from "react";
 import { useMount } from "react-use";
 import { t } from "ttag";
 import _ from "underscore";
 
+import { useSetting } from "metabase/common/hooks";
 import AdminHeader from "metabase/components/AdminHeader";
 import Code from "metabase/components/Code";
-import CopyButton from "metabase/components/CopyButton";
-
-import { UtilApi } from "metabase/services";
+import { CopyButton } from "metabase/components/CopyButton";
+import CS from "metabase/css/core/index.css";
 import { useSelector } from "metabase/lib/redux";
-import { getIsPaidPlan, getSetting } from "metabase/selectors/settings";
+import { getIsPaidPlan } from "metabase/selectors/settings";
+import { UtilApi } from "metabase/services";
+
 import {
   HelpBody,
   HelpExternalLink,
@@ -67,22 +69,24 @@ interface HelpLinkProps {
 }
 
 const HelpLink = ({ title, description, link }: HelpLinkProps) => (
-  <li className="mb2">
+  <li className={CS.mb2}>
     <HelpExternalLink href={link} target="_blank">
       <div>
-        <h3 className="text-brand">{title}</h3>
-        <p className="m0 mt1">{description}</p>
+        <h3 className={CS.textBrand}>{title}</h3>
+        <p className={cx(CS.m0, CS.mt1)}>{description}</p>
       </div>
     </HelpExternalLink>
   </li>
 );
 
 interface InfoBlockProps {
-  children?: ReactNode;
+  children: string;
 }
 
 const InfoBlock = ({ children }: InfoBlockProps) => (
-  <InfoBlockRoot className="bordered rounded bg-light relative">
+  <InfoBlockRoot
+    className={cx(CS.bordered, CS.rounded, CS.bgLight, CS.relative)}
+  >
     <InfoBlockButton>
       <CopyButton value={children} />
     </InfoBlockButton>
@@ -92,8 +96,8 @@ const InfoBlock = ({ children }: InfoBlockProps) => (
 
 export const Help = () => {
   const [details, setDetails] = useState({ "browser-info": navigatorInfo() });
-  const { tag } = useSelector(state => getSetting(state, "version"));
-  const isPainPlan = useSelector(getIsPaidPlan);
+  const { tag } = useSetting("version");
+  const isPaidPlan = useSelector(getIsPaidPlan);
 
   useMount(async () => {
     const newDetails = await UtilApi.bug_report_details();
@@ -105,14 +109,14 @@ export const Help = () => {
 
   return (
     <HelpRoot>
-      <AdminHeader title={t`Help`} className="mb2" />
+      <AdminHeader title={t`Help`} className={CS.mb2} />
       <HelpLinks>
         <ol>
           <HelpLink
             title={t`Get Help`}
             description={t`Resources and support`}
             link={
-              isPainPlan
+              isPaidPlan
                 ? `https://www.metabase.com/help-premium?utm_source=in-product&utm_medium=troubleshooting&utm_campaign=help&instance_version=${tag}&diag=${compactDetailStringForUrl}`
                 : `https://www.metabase.com/help?utm_source=in-product&utm_medium=troubleshooting&utm_campaign=help&instance_version=${tag}`
             }
@@ -126,10 +130,12 @@ export const Help = () => {
       </HelpLinks>
 
       <HelpBody>
-        <AdminHeader title={t`Diagnostic Info`} className="mb2" />
+        <AdminHeader title={t`Diagnostic Info`} className={CS.mb2} />
         <p>{t`Please include these details in support requests. Thank you!`}</p>
         <InfoBlock>{detailString}</InfoBlock>
-        <div className="text-medium text-bold text-uppercase py2">{t`Advanced Details (click to download)`}</div>
+        <div
+          className={cx(CS.textMedium, CS.textBold, CS.textUppercase, CS.py2)}
+        >{t`Advanced Details (click to download)`}</div>
         <ol>
           <HelpLink
             title={t`Connection Pool Details`}

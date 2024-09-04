@@ -1,8 +1,8 @@
+import type { FloatingPosition } from "@mantine/core/lib/Floating";
 import type { CSSProperties, ReactNode } from "react";
-import type { Placement } from "tippy.js";
 
-import Tooltip from "metabase/core/components/Tooltip";
 import { useIsTruncated } from "metabase/hooks/use-is-truncated";
+import { Tooltip } from "metabase/ui";
 
 import { EllipsifiedRoot } from "./Ellipsified.styled";
 
@@ -13,10 +13,12 @@ interface EllipsifiedProps {
   alwaysShowTooltip?: boolean;
   tooltip?: ReactNode;
   children?: ReactNode;
-  tooltipMaxWidth?: CSSProperties["maxWidth"];
+  tooltipMaxWidth?: number | "auto";
   lines?: number;
-  placement?: Placement;
+  multiline?: boolean;
+  placement?: FloatingPosition;
   "data-testid"?: string;
+  id?: string;
 }
 
 export const Ellipsified = ({
@@ -27,21 +29,27 @@ export const Ellipsified = ({
   tooltip,
   children,
   tooltipMaxWidth,
-  lines,
+  lines = 1,
+  multiline = false,
   placement = "top",
   "data-testid": dataTestId,
+  id,
 }: EllipsifiedProps) => {
   const canSkipTooltipRendering = !showTooltip && !alwaysShowTooltip;
   const { isTruncated, ref } = useIsTruncated<HTMLDivElement>({
     disabled: canSkipTooltipRendering,
   });
+  const isEnabled =
+    (showTooltip && (isTruncated || alwaysShowTooltip)) || false;
 
   return (
     <Tooltip
-      tooltip={canSkipTooltipRendering ? undefined : tooltip || children || " "}
-      isEnabled={(showTooltip && (isTruncated || alwaysShowTooltip)) || false}
-      maxWidth={tooltipMaxWidth}
-      placement={placement}
+      data-testid="ellipsified-tooltip"
+      disabled={!isEnabled}
+      label={canSkipTooltipRendering ? undefined : tooltip || children || " "}
+      position={placement}
+      width={tooltipMaxWidth}
+      multiline={multiline}
     >
       <EllipsifiedRoot
         ref={ref}
@@ -49,6 +57,7 @@ export const Ellipsified = ({
         lines={lines}
         style={style}
         data-testid={dataTestId}
+        id={id}
       >
         {children}
       </EllipsifiedRoot>

@@ -1,12 +1,13 @@
+import { SAMPLE_DATABASE } from "e2e/support/cypress_sample_database";
 import {
-  restore,
+  commandPalette,
+  commandPaletteSearch,
+  openColumnOptions,
   openQuestionActions,
   popover,
+  restore,
   sidebar,
-  openColumnOptions,
 } from "e2e/support/helpers";
-
-import { SAMPLE_DATABASE } from "e2e/support/cypress_sample_database";
 import { createModelIndex } from "e2e/support/helpers/e2e-model-index-helper";
 
 const { PRODUCTS_ID, PEOPLE_ID } = SAMPLE_DATABASE;
@@ -28,7 +29,7 @@ describe("scenarios > model indexes", () => {
       {
         name: "Products Model",
         query: { "source-table": PRODUCTS_ID },
-        dataset: true,
+        type: "model",
       },
       { wrapId: true, idAlias: "modelId" },
     );
@@ -46,7 +47,7 @@ describe("scenarios > model indexes", () => {
 
     sidebar()
       .findByLabelText(/surface individual records/i)
-      .click();
+      .click({ force: true }); // needs to be forced because Mantine
 
     cy.findByTestId("dataset-edit-bar").within(() => {
       cy.button("Save changes").click();
@@ -64,7 +65,7 @@ describe("scenarios > model indexes", () => {
 
     sidebar()
       .findByLabelText(/surface individual records/i)
-      .click();
+      .click({ force: true });
 
     cy.findByTestId("dataset-edit-bar").within(() => {
       cy.button("Save changes").click();
@@ -81,7 +82,7 @@ describe("scenarios > model indexes", () => {
 
     sidebar()
       .findByLabelText(/surface individual records/i)
-      .click();
+      .click({ force: true });
 
     cy.findByTestId("dataset-edit-bar").within(() => {
       cy.button("Save changes").click();
@@ -105,7 +106,7 @@ describe("scenarios > model indexes", () => {
 
     sidebar()
       .findByLabelText(/surface individual records/i)
-      .click();
+      .click({ force: true });
 
     openColumnOptions("ID");
 
@@ -123,13 +124,11 @@ describe("scenarios > model indexes", () => {
     cy.wait("@cardUpdate");
 
     // search should fail
-    cy.findByTestId("app-bar")
-      .findByPlaceholderText("Search…")
-      .type("marble shoes");
+    commandPaletteSearch("marble shoes", false);
 
-    cy.wait("@searchQuery");
-
-    cy.findByTestId("search-results-empty-state").should("be.visible");
+    commandPalette()
+      .findByRole("option", { name: /No results for/ })
+      .should("exist");
   });
 
   it("should be able to search model index values and visit detail records", () => {
@@ -137,20 +136,15 @@ describe("scenarios > model indexes", () => {
 
     cy.visit("/");
 
-    cy.findByTestId("app-bar")
-      .findByPlaceholderText("Search…")
-      .type("marble shoes");
-
-    cy.wait("@searchQuery");
-
-    cy.findByTestId("search-results-list")
-      .findByText("Small Marble Shoes")
+    commandPaletteSearch("marble shoes", false);
+    commandPalette()
+      .findByRole("option", { name: "Small Marble Shoes" })
       .click();
 
     cy.wait("@dataset");
 
     cy.findByTestId("object-detail").within(() => {
-      cy.findByText("Product");
+      cy.findByRole("heading", { name: /Product/ });
       cy.findByText("Small Marble Shoes");
       cy.findByText("Doohickey");
     });
@@ -161,7 +155,7 @@ describe("scenarios > model indexes", () => {
       {
         name: "People Model",
         query: { "source-table": PEOPLE_ID },
-        dataset: true,
+        type: "model",
       },
       {
         wrapId: true,
@@ -179,11 +173,8 @@ describe("scenarios > model indexes", () => {
 
     cy.visit("/");
 
-    cy.findByTestId("app-bar").findByPlaceholderText("Search…").type("anais");
-
-    cy.wait("@searchQuery");
-
-    cy.findByTestId("search-results-list").findByText("Anais Zieme").click();
+    commandPaletteSearch("anais", false);
+    commandPalette().findByRole("option", { name: "Anais Zieme" }).click();
 
     cy.wait("@dataset");
     cy.wait("@dataset"); // second query gets the additional record
@@ -199,20 +190,15 @@ describe("scenarios > model indexes", () => {
 
     cy.visit("/");
 
-    cy.findByTestId("app-bar")
-      .findByPlaceholderText("Search…")
-      .type("marble shoes");
-
-    cy.wait("@searchQuery");
-
-    cy.findByTestId("search-results-list")
-      .findByText("Small Marble Shoes")
+    commandPaletteSearch("marble shoes", false);
+    commandPalette()
+      .findByRole("option", { name: "Small Marble Shoes" })
       .click();
 
     cy.wait("@dataset");
 
     cy.findByTestId("object-detail").within(() => {
-      cy.findByText("Product");
+      cy.findByRole("heading", { name: /Product/ });
       cy.findByText("Small Marble Shoes");
       cy.findByText("Doohickey");
     });
@@ -221,13 +207,9 @@ describe("scenarios > model indexes", () => {
 
     cy.get("body").type("{esc}");
 
-    cy.findByTestId("app-bar")
-      .findByPlaceholderText("Search…")
-      .clear()
-      .type("silk coat");
-
-    cy.findByTestId("search-results-list")
-      .findByText("Ergonomic Silk Coat")
+    commandPaletteSearch("silk coat", false);
+    commandPalette()
+      .findByRole("option", { name: "Ergonomic Silk Coat" })
       .click();
 
     cy.findByTestId("object-detail").within(() => {

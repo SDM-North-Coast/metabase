@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+
 import MetabaseSettings from "../lib/settings";
 
 const DEFAULT_FAVICON = () => MetabaseSettings.get("application-favicon-url");
@@ -25,11 +26,11 @@ const withFavicon = faviconSetterOrGetter => ComposedComponent => {
     const favicon = resolveFavicon(faviconSetterOrGetter, props);
 
     useEffect(() => {
-      document.querySelector('link[rel="icon"]').setAttribute("href", favicon);
+      document.querySelector('link[rel="icon"]')?.setAttribute("href", favicon);
       return () => {
         document
           .querySelector('link[rel="icon"]')
-          .setAttribute("href", DEFAULT_FAVICON());
+          ?.setAttribute("href", DEFAULT_FAVICON());
       };
     }, [favicon]);
     return <ComposedComponent {...props} />;

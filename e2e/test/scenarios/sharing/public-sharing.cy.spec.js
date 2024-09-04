@@ -1,12 +1,23 @@
-import {
-  restore,
-  modal,
-  setActionsEnabledForDB,
-  createAction,
-  visitDashboardAndCreateTab,
-} from "e2e/support/helpers";
-import { SAMPLE_DATABASE } from "e2e/support/cypress_sample_database";
 import { SAMPLE_DB_ID } from "e2e/support/cypress_data";
+import { SAMPLE_DATABASE } from "e2e/support/cypress_sample_database";
+import {
+  ORDERS_DASHBOARD_ID,
+  ORDERS_QUESTION_ID,
+} from "e2e/support/cypress_sample_instance_data";
+import {
+  createAction,
+  describeEE,
+  modal,
+  openSharingMenu,
+  restore,
+  setActionsEnabledForDB,
+  setTokenFeatures,
+  setupSMTP,
+  sidebar,
+  visitDashboard,
+  visitDashboardAndCreateTab,
+  visitQuestion,
+} from "e2e/support/helpers";
 
 const { ORDERS_ID } = SAMPLE_DATABASE;
 
@@ -119,9 +130,14 @@ describe("scenarios > admin > settings > public sharing", () => {
 
     cy.get("@dashboardId").then(dashboardId => {
       cy.findByText(expectedDashboardName).click();
+      cy.log(
+        "Sometimes the URL will be updated with the tab ID, so we need to account for that",
+      );
       cy.url().should(
-        "eq",
-        `${location.origin}/dashboard/${dashboardId}-${expectedDashboardSlug}`,
+        "match",
+        new RegExp(
+          `${location.origin}/dashboard/${dashboardId}-${expectedDashboardSlug}*`,
+        ),
       );
       cy.visit("/admin/settings/public-sharing");
     });
@@ -200,7 +216,7 @@ describe("scenarios > admin > settings > public sharing", () => {
       query: {
         "source-table": ORDERS_ID,
       },
-      dataset: true,
+      type: "model",
     }).then(({ body }) => {
       const modelId = body.id;
       cy.wrap(modelId).as("modelId");
@@ -262,3 +278,65 @@ describe("scenarios > admin > settings > public sharing", () => {
     );
   });
 });
+
+describeEE(
+  "scenarios > sharing > approved domains (EE)",
+  { tags: "@external" },
+  () => {
+    const allowedDomain = "metabase.test";
+    const deniedDomain = "metabase.example";
+    const deniedEmail = `mailer@${deniedDomain}`;
+    const subscriptionError = `You're only allowed to email subscriptions to addresses ending in ${allowedDomain}`;
+    const alertError = `You're only allowed to email alerts to addresses ending in ${allowedDomain}`;
+
+    function addEmailRecipient(email) {
+      cy.findByRole("textbox").click().type(`${email}`).blur();
+    }
+
+    function setAllowedDomains() {
+      cy.request("PUT", "/api/setting/subscription-allowed-domains", {
+        value: allowedDomain,
+      });
+    }
+
+    beforeEach(() => {
+      restore();
+      cy.signInAsAdmin();
+      setTokenFeatures("all");
+      setupSMTP();
+      setAllowedDomains();
+    });
+
+    it("should validate approved email domains for a question alert", () => {
+      visitQuestion(ORDERS_QUESTION_ID);
+
+      openSharingMenu("Create alert");
+      modal().findByText("Set up an alert").click();
+
+      modal()
+        .findByRole("heading", { name: "Email" })
+        .closest("li")
+        .within(() => {
+          addEmailRecipient(deniedEmail);
+          cy.findByText(alertError);
+        });
+      cy.button("Done").should("be.disabled");
+    });
+
+    it("should validate approved email domains for a dashboard subscription (metabase#17977)", () => {
+      visitDashboard(ORDERS_DASHBOARD_ID);
+      openSharingMenu("Subscriptions");
+
+      cy.findByRole("heading", { name: "Email it" }).click();
+
+      sidebar().within(() => {
+        addEmailRecipient(deniedEmail);
+
+        // Reproduces metabase#17977
+        cy.button("Send email now").should("be.disabled");
+        cy.button("Done").should("be.disabled");
+        cy.findByText(subscriptionError);
+      });
+    });
+  },
+);

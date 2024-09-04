@@ -4,7 +4,7 @@
   `metabase_database` table."
   (:require
    [metabase.util.cron :as u.cron]
-   [metabase.util.i18n :as i18n]
+   [metabase.util.i18n :refer [deferred-tru]]
    [metabase.util.malli :as mu]
    [metabase.util.malli.registry :as mr]))
 
@@ -12,15 +12,15 @@
   "Schema with values for a DB's schedules that can be put directly into the DB."
   [:map
    [:metadata_sync_schedule      {:optional true} u.cron/CronScheduleString]
-   [:cache_field_values_schedule {:optional true} u.cron/CronScheduleString]])
+   [:cache_field_values_schedule {:optional true} [:maybe u.cron/CronScheduleString]]])
 
 (mr/def ::ExpandedSchedulesMap
   (mu/with-api-error-message
    [:map
     {:error/message "Map of expanded schedule maps"}
-    [:cache_field_values {:optional true} u.cron/ScheduleMap]
+    [:cache_field_values {:optional true} [:maybe u.cron/ScheduleMap]]
     [:metadata_sync      {:optional true} u.cron/ScheduleMap]]
-   (i18n/deferred-tru "value must be a valid map of schedule maps for a DB.")))
+   (deferred-tru "value must be a valid map of schedule maps for a DB.")))
 
 (def ExpandedSchedulesMap
   "Schema for the `:schedules` key we add to the response containing 'expanded' versions of the CRON schedules.
@@ -70,5 +70,6 @@
 (defn scheduling
   "Adds sync schedule defaults to a map of schedule-maps."
   [{:keys [cache_field_values metadata_sync] :as _schedules}]
-  {:cache_field_values (or cache_field_values (randomly-once-a-day))
-   :metadata_sync      (or metadata_sync (randomly-once-an-hour))})
+  {:metadata_sync      (or metadata_sync (randomly-once-an-hour))
+   ;; cache_field_values is nullable
+   :cache_field_values cache_field_values})

@@ -1,14 +1,15 @@
 import { t } from "ttag";
 
-import { PLUGIN_COLLECTIONS } from "metabase/plugins";
-import * as Urls from "metabase/lib/urls";
-import EntityMenu from "metabase/components/EntityMenu";
-import { ANALYTICS_CONTEXT } from "metabase/collections/constants";
+import { useListCollectionItemsQuery } from "metabase/api";
 import {
   isInstanceAnalyticsCustomCollection,
-  isRootPersonalCollection,
   isRootCollection,
+  isRootPersonalCollection,
+  isTrashedCollection,
 } from "metabase/collections/utils";
+import EntityMenu from "metabase/components/EntityMenu";
+import * as Urls from "metabase/lib/urls";
+import { PLUGIN_COLLECTIONS } from "metabase/plugins";
 import type { Collection } from "metabase-types/api";
 
 export interface CollectionMenuProps {
@@ -24,21 +25,31 @@ export const CollectionMenu = ({
   isPersonalCollectionChild,
   onUpdateCollection,
 }: CollectionMenuProps): JSX.Element | null => {
+  // only get the count of items in the collection if we need it
+  const maybeCollectionItemCount =
+    useListCollectionItemsQuery(
+      {
+        id: collection.id,
+        limit: 0, // we don't want any of the items, we just want to know how many there are in the collection
+      },
+      {
+        skip: !PLUGIN_COLLECTIONS.canCleanUp,
+      },
+    ).data?.total ?? 0;
+
   const items = [];
   const url = Urls.collection(collection);
   const isRoot = isRootCollection(collection);
   const isPersonal = isRootPersonalCollection(collection);
   const isInstanceAnalyticsCustom =
     isInstanceAnalyticsCustomCollection(collection);
-  const canWrite = collection.can_write;
+  const isTrashed = isTrashedCollection(collection);
 
-  if (
-    isAdmin &&
-    !isRoot &&
-    !isPersonal &&
-    !isPersonalCollectionChild &&
-    canWrite
-  ) {
+  const canWrite = collection.can_write;
+  const canMove =
+    !isRoot && !isPersonal && canWrite && !isInstanceAnalyticsCustom;
+
+  if (isAdmin && !isRoot && canWrite) {
     items.push(
       ...PLUGIN_COLLECTIONS.getAuthorityLevelMenuItems(
         collection,
@@ -52,35 +63,45 @@ export const CollectionMenu = ({
       title: t`Edit permissions`,
       icon: "lock",
       link: `${url}/permissions`,
-      event: `${ANALYTICS_CONTEXT};Edit Menu;Edit Permissions`,
     });
   }
 
-  if (!isRoot && !isPersonal && canWrite && !isInstanceAnalyticsCustom) {
+  if (canMove) {
     items.push({
       title: t`Move`,
       icon: "move",
       link: `${url}/move`,
-      event: `${ANALYTICS_CONTEXT};Edit Menu;Move Collection`,
-    });
-    items.push({
-      title: t`Archive`,
-      icon: "archive",
-      link: `${url}/archive`,
-      event: `${ANALYTICS_CONTEXT};Edit Menu;Archive Collection`,
     });
   }
 
-  if (items.length > 0) {
-    return (
-      <EntityMenu
-        items={items}
-        triggerIcon="ellipsis"
-        tooltip={t`Move, archive, and more...`}
-        tooltipPlacement="bottom"
-      />
-    );
-  } else {
+  items.push(
+    ...PLUGIN_COLLECTIONS.getCleanUpMenuItems(
+      maybeCollectionItemCount,
+      url,
+      isInstanceAnalyticsCustom,
+      isTrashed,
+      canWrite,
+    ),
+  );
+
+  if (canMove) {
+    items.push({
+      title: t`Move to trash`,
+      icon: "trash",
+      link: `${url}/archive`,
+    });
+  }
+
+  if (items.length === 0) {
     return null;
   }
+
+  return (
+    <EntityMenu
+      items={items}
+      triggerIcon="ellipsis"
+      tooltip={t`Move, trash, and more...`}
+      tooltipPlacement="bottom"
+    />
+  );
 };

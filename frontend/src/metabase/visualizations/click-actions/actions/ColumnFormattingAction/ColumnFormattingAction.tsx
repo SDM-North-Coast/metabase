@@ -1,25 +1,29 @@
 import { t } from "ttag";
-import { getSettingsWidgetsForSeries } from "metabase/visualizations/lib/settings/visualization";
+
 import ChartSettingsWidget from "metabase/visualizations/components/ChartSettingsWidget";
 import { updateSettings } from "metabase/visualizations/lib/settings";
-import type { VisualizationSettings } from "metabase-types/api";
+import { getSettingsWidgetsForSeries } from "metabase/visualizations/lib/settings/visualization";
 import type {
   ClickActionPopoverProps,
   LegacyDrill,
 } from "metabase/visualizations/types";
-import { getColumnKey } from "metabase-lib/queries/utils/get-column-key";
+import * as Lib from "metabase-lib";
+import { getColumnKey } from "metabase-lib/v1/queries/utils/column-key";
+import type { VisualizationSettings } from "metabase-types/api";
 
 import { PopoverRoot } from "./ColumnFormattingAction.styled";
 
 export const POPOVER_TEST_ID = "column-formatting-settings";
 
 export const ColumnFormattingAction: LegacyDrill = ({ question, clicked }) => {
+  const { isEditable } = Lib.queryDisplayInfo(question.query());
+
   if (
     !clicked ||
     clicked.value !== undefined ||
     !clicked.column ||
     clicked?.extraData?.isRawTable ||
-    !question.query().isEditable()
+    !isEditable
   ) {
     return [];
   }

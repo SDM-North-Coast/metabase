@@ -1,4 +1,4 @@
-import { sidebar } from "e2e/support/helpers";
+import { openSharingMenu, sidebar } from "e2e/support/helpers";
 
 import { WEBMAIL_CONFIG } from "../cypress_data";
 
@@ -65,7 +65,7 @@ export const openEmailPage = emailSubject => {
   const webmailInterface = `http://localhost:${WEB_PORT}`;
 
   cy.window().then(win => (win.location.href = webmailInterface));
-  cy.findByText(emailSubject).click();
+  cy.findAllByText(emailSubject).first().click();
 
   return cy.hash().then(path => {
     const htmlPath = `${webmailInterface}${path.slice(1)}/html`;
@@ -81,33 +81,33 @@ export const clickSend = () => {
   cy.wait("@emailSent");
 };
 
-export const openAndAddEmailToSubscriptions = recipient => {
-  cy.findByLabelText("subscriptions").click();
+export const openAndAddEmailsToSubscriptions = recipients => {
+  openSharingMenu("Subscriptions");
+
+  sidebar().findByText("Create a dashboard subscription").should("be.visible");
 
   cy.findByText("Email it").click();
-  cy.findByPlaceholderText("Enter user names or email addresses")
-    .click()
-    .type(`${recipient}{enter}`)
-    .blur();
+
+  const input = cy
+    .findByPlaceholderText("Enter user names or email addresses")
+    .click();
+  recipients.forEach(recipient => {
+    input.type(`${recipient}{enter}`);
+  });
+  input.blur();
 };
 
-export const setupSubscriptionWithRecipient = recipient => {
-  openAndAddEmailToSubscriptions(recipient);
+export const setupSubscriptionWithRecipients = recipients => {
+  openAndAddEmailsToSubscriptions(recipients);
   sidebar().findByText("Done").click();
 };
 
 export const openPulseSubscription = () => {
-  cy.findByLabelText("subscriptions").click();
   sidebar().findByLabelText("Pulse Card").click();
 };
 
 export const emailSubscriptionRecipients = () => {
   openPulseSubscription();
-  clickSend();
-};
-
-export const sendSubscriptionsEmail = recipient => {
-  openAndAddEmailToSubscriptions(recipient);
   clickSend();
 };
 

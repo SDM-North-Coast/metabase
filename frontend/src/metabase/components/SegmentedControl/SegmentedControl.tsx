@@ -1,27 +1,16 @@
-import { useMemo } from "react";
 import type * as React from "react";
-import PropTypes from "prop-types";
+import { useMemo } from "react";
 import _ from "underscore";
-import type { IconName } from "metabase/core/components/Icon";
+
+import type { IconName } from "metabase/ui";
+
 import {
-  SegmentedList,
+  ItemIcon,
+  SegmentedControlRadio,
   SegmentedItem,
   SegmentedItemLabel,
-  SegmentedControlRadio,
-  ItemIcon,
+  SegmentedList,
 } from "./SegmentedControl.styled";
-
-export const optionShape = PropTypes.shape({
-  name: PropTypes.node,
-  value: PropTypes.any,
-  icon: PropTypes.string,
-  iconSize: PropTypes.number,
-
-  // Expects a color alias, not a color code
-  // Example: brand, accent1, success
-  // Won't work: red, #000, rgb(0, 0, 0)
-  selectedColor: PropTypes.string,
-});
 
 type SegmentedControlValue = string | number;
 

@@ -2,10 +2,23 @@
   (:require
    [clojure.string :as str]
    [clojure.test :refer :all]
+   [clojure.walk :as walk]
    [malli.core :as mc]
    [malli.experimental :as mx]
+   [metabase.test :as mt]
    [metabase.util.malli :as mu]
-   [metabase.util.malli.defn :as mu.defn]))
+   [metabase.util.malli.defn :as mu.defn]
+   [metabase.util.malli.fn :as mu.fn]))
+
+(defn- deanon-fn-names
+  "Walk the form and remove the numeric part in symbols like `symbol12345`."
+  [form]
+  (walk/postwalk
+   #(if-some [[_ prefix] (when (symbol? %)
+                           (re-matches #"(.+?)\d+" (str %)))]
+      (symbol prefix)
+      %)
+   form))
 
 (deftest ^:parallel annotated-docstring-test
   (are [fn-tail expected] (= expected
@@ -15,7 +28,6 @@
       (str x))
     (str "Inputs: [x :- [:map [:x int?] [:y int?]]]\n"
          "  Return: :any")
-
 
     '(bar
       :- :int
@@ -33,22 +45,22 @@
 
 (deftest ^:parallel mu-defn-test
   (testing "invalid input"
-    (is (=? {:humanized {:x ["missing required key"]
-                         :y ["missing required key"]}}
+    (is (=? {:humanized {:x ["missing required key, got: nil"]
+                         :y ["missing required key, got: nil"]}}
             (try (bar {})
                  (catch Exception e (ex-data e))))
         "when we pass bar an invalid shape um/defn throws"))
 
   (testing "invalid output"
-    (is (=? {:humanized {:x ["should be an int"]
-                         :y ["missing required key"]}}
+    (is (=? {:humanized {:x ["should be an int, got: \"3\""]
+                         :y ["missing required key, got: nil"]}}
             (try (baz)
-                 (catch Exception e (ex-data e))))
+                 (catch Exception e (def eed (ex-data e)) eed)))
         "when baz returns an invalid form um/defn throws")
     (is (= "Inputs: []\n  Return: [:map [:x int?] [:y int?]]"
            (:doc (meta #'baz))))))
 
-(mu/defn ^:private boo :- :int "something very important to remember goes here" [_x])
+(mu/defn- boo :- :int "something very important to remember goes here" [_x])
 
 (mu/defn qux-1 [])
 (mu/defn qux-2 "Original docstring." [])
@@ -57,13 +69,13 @@
 (mu/defn qux-5 :- :int [])
 (mu/defn qux-6 :- :int "Original docstring." [x :- :int] x)
 
-(mu/defn ^:private foo :- [:multi {:dispatch :type}
-                           [:sized [:map [:type [:= :sized]]
-                                    [:size int?]]]
-                           [:human [:map
-                                    [:type [:= :human]]
-                                    [:name string?]
-                                    [:address [:map [:street string?]]]]]]
+(mu/defn- foo :- [:multi {:dispatch :type}
+                  [:sized [:map [:type [:= :sized]]
+                           [:size int?]]]
+                  [:human [:map
+                           [:type [:= :human]]
+                           [:name string?]
+                           [:address [:map [:street string?]]]]]]
   ([] {:type :sized :size 3})
   ([a :- :int] {:type :sized :size a})
   ([a :- :int b :- :int] {:type :sized :size (+ a b)})
@@ -79,7 +91,7 @@
     (is (= "Inputs: []\n  Return: :any"
            (:doc (meta #'qux-1))))
     (is (= (str/join "\n"
-                     [  "Inputs: []"
+                     ["Inputs: []"
                       "  Return: :any"
                       "          "
                       ""
@@ -90,7 +102,7 @@
     (is (= "Inputs: [x :- :int]\n  Return: :any"
            (:doc (meta #'qux-3))))
     (is (= (str/join "\n"
-                     [  "Inputs: [x :- :int]"
+                     ["Inputs: [x :- :int]"
                       "  Return: :any"
                       "          "
                       ""
@@ -101,7 +113,7 @@
     (is (= "Inputs: []\n  Return: :int"
            (:doc (meta #'qux-5))))
     (is (= (str/join "\n"
-                     [  "Inputs: [x :- :int]"
+                     ["Inputs: [x :- :int]"
                       "  Return: :int"
                       "          "
                       ""
@@ -111,7 +123,7 @@
   (testing "multi-arity, and varargs doc strings should work"
     (is (= (str/join "\n"
                      ;;v---doc inserts 2 spaces here, it's not misaligned!
-                     [  "Inputs: ([]"
+                     ["Inputs: ([]"
                       "           [a :- :int]"
                       "           [a :- :int b :- :int]"
                       "           [a b & c :- [:* :int]])"
@@ -143,12 +155,12 @@
        [:=> [:cat :int :int] out]
        [:=> [:cat :any :any [:* :int]] out]])))
 
-(mu/defn ^:private add-ints :- :int
+(mu/defn- add-ints :- :int
   ^Integer [x :- :int y :- :int]
   (+ x y))
 
 (deftest ^:parallel preserve-arglists-metadata-test
-  (is (= 'Integer
+  (is (= 'java.lang.Integer
          (-> '{:arities [:single {:args    ^{:tag Integer} [x :- :int y :- :int]
                                   :prepost nil
                                   :body    [(+ x y)]}]}
@@ -156,5 +168,36 @@
              first
              meta
              :tag)))
-  (is (= 'Integer
+  (is (= 'java.lang.Integer
          (-> #'add-ints meta :arglists first meta :tag))))
+
+(deftest ^:parallel defn-forms-are-not-emitted-for-skippable-ns-in-prod-test
+  (testing "omission in macroexpansion"
+    (testing "returns a simple fn*"
+      (mt/with-dynamic-redefs [mu.fn/instrument-ns? (constantly false)]
+        (let [expansion (macroexpand `(mu/defn ~'f :- :int [] "foo"))]
+          (is (= '(def f
+                    "Inputs: []\n  Return: :int" (clojure.core/fn f [] "foo"))
+                 (deanon-fn-names expansion))))))
+    (testing "returns an instrumented fn"
+      (mt/with-dynamic-redefs [mu.fn/instrument-ns? (constantly true)]
+        (let [expansion (macroexpand `(mu/defn ~'f :- :int [] "foo"))]
+          (is (= '(def f
+                    "Inputs: []\n  Return: :int"
+                    (clojure.core/let
+                     [&f (clojure.core/fn f [] "foo")]
+                      (clojure.core/fn
+                        ([]
+                         (try
+                           (clojure.core/->> (&f) (metabase.util.malli.fn/validate-output {:fn-name 'f} :int))
+                           (catch java.lang.Exception error (throw (metabase.util.malli.fn/fixup-stacktrace error))))))))
+                 (deanon-fn-names expansion))))))))
+
+(mu/defn- ^:extra-metadata private-foo :- :int
+  [x :- :int]
+  x)
+
+(deftest ^:parallel private-defn-test
+  (testing "The defn- macro creates a private function"
+    (is (true? (:private (meta #'private-foo))))
+    (is (true? (:extra-metadata (meta #'private-foo))))))

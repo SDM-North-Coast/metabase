@@ -1,6 +1,5 @@
-import styled from "@emotion/styled";
 import { css } from "@emotion/react";
-import { color } from "metabase/lib/colors";
+import styled from "@emotion/styled";
 
 export interface EditableTextRootProps {
   isEditing?: boolean;
@@ -10,7 +9,7 @@ export interface EditableTextRootProps {
 
 export const EditableTextRoot = styled.div<EditableTextRootProps>`
   position: relative;
-  color: ${color("text-dark")};
+  color: var(--mb-color-text-dark);
   padding: 0.25rem;
   border: 1px solid transparent;
   border-radius: 4px;
@@ -18,14 +17,14 @@ export const EditableTextRoot = styled.div<EditableTextRootProps>`
 
   &:hover,
   &:focus-within {
-    border-color: ${props => (props.isDisabled ? "" : color("border"))};
+    border-color: ${props => !props.isDisabled && "var(--mb-color-border)"};
   }
 
   ${props =>
     props.isEditing &&
     !props.isDisabled &&
     css`
-      border-color: ${color("border")};
+      border-color: var(--mb-color-border);
     `}
 
   ${({ isEditingMarkdown }) =>

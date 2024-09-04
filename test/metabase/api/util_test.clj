@@ -1,7 +1,10 @@
 (ns metabase.api.util-test
   "Tests for /api/util"
   (:require
+   [clojure.string :as str]
    [clojure.test :refer :all]
+   [metabase.api.embed.common :as api.embed.common]
+   [metabase.api.util :as api.util]
    [metabase.test :as mt]
    [metabase.util.log :as log]))
 
@@ -57,3 +60,37 @@
              (mt/user-http-request :rasta :get 403 "util/diagnostic_info/connection_pool_info"))))
     (testing "Call successful for superusers"
       (is (map? (mt/user-http-request :crowberto :get 200 "util/diagnostic_info/connection_pool_info"))))))
+
+(deftest product-feedback-tests
+  (testing "requires non-blank source"
+    (let [payload  {:comments "foo"
+                    :email    "foo"}
+          response (mt/user-http-request :crowberto :post 400 "util/product-feedback" payload)]
+      (testing (str "without " :source)
+        (is (= {:errors          {:source "value must be a non-blank string."},
+                :specific-errors {:source ["should be a string, received: nil" "non-blank string, received: nil"]}}
+               response)))))
+  (testing "fires the proxy in background"
+    (let [sent? (promise)]
+      (with-redefs [api.util/send-feedback! (fn [comments source email]
+                                              (doseq [prop [comments source email]]
+                                                (is (not (str/blank? prop)) "got a blank property to send-feedback!"))
+                                              (deliver sent? true))]
+        (mt/user-http-request :crowberto :post 204 "util/product-feedback"
+                              {:comments "I like Metabase"
+                               :email    "happy_user@test.com"
+                               :source   "Analytics Inc"})
+        (is (true? (deref sent? 2000 ::timedout)))))))
+
+(deftest entity-id-translation-test
+  (mt/with-temp [:model/Card {card-id :id card-eid :entity_id} {}]
+    (is (= {card-eid {:id card-id :type "card"  :status "success"}}
+           (-> (mt/user-http-request :crowberto :post 200
+                                     "util/entity_id"
+                                     {:entity_ids {"card" [card-eid]}})
+               :entity_ids
+               (update-keys name))))
+
+    (testing "error message contains allowed models"
+      (is (= (set (map name (keys @#'api.embed.common/api-name->model)))
+             (set (:allowed-models (mt/user-http-request :crowberto :post 400 "util/entity_id" {:entity_ids {"Card" [card-eid]}}))))))))

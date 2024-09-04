@@ -2,18 +2,18 @@
   (:require
    [clojure.test :refer :all]
    [metabase-enterprise.enhancements.integrations.ldap :as ldap-ee]
+   [metabase-enterprise.sso.integrations.sso-settings :as sso-settings]
    [metabase.integrations.ldap :as ldap]
    [metabase.models.user :as user :refer [User]]
-   [metabase.public-settings.premium-features-test
-    :as premium-features-test]
+   [metabase.public-settings :as public-settings]
    [metabase.test :as mt]
    [metabase.test.integrations.ldap :as ldap.test]
    [metabase.util.malli.schema :as ms]
    [toucan2.core :as t2]))
 
 (deftest find-test
-  (premium-features-test/with-premium-features #{:sso-ldap}
-    (ldap.test/with-ldap-server
+  (mt/with-premium-features #{:sso-ldap}
+    (ldap.test/with-ldap-server!
       (testing "find by username"
         (is (= {:dn         "cn=John Smith,ou=People,dc=metabase,dc=com"
                 :first-name "John"
@@ -92,8 +92,8 @@
                  (ldap/find-user "sally.brown@metabase.com"))))))))
 
 (deftest attribute-sync-test
-  (premium-features-test/with-premium-features #{:sso-ldap}
-    (ldap.test/with-ldap-server
+  (mt/with-premium-features #{:sso-ldap}
+    (ldap.test/with-ldap-server!
       (testing "find by email/username should return other attributes as well"
         (is (= {:dn         "cn=Lucky Pigeon,ou=Birds,dc=metabase,dc=com"
                 :first-name "Lucky"
@@ -165,8 +165,8 @@
               (t2/delete! User :%lower.email "john.smith@metabase.com"))))))))
 
 (deftest update-attributes-on-login-test
-  (premium-features-test/with-premium-features #{:sso-ldap}
-    (ldap.test/with-ldap-server
+  (mt/with-premium-features #{:sso-ldap}
+    (ldap.test/with-ldap-server!
       (testing "Existing user's attributes are updated on fetch"
         (try
           (let [user-info (ldap/find-user "jsmith1")]
@@ -215,37 +215,48 @@
             (t2/delete! User :%lower.email "john.smith@metabase.com")))))))
 
 (deftest fetch-or-create-user-test
-  (premium-features-test/with-premium-features #{:sso-ldap}
-    (ldap.test/with-ldap-server
+  (mt/with-premium-features #{:sso-ldap}
+    (ldap.test/with-ldap-server!
       (testing "a new user is created when they don't already exist"
         (try
-         (ldap/fetch-or-create-user! (ldap/find-user "jsmith1"))
-         (is (= {:first_name       "John"
-                 :last_name        "Smith"
-                 :common_name      "John Smith"
-                 :email            "john.smith@metabase.com"}
-                (into {} (t2/select-one [User :first_name :last_name :email] :email "john.smith@metabase.com"))))
-         (finally (t2/delete! User :email "john.smith@metabase.com"))))
+          (ldap/fetch-or-create-user! (ldap/find-user "jsmith1"))
+          (is (= {:first_name       "John"
+                  :last_name        "Smith"
+                  :common_name      "John Smith"
+                  :email            "john.smith@metabase.com"}
+                 (into {} (t2/select-one [User :first_name :last_name :email] :email "john.smith@metabase.com"))))
+          (finally (t2/delete! User :email "john.smith@metabase.com"))))
 
       (try
-       (testing "a user without a givenName attribute has `nil` for that attribute"
-         (ldap/fetch-or-create-user! (ldap/find-user "jmiller"))
-         (is (= {:first_name       nil
-                 :last_name        "Miller"
-                 :common_name      "Miller"}
-                (into {} (t2/select-one [User :first_name :last_name] :email "jane.miller@metabase.com")))))
+        (testing "a user without a givenName attribute has `nil` for that attribute"
+          (ldap/fetch-or-create-user! (ldap/find-user "jmiller"))
+          (is (= {:first_name       nil
+                  :last_name        "Miller"
+                  :common_name      "Miller"}
+                 (into {} (t2/select-one [User :first_name :last_name] :email "jane.miller@metabase.com")))))
 
-       (testing "when givenName or sn attributes change in LDAP, they are updated in Metabase on next login"
-         (ldap/fetch-or-create-user! (assoc (ldap/find-user "jmiller") :first-name "Jane" :last-name "Doe"))
-         (is (= {:first_name       "Jane"
-                 :last_name        "Doe"
-                 :common_name      "Jane Doe"}
-                (into {} (t2/select-one [User :first_name :last_name] :email "jane.miller@metabase.com")))))
+        (testing "when givenName or sn attributes change in LDAP, they are updated in Metabase on next login"
+          (ldap/fetch-or-create-user! (assoc (ldap/find-user "jmiller") :first-name "Jane" :last-name "Doe"))
+          (is (= {:first_name       "Jane"
+                  :last_name        "Doe"
+                  :common_name      "Jane Doe"}
+                 (into {} (t2/select-one [User :first_name :last_name] :email "jane.miller@metabase.com")))))
 
-       (testing "if givenName or sn attributes are removed, values stored in Metabase are updated to `nil` to respect the IdP response."
-         (ldap/fetch-or-create-user! (assoc (ldap/find-user "jmiller") :first-name nil :last-name nil))
-         (is (= {:first_name       nil
-                 :last_name        nil
-                 :common_name      "jane.miller@metabase.com"}
-                (select-keys (t2/select-one User :email "jane.miller@metabase.com") [:first_name :last_name :common_name]))))
-       (finally (t2/delete! User :email "jane.miller@metabase.com"))))))
+        (testing "if givenName or sn attributes are removed, values stored in Metabase are updated to `nil` to respect the IdP response."
+          (ldap/fetch-or-create-user! (assoc (ldap/find-user "jmiller") :first-name nil :last-name nil))
+          (is (= {:first_name       nil
+                  :last_name        nil
+                  :common_name      "jane.miller@metabase.com"}
+                 (select-keys (t2/select-one User :email "jane.miller@metabase.com") [:first_name :last_name :common_name]))))
+        (finally (t2/delete! User :email "jane.miller@metabase.com"))))))
+
+(deftest ldap-no-user-provisioning-test
+  (mt/with-premium-features #{:sso-ldap}
+    (ldap.test/with-ldap-server!
+      (testing "an error is thrown when a new user is fetched and user provisioning is not enabled"
+        (with-redefs [sso-settings/ldap-user-provisioning-enabled? (constantly false)
+                      public-settings/site-name (constantly "test")]
+          (is (thrown-with-msg?
+               clojure.lang.ExceptionInfo
+               #"Sorry, but you'll need a test account to view this page. Please contact your administrator."
+               (ldap/fetch-or-create-user! (ldap/find-user "jsmith1")))))))))

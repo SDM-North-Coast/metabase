@@ -1,25 +1,26 @@
 /* eslint-disable react/prop-types */
-import { isEmpty } from "underscore";
 import type { MouseEvent } from "react";
 import { useLayoutEffect, useRef, useState } from "react";
+import { isEmpty } from "underscore";
+
+import Popover from "metabase/components/Popover";
+import useIsSmallScreen from "metabase/hooks/use-is-small-screen";
+import { useSelector } from "metabase/lib/redux";
+import { isNotNull } from "metabase/lib/types";
 import type {
   FilterTypeKeys,
   SearchFilterComponentProps,
   SearchFilterDropdown,
   SearchFilterPropTypes,
 } from "metabase/search/types";
-import { Text, Box, Center, Button, Stack } from "metabase/ui";
-import type { IconName } from "metabase/core/components/Icon";
-import { Icon } from "metabase/core/components/Icon";
-import Popover from "metabase/components/Popover";
-import { useSelector } from "metabase/lib/redux";
 import { getIsNavbarOpen } from "metabase/selectors/app";
-import useIsSmallScreen from "metabase/hooks/use-is-small-screen";
-import { isNotNull } from "metabase/lib/types";
+import type { IconName } from "metabase/ui";
+import { Box, Button, Center, Icon, Stack, Text } from "metabase/ui";
+
 import {
-  GroupOverflowHidden,
   DropdownFieldSet,
   DropdownLabelIcon,
+  GroupOverflowHidden,
   SearchEventSandbox,
 } from "./DropdownSidebarFilter.styled";
 
@@ -101,7 +102,7 @@ export const DropdownSidebarFilter = ({
     >
       <DropdownFieldSet
         noPadding
-        legend={fieldHasValue ? label() : null}
+        legend={fieldHasValue ? label() : undefined}
         fieldHasValueOrFocus={fieldHasValue}
       >
         <GroupOverflowHidden position="apart" noWrap w="100%">

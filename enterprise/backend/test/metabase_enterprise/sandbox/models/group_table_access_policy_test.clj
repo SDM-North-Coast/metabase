@@ -2,12 +2,11 @@
   (:require
    [clojure.test :refer :all]
    [metabase-enterprise.sandbox.models.group-table-access-policy
+    :as sandboxes
     :refer [GroupTableAccessPolicy]]
    [metabase.models :refer [Card]]
    [metabase.models.permissions-group :as perms-group]
-   [metabase.public-settings.premium-features-test
-    :as premium-features-test]
-   [metabase.query-processor :as qp]
+   [metabase.query-processor.preprocess :as qp.preprocess]
    [metabase.test :as mt]
    [metabase.util :as u]
    [toucan2.core :as t2]
@@ -35,12 +34,12 @@
                (t2/select-one-fn :attribute_remappings GroupTableAccessPolicy :id (u/the-id gtap))))))))
 
 (deftest disallow-changing-table-id-test
-  (testing "You can't change the table_id of a GTAP after it has been created."
+  (testing "You can't change the table_id of a sandbox after it has been created."
     (t2.with-temp/with-temp [GroupTableAccessPolicy gtap {:table_id (mt/id :venues)
                                                           :group_id (u/the-id (perms-group/all-users))}]
       (is (thrown-with-msg?
            clojure.lang.ExceptionInfo
-           #"You cannot change the Table ID of a GTAP once it has been created"
+           #"You cannot change the table ID of a sandbox once it has been created"
            (t2/update! GroupTableAccessPolicy (:id gtap) {:table_id (mt/id :checkins)}))))))
 
 (deftest disallow-queries-that-add-columns-test
@@ -48,7 +47,7 @@
     (doseq [[msg f] {"Create a new GTAP"
                      (fn [query]
                        (mt/with-temp [Card                   card {:dataset_query   query
-                                                                   :result_metadata (qp/query->expected-cols query)}
+                                                                   :result_metadata (qp.preprocess/query->expected-cols query)}
                                       GroupTableAccessPolicy _    {:table_id (mt/id :venues)
                                                                    :group_id (u/the-id (perms-group/all-users))
                                                                    :card_id  (:id card)}]
@@ -57,7 +56,7 @@
                      "Update an existing GTAP"
                      (fn [query]
                        (mt/with-temp [Card                   card {:dataset_query   query
-                                                                   :result_metadata (qp/query->expected-cols query)}
+                                                                   :result_metadata (qp.preprocess/query->expected-cols query)}
                                       GroupTableAccessPolicy gtap {:table_id (mt/id :venues)
                                                                    :group_id (u/the-id (perms-group/all-users))}]
                          (t2/update! GroupTableAccessPolicy (:id gtap) {:card_id (:id card)})
@@ -66,7 +65,7 @@
                      "Update query for Card associated with an existing GTAP"
                      (fn [query]
                        (mt/with-temp [Card                   card {:dataset_query   (mt/mbql-query venues)
-                                                                   :result_metadata (qp/query->expected-cols (mt/mbql-query venues))}
+                                                                   :result_metadata (qp.preprocess/query->expected-cols (mt/mbql-query venues))}
                                       GroupTableAccessPolicy _    {:table_id (mt/id :venues)
                                                                    :group_id (u/the-id (perms-group/all-users))
                                                                    :card_id  (:id card)}]
@@ -82,12 +81,12 @@
         (testing "changing order of columns = ok"
           (is (= :ok
                  (f (mt/mbql-query venues
-                      {:fields (for [id (shuffle (map :id (qp/query->expected-cols (mt/mbql-query venues))))]
+                      {:fields (for [id (shuffle (map :id (qp.preprocess/query->expected-cols (mt/mbql-query venues))))]
                                  [:field id nil])})))))))))
 
 (deftest disallow-queries-that-change-types-test
   (testing "Don't allow saving a Sandboxing query that changes the type of a column vs. the type in the Table it replaces (#13715)"
-    (premium-features-test/with-premium-features #{:sandboxes}
+    (mt/with-premium-features #{:sandboxes}
       (doseq [[msg f] {"Create a new GTAP"
                        (fn [metadata]
                          (mt/with-temp [Card                   card {:dataset_query   (mt/mbql-query venues)
@@ -109,7 +108,7 @@
                        "Update query for Card associated with an existing GTAP"
                        (fn [metadata]
                          (mt/with-temp [Card                   card {:dataset_query   (mt/mbql-query venues)
-                                                                     :result_metadata (qp/query->expected-cols (mt/mbql-query venues))}
+                                                                     :result_metadata (qp.preprocess/query->expected-cols (mt/mbql-query venues))}
                                         GroupTableAccessPolicy _    {:table_id (mt/id :venues)
                                                                      :group_id (u/the-id (perms-group/all-users))
                                                                      :card_id  (:id card)}]
@@ -119,10 +118,51 @@
           (is (thrown-with-msg?
                clojure.lang.ExceptionInfo
                #"Sandbox Questions can't return columns that have different types than the Table they are sandboxing"
-               (f (-> (vec (qp/query->expected-cols (mt/mbql-query venues)))
+               (f (-> (vec (qp.preprocess/query->expected-cols (mt/mbql-query venues)))
                       (assoc-in [0 :base_type] :type/Text)))))
           (testing "type changes to a descendant type = ok"
             (is (= :ok
                    (f
-                    (-> (vec (qp/query->expected-cols (mt/mbql-query venues)))
+                    (-> (vec (qp.preprocess/query->expected-cols (mt/mbql-query venues)))
                         (assoc-in [0 :base_type] :type/BigInteger)))))))))))
+
+(deftest add-sandboxes-to-permissions-graph-test
+  (mt/with-premium-features #{:sandboxes}
+    (mt/with-full-data-perms-for-all-users!
+      (testing "Sandbox definitions in the DB are automatically added to the permissions graph"
+        (mt/with-temp [GroupTableAccessPolicy _gtap {:table_id (mt/id :venues)
+                                                     :group_id (u/the-id (perms-group/all-users))}]
+          (is (partial=
+               {(u/the-id (perms-group/all-users))
+                {(mt/id)
+                 {:view-data
+                  {"PUBLIC"
+                   {(mt/id :venues) :sandboxed}}}}}
+               (sandboxes/add-sandboxes-to-permissions-graph {})))))
+
+      (testing "When perms are set at the DB level, incorporating a sandbox breaks them out to table-level"
+        (mt/with-temp [GroupTableAccessPolicy _gtap {:table_id (mt/id :venues)
+                                                     :group_id (u/the-id (perms-group/all-users))}]
+          (is (partial=
+               {(u/the-id (perms-group/all-users))
+                {(mt/id)
+                 {:view-data {"PUBLIC"
+                              {(mt/id :venues) :sandboxed}}}}}
+               (sandboxes/add-sandboxes-to-permissions-graph
+                {(u/the-id (perms-group/all-users))
+                 {(mt/id)
+                  {:view-data :unrestricted}}})))))
+
+      (testing "When perms are set at the schema level, incorporating a sandbox breaks them out to table-level"
+        (mt/with-temp [GroupTableAccessPolicy _gtap {:table_id (mt/id :venues)
+                                                     :group_id (u/the-id (perms-group/all-users))}]
+          (is (partial=
+               {(u/the-id (perms-group/all-users))
+                {(mt/id)
+                 {:view-data
+                  {"PUBLIC"
+                   {(mt/id :venues) :sandboxed}}}}}
+               (sandboxes/add-sandboxes-to-permissions-graph
+                {(u/the-id (perms-group/all-users))
+                 {(mt/id)
+                  {:view-data :unrestricted}}}))))))))

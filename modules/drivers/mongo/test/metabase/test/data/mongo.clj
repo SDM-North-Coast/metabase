@@ -9,22 +9,25 @@
    [metabase.config :as config]
    [metabase.driver :as driver]
    [metabase.driver.ddl.interface :as ddl.i]
-   [metabase.driver.mongo.util :refer [with-mongo-connection]]
-   [metabase.test.data.interface :as tx]
-   [monger.collection :as mcoll]
-   [monger.core :as mg])
+   [metabase.driver.mongo.connection :as mongo.connection]
+   [metabase.driver.mongo.util :as mongo.util]
+   [metabase.test.data.interface :as tx])
   (:import
-   (com.fasterxml.jackson.core JsonGenerator)))
+   (com.fasterxml.jackson.core JsonGenerator)
+   (com.mongodb.client MongoDatabase)))
 
 (set! *warn-on-reflection* true)
 
 (tx/add-test-extensions! :mongo)
 
-(defmethod tx/supports-time-type? :mongo [_driver] false)
-(defmethod tx/supports-timestamptz-type? :mongo [_driver] false)
+(doseq [feature [:test/time-type
+                 :test/timestamptz-type]]
+  (defmethod driver/database-supports? [:mongo feature]
+    [_driver _feature _database]
+    false))
 
-;; during unit tests don't treat Mongo as having FK support
-(defmethod driver/supports? [:mongo :foreign-keys] [_ _] (not config/is-test?))
+;; During tests don't treat Mongo as having FK support
+(defmethod driver/database-supports? [:mongo :foreign-keys] [_driver _feature _db] (not config/is-test?))
 
 (defn ssl-required?
   "Returns if the mongo server requires an SSL connection."
@@ -58,28 +61,30 @@
                    {:pass password}))))
 
 (defn- destroy-db! [driver dbdef]
-  (with-mongo-connection [^com.mongodb.DB mongo-connection (tx/dbdef->connection-details driver :server dbdef)]
-    (mg/drop-db (.getMongo mongo-connection) (tx/escaped-database-name dbdef))))
+  (mongo.connection/with-mongo-database [^MongoDatabase db (tx/dbdef->connection-details driver :server dbdef)]
+    (.drop db)))
 
 (def ^:dynamic *remove-nil?*
   "When creating a dataset, omit any nil-valued fields from the documents."
   false)
 
 (defmethod tx/create-db! :mongo
-  [driver {:keys [table-definitions], :as dbdef} & {:keys [skip-drop-db?], :or {skip-drop-db? false}}]
-  (when-not skip-drop-db?
-    (destroy-db! driver dbdef))
-  (with-mongo-connection [mongo-db (tx/dbdef->connection-details driver :db dbdef)]
+  [driver {:keys [table-definitions], :as dbdef} & _options]
+  (mongo.connection/with-mongo-database [^MongoDatabase db (tx/dbdef->connection-details driver :db dbdef)]
     (doseq [{:keys [field-definitions table-name rows]} table-definitions]
+      (doseq [{:keys [field-name indexed?]} field-definitions]
+        (when indexed?
+          (mongo.util/create-index (mongo.util/collection db table-name) {field-name 1})))
       (let [field-names (for [field-definition field-definitions]
                           (keyword (:field-name field-definition)))]
         ;; Use map-indexed so we can get an ID for each row (index + 1)
         (doseq [[i row] (map-indexed vector rows)]
           (try
             ;; Insert each row
-            (mcoll/insert mongo-db (name table-name) (into (ordered-map/ordered-map :_id (inc i))
-                                                           (cond->> (zipmap field-names row)
-                                                             *remove-nil?* (m/remove-vals nil?))))
+            (mongo.util/insert-one (mongo.util/collection db (name table-name))
+                                   (into (ordered-map/ordered-map :_id (inc i))
+                                         (cond->> (zipmap field-names row)
+                                           *remove-nil?* (m/remove-vals nil?))))
             ;; If row already exists then nothing to do
             (catch com.mongodb.MongoException _)))))))
 

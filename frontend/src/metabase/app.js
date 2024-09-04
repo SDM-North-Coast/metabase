@@ -1,11 +1,5 @@
 import "regenerator-runtime/runtime";
 
-// Use of classList.add and .remove in Background and FitViewPort Hocs requires
-// this polyfill so that those work in older browsers
-import "classlist-polyfill";
-
-import "number-to-locale-string";
-
 // This is conditionally aliased in the webpack config.
 // If EE isn't enabled, it loads an empty file.
 // Should be imported before any other metabase import
@@ -30,7 +24,13 @@ import "metabase/plugins/builtin";
 // If EE isn't enabled, it loads an empty file.
 import "ee-plugins"; // eslint-disable-line import/no-duplicates
 
-import ReactDOM from "react-dom";
+// Set nonce for mantine v6 deps
+import "metabase/lib/csp";
+
+import { createHistory } from "history";
+import { DragDropContextProvider } from "react-dnd";
+import HTML5Backend from "react-dnd-html5-backend";
+import { createRoot } from "react-dom/client";
 import { Provider } from "react-redux";
 
 // RJL 09/16/2023 -- Google Analytics GA4
@@ -38,23 +38,20 @@ import ReactGA from "react-ga4";
 
 // router
 import { Router, useRouterHistory } from "react-router";
-import { createHistory } from "history";
 import { syncHistoryWithStore } from "react-router-redux";
 
-// drag and drop
-import HTML5Backend from "react-dnd-html5-backend";
-import { DragDropContextProvider } from "react-dnd";
-import { ThemeProvider } from "metabase/ui";
-import { refreshSiteSettings } from "metabase/redux/settings";
-import { initializeEmbedding } from "metabase/lib/embed";
-import api from "metabase/lib/api";
-import MetabaseSettings from "metabase/lib/settings";
 import { createTracker } from "metabase/lib/analytics";
-import registerVisualizations from "metabase/visualizations/register";
-import { PLUGIN_APP_INIT_FUCTIONS } from "metabase/plugins";
-
-import GlobalStyles from "metabase/styled-components/containers/GlobalStyles";
+import api from "metabase/lib/api";
+import { initializeEmbedding } from "metabase/lib/embed";
+import { captureConsoleErrors } from "metabase/lib/errors";
+import MetabaseSettings from "metabase/lib/settings";
+import { PLUGIN_APP_INIT_FUNCTIONS } from "metabase/plugins";
+import { refreshSiteSettings } from "metabase/redux/settings";
 import { EmotionCacheProvider } from "metabase/styled-components/components/EmotionCacheProvider";
+import { GlobalStyles } from "metabase/styled-components/containers/GlobalStyles";
+import { ThemeProvider } from "metabase/ui";
+import registerVisualizations from "metabase/visualizations/register";
+
 import { getStore } from "./store";
 
 // remove trailing slash
@@ -72,12 +69,14 @@ function _init(reducers, getRoutes, callback) {
   const routes = getRoutes(store);
   const history = syncHistoryWithStore(browserHistory, store);
 
-  let root;
-
   createTracker(store);
 
-  ReactDOM.render(
-    <Provider store={store} ref={ref => (root = ref)}>
+  initializeEmbedding(store);
+
+  const root = createRoot(document.getElementById("root"));
+
+  root.render(
+    <Provider store={store}>
       <EmotionCacheProvider>
         <DragDropContextProvider backend={HTML5Backend} context={{ window }}>
           <ThemeProvider>
@@ -87,7 +86,6 @@ function _init(reducers, getRoutes, callback) {
         </DragDropContextProvider>
       </EmotionCacheProvider>
     </Provider>,
-    document.getElementById("root"),
   );
 
   registerVisualizations();
@@ -99,7 +97,7 @@ function _init(reducers, getRoutes, callback) {
 
   store.dispatch(refreshSiteSettings());
 
-  PLUGIN_APP_INIT_FUCTIONS.forEach(init => init({ root }));
+  PLUGIN_APP_INIT_FUNCTIONS.forEach(init => init());
 
   window.Metabase = window.Metabase || {};
   window.Metabase.store = store;
@@ -117,3 +115,5 @@ export function init(...args) {
     document.addEventListener("DOMContentLoaded", () => _init(...args));
   }
 }
+
+captureConsoleErrors();

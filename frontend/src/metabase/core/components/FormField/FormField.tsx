@@ -1,8 +1,9 @@
 import type { HTMLAttributes, ReactNode, Ref } from "react";
 import { forwardRef } from "react";
 import { t } from "ttag";
-import Tooltip from "metabase/core/components/Tooltip";
-import type { FieldAlignment, FieldOrientation } from "./types";
+
+import { Tooltip } from "metabase/ui";
+
 import {
   FieldCaption,
   FieldDescription,
@@ -12,9 +13,10 @@ import {
   FieldLabelContainer,
   FieldLabelError,
   FieldRoot,
-  OptionalTag,
   FieldTitleActions,
+  OptionalTag,
 } from "./FormField.styled";
+import type { FieldAlignment, FieldOrientation } from "./types";
 
 export interface FormFieldProps extends HTMLAttributes<HTMLDivElement> {
   title?: string;
@@ -71,14 +73,16 @@ const FormField = forwardRef(function FormField(
             {hasTitle && (
               <FieldLabel hasError={hasError} htmlFor={htmlFor}>
                 {title}
-                {hasError && <FieldLabelError>: {error}</FieldLabelError>}
+                {hasError && (
+                  <FieldLabelError role="alert">: {error}</FieldLabelError>
+                )}
               </FieldLabel>
             )}
             {!!optional && !hasError && (
               <OptionalTag>{t`(optional)`}</OptionalTag>
             )}
             {(infoLabel || infoTooltip) && (
-              <Tooltip tooltip={infoTooltip} maxWidth="100%">
+              <Tooltip multiline label={infoTooltip}>
                 {infoLabel ? (
                   <FieldInfoLabel>{infoLabel}</FieldInfoLabel>
                 ) : (

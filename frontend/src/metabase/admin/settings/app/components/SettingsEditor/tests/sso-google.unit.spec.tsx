@@ -1,11 +1,11 @@
 import "metabase/plugins/builtin";
+import { setupGroupsEndpoint } from "__support__/server-mocks";
 import { screen } from "__support__/ui";
 import {
   createMockGroup,
-  createMockSettings,
   createMockTokenFeatures,
 } from "metabase-types/api/mocks";
-import { setupGroupsEndpoint } from "__support__/server-mocks";
+
 import type { SetupOpts } from "./setup";
 import { setup } from "./setup";
 
@@ -36,17 +36,6 @@ describe("SettingsEditorApp", () => {
       await screen.findByPlaceholderText(
         "mycompany.com, example.com.br, otherdomain.co.uk",
       ),
-    ).toBeInTheDocument();
-  });
-
-  it("shows the admin sso notification setting", async () => {
-    setupPremium({
-      initialRoute: "/admin/settings/authentication",
-      settingValues: createMockSettings({ "google-auth-enabled": true }),
-    });
-
-    expect(
-      await screen.findByText("Notify admins of new SSO users"),
     ).toBeInTheDocument();
   });
 });

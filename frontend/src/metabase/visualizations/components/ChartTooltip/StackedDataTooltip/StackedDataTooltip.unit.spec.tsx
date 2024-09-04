@@ -1,7 +1,8 @@
-import { render, screen } from "@testing-library/react";
 import _ from "underscore";
 
+import { renderWithProviders, screen } from "__support__/ui";
 import type { StackedTooltipModel } from "metabase/visualizations/types";
+
 import StackedDataTooltip from "./StackedDataTooltip";
 
 const defaultHeaderRows = [
@@ -34,7 +35,7 @@ const setup = ({
   bodyRows = defaultBodyRows,
   ...rest
 }: Partial<StackedTooltipModel> = {}) => {
-  render(
+  renderWithProviders(
     <StackedDataTooltip
       headerTitle={headerTitle}
       headerRows={headerRows}

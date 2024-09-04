@@ -1,15 +1,15 @@
 import type * as React from "react";
-import { t, jt } from "ttag";
-
-import { Icon } from "metabase/core/components/Icon";
-
-import type { DashboardCard, DatasetColumn } from "metabase-types/api";
+import { jt, t } from "ttag";
 
 import { isTableDisplay } from "metabase/lib/click-behavior";
+import { Icon } from "metabase/ui";
+import type { DashboardCard, DatasetColumn } from "metabase-types/api";
+
 import { Heading, SidebarHeader } from "../ClickBehaviorSidebar.styled";
+
 import {
-  ColumnClickBehaviorHeader,
   ChevronIconContainer,
+  ColumnClickBehaviorHeader,
   ItemName,
 } from "./ClickBehaviorSidebarHeader.styled";
 

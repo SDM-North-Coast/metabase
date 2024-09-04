@@ -1,14 +1,17 @@
-import { t } from "ttag";
-import { scaleLinear } from "@visx/scale";
-import { Group } from "@visx/group";
 import { ClipPath } from "@visx/clip-path";
-import type { ColorGetter } from "metabase/static-viz/lib/colors";
+import { Group } from "@visx/group";
+import { scaleLinear } from "@visx/scale";
+import { t } from "ttag";
+
+import type { ColorGetter } from "metabase/visualizations/types";
+
 import { formatNumber } from "../../lib/numbers";
 import { Text } from "../Text";
-import { Pointer } from "./Pointer";
+
 import { CheckMarkIcon } from "./CheckMarkIcon";
-import { getBarText, getColors, calculatePointerLabelShift } from "./utils";
+import { Pointer } from "./Pointer";
 import type { ProgressBarData } from "./types";
+import { calculatePointerLabelShift, getBarText, getColors } from "./utils";
 
 const layout = {
   width: 440,
@@ -75,7 +78,11 @@ const ProgressBar = ({
   );
 
   return (
-    <svg width={layout.width} height={layout.height}>
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={layout.width}
+      height={layout.height}
+    >
       <ClipPath id="rounded-bar">
         <rect
           width={barWidth}
@@ -98,18 +105,18 @@ const ProgressBar = ({
           <>
             <CheckMarkIcon
               size={layout.iconSize}
-              color="white"
+              color="#ffffff"
               x={10}
               y={(layout.barHeight - layout.iconSize) / 2}
             />
             <Text
               fontSize={layout.fontSize}
               textAnchor="start"
-              color="white"
+              color="#ffffff"
               x={layout.iconSize + 16}
               y={layout.barHeight / 2}
               verticalAnchor="middle"
-              fill="white"
+              fill="#ffffff"
             >
               {barText}
             </Text>

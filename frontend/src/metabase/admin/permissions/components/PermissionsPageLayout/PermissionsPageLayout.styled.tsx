@@ -1,6 +1,6 @@
 import styled from "@emotion/styled";
-import { Icon } from "metabase/core/components/Icon";
-import { color } from "metabase/lib/colors";
+
+import { Icon } from "metabase/ui";
 
 export const PermissionPageRoot = styled.div`
   display: flex;
@@ -22,7 +22,7 @@ export const PermissionPageSidebar = styled.aside`
   flex-direction: column;
   height: 100%;
   overflow: auto;
-  border-left: 1px solid ${color("border")};
+  border-left: 1px solid var(--mb-color-border);
   max-width: 320px;
 `;
 
@@ -41,13 +41,13 @@ export const FullHeightContainer = styled.div`
 export const CloseSidebarButton = styled(Icon)`
   top: 1.75rem;
   right: 1.5rem;
-  color: ${color("text-light")};
+  color: var(--mb-color-text-light);
   position: absolute;
   cursor: pointer;
   transition: color 200ms;
 
   &:hover {
-    color: ${color("text-medium")};
+    color: var(--mb-color-text-medium);
   }
 `;
 

@@ -1,12 +1,14 @@
 import userEvent from "@testing-library/user-event";
-import { checkNotNull } from "metabase/lib/types";
-import { getMetadata } from "metabase/selectors/metadata";
+
 import {
   setupDatabasesEndpoints,
+  setupParameterValuesEndpoints,
   setupSearchEndpoints,
 } from "__support__/server-mocks";
 import { createMockEntitiesState } from "__support__/store";
-import { renderWithProviders, screen } from "__support__/ui";
+import { renderWithProviders, screen, waitFor } from "__support__/ui";
+import { checkNotNull } from "metabase/lib/types";
+import { getMetadata } from "metabase/selectors/metadata";
 import type { TemplateTag } from "metabase-types/api";
 import {
   createMockCard,
@@ -15,15 +17,16 @@ import {
   createMockTemplateTag,
 } from "metabase-types/api/mocks";
 import {
-  createSampleDatabase,
   ORDERS,
   PEOPLE,
   REVIEWS,
+  createSampleDatabase,
 } from "metabase-types/api/mocks/presets";
 import {
   createMockQueryBuilderState,
   createMockState,
 } from "metabase-types/store/mocks";
+
 import { TagEditorParam } from "./TagEditorParam";
 
 interface SetupOpts {
@@ -49,6 +52,10 @@ const setup = ({ tag = createMockTemplateTag() }: SetupOpts = {}) => {
 
   setupDatabasesEndpoints([database]);
   setupSearchEndpoints([]);
+  setupParameterValuesEndpoints({
+    values: [],
+    has_more_values: false,
+  });
 
   const setTemplateTag = jest.fn();
   const setTemplateTagConfig = jest.fn();
@@ -79,9 +86,9 @@ describe("TagEditorParam", () => {
       const input = screen.getByRole("textbox", {
         name: "Filter widget label",
       });
-      userEvent.clear(input);
-      userEvent.type(input, "New");
-      userEvent.tab();
+      await userEvent.clear(input);
+      await userEvent.type(input, "New");
+      await userEvent.tab();
 
       expect(setTemplateTag).toHaveBeenCalledWith({
         ...tag,
@@ -91,7 +98,7 @@ describe("TagEditorParam", () => {
   });
 
   describe("tag type", () => {
-    it("should be able to change the type of the tag", () => {
+    it("should be able to change the type of the tag", async () => {
       const tag = createMockTemplateTag({
         type: "dimension",
         dimension: ["field", PEOPLE.NAME, null],
@@ -99,8 +106,10 @@ describe("TagEditorParam", () => {
       });
       const { setTemplateTag } = setup({ tag });
 
-      userEvent.click(screen.getByText("Field Filter"));
-      userEvent.click(screen.getByText("Number"));
+      await userEvent.click(screen.getByTestId("variable-type-select"));
+      await userEvent.click(screen.getByText("Field Filter"));
+      await userEvent.click(screen.getByTestId("variable-type-select"));
+      await userEvent.click(screen.getByText("Number"));
 
       expect(setTemplateTag).toHaveBeenCalledWith({
         ...tag,
@@ -121,8 +130,10 @@ describe("TagEditorParam", () => {
       });
       const { setTemplateTag } = setup({ tag });
 
-      userEvent.click(await screen.findByText("People"));
-      userEvent.click(await screen.findByText("Source"));
+      await waitForElementsToLoad("People");
+
+      await userEvent.click(screen.getByText("People"));
+      await userEvent.click(await screen.findByText("Source"));
 
       expect(setTemplateTag).toHaveBeenCalledWith({
         ...tag,
@@ -140,8 +151,10 @@ describe("TagEditorParam", () => {
       });
       const { setTemplateTag } = setup({ tag });
 
-      userEvent.click(await screen.findByText("People"));
-      userEvent.click(await screen.findByText("Name"));
+      await waitForElementsToLoad("People");
+
+      await userEvent.click(screen.getByText("People"));
+      await userEvent.click(await screen.findByText("Name"));
 
       expect(setTemplateTag).toHaveBeenCalledWith({
         ...tag,
@@ -159,8 +172,10 @@ describe("TagEditorParam", () => {
       });
       const { setTemplateTag } = setup({ tag });
 
-      userEvent.click(await screen.findByText("Orders"));
-      userEvent.click(await screen.findByText("Quantity"));
+      await waitForElementsToLoad("Orders");
+
+      await userEvent.click(screen.getByText("Orders"));
+      await userEvent.click(await screen.findByText("Quantity"));
 
       expect(setTemplateTag).toHaveBeenCalledWith({
         ...tag,
@@ -178,8 +193,10 @@ describe("TagEditorParam", () => {
       });
       const { setTemplateTag } = setup({ tag });
 
-      userEvent.click(await screen.findByText("Reviews"));
-      userEvent.click(await screen.findByText("Rating"));
+      await waitForElementsToLoad("Reviews");
+
+      await userEvent.click(screen.getByText("Reviews"));
+      await userEvent.click(await screen.findByText("Rating"));
 
       expect(setTemplateTag).toHaveBeenCalledWith({
         ...tag,
@@ -197,8 +214,10 @@ describe("TagEditorParam", () => {
       });
       const { setTemplateTag } = setup({ tag });
 
-      userEvent.click(await screen.findByText("Name"));
-      userEvent.click(await screen.findByText("Address"));
+      await waitForElementsToLoad("Name");
+
+      await userEvent.click(screen.getByText("Name"));
+      await userEvent.click(await screen.findByText("Address"));
 
       expect(setTemplateTag).toHaveBeenCalledWith({
         ...tag,
@@ -208,7 +227,7 @@ describe("TagEditorParam", () => {
   });
 
   describe("tag widget type", () => {
-    it("should be able to set the widget type with options", () => {
+    it("should be able to set the widget type with options", async () => {
       const tag = createMockTemplateTag({
         type: "dimension",
         dimension: ["field", PEOPLE.NAME, null],
@@ -216,17 +235,20 @@ describe("TagEditorParam", () => {
       });
       const { setTemplateTag } = setup({ tag });
 
-      userEvent.click(screen.getByText("String"));
-      userEvent.click(screen.getByText("String contains"));
+      await userEvent.click(screen.getByTestId("filter-widget-type-select"));
+      await userEvent.click(screen.getByText("String"));
+      await userEvent.click(screen.getByTestId("filter-widget-type-select"));
+      await userEvent.click(screen.getByText("String contains"));
 
       expect(setTemplateTag).toHaveBeenCalledWith({
         ...tag,
+        default: null,
         "widget-type": "string/contains",
         options: { "case-sensitive": false },
       });
     });
 
-    it("should be able to set the widget type without options", () => {
+    it("should be able to set the widget type without options", async () => {
       const tag = createMockTemplateTag({
         type: "dimension",
         dimension: ["field", PEOPLE.NAME, null],
@@ -235,17 +257,20 @@ describe("TagEditorParam", () => {
       });
       const { setTemplateTag } = setup({ tag });
 
-      userEvent.click(screen.getByText("String starts with"));
-      userEvent.click(screen.getByText("String"));
+      await userEvent.click(screen.getByTestId("filter-widget-type-select"));
+      await userEvent.click(screen.getByText("String starts with"));
+      await userEvent.click(screen.getByTestId("filter-widget-type-select"));
+      await userEvent.click(screen.getByText("String"));
 
       expect(setTemplateTag).toHaveBeenCalledWith({
         ...tag,
+        default: null,
         "widget-type": "string/=",
         options: undefined,
       });
     });
 
-    it("should replace old location widget-type values with string/=", () => {
+    it("should replace old location widget-type values with string/=", async () => {
       const tag = createMockTemplateTag({
         type: "dimension",
         dimension: ["field", PEOPLE.NAME, null],
@@ -253,17 +278,18 @@ describe("TagEditorParam", () => {
       });
       setup({ tag });
 
+      await userEvent.click(screen.getByTestId("filter-widget-type-select"));
       expect(screen.getByText("String")).toBeInTheDocument();
     });
   });
 
   describe("tag required", () => {
-    it("should be able to make the tag required", () => {
+    it("should be able to make the tag required", async () => {
       const tag = createMockTemplateTag();
       const { setTemplateTag } = setup({ tag });
 
-      const toggle = screen.getByRole("switch", { name: "Required?" });
-      userEvent.click(toggle);
+      const toggleLabel = screen.getByText("Always require a value");
+      await userEvent.click(toggleLabel);
 
       expect(setTemplateTag).toHaveBeenCalledWith({
         ...tag,
@@ -271,18 +297,37 @@ describe("TagEditorParam", () => {
       });
     });
 
-    it("should clear the default value when becoming not required", () => {
+    it("should set the default value when turning required on", async () => {
+      const tag = createMockTemplateTag({ default: "123" });
+      const { setParameterValue } = setup({ tag });
+
+      const toggleLabel = screen.getByText("Always require a value");
+      await userEvent.click(toggleLabel);
+
+      expect(setParameterValue).toHaveBeenCalledWith(tag.id, "123");
+    });
+
+    it("should not clear the default value when turning required off", async () => {
       const tag = createMockTemplateTag({ required: true, default: "abc" });
       const { setTemplateTag } = setup({ tag });
 
-      const toggle = screen.getByRole("switch", { name: "Required?" });
-      userEvent.click(toggle);
+      const toggleLabel = screen.getByText("Always require a value");
+      await userEvent.click(toggleLabel);
 
       expect(setTemplateTag).toHaveBeenCalledWith({
         ...tag,
         required: false,
-        default: undefined,
+        default: "abc",
       });
     });
   });
 });
+
+async function waitForElementsToLoad(text: string) {
+  await waitFor(
+    () => {
+      expect(screen.getByText(text)).toBeInTheDocument();
+    },
+    { timeout: 10000 },
+  );
+}

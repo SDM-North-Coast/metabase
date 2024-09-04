@@ -1,7 +1,7 @@
 import { binning, isBinnable, withDefaultBinning } from "./binning";
 import {
-  temporalBucket,
   isTemporalBucketable,
+  temporalBucket,
   withDefaultTemporalBucket,
 } from "./temporal_bucket";
 import type { ColumnMetadata, Query } from "./types";
@@ -10,7 +10,7 @@ export function withDefaultBucket(
   query: Query,
   stageIndex: number,
   column: ColumnMetadata,
-) {
+): ColumnMetadata {
   if (isBinnable(query, stageIndex, column)) {
     const isBinned = binning(column) != null;
     return isBinned ? column : withDefaultBinning(query, stageIndex, column);

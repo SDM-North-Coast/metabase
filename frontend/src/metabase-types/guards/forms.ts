@@ -1,8 +1,9 @@
 import type {
-  StandardFormFieldDefinition,
   CustomFormFieldDefinition,
   FormFieldDefinition,
+  StandardFormFieldDefinition,
 } from "metabase-types/forms";
+
 import { isReactComponent } from "./react";
 
 export function isCustomWidget(

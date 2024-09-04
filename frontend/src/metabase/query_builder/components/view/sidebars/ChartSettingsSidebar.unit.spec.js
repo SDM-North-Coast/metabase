@@ -1,11 +1,12 @@
-import { render, fireEvent, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+
 import { createMockMetadata } from "__support__/metadata";
-import {
-  createSampleDatabase,
-  SAMPLE_DB_ID,
-} from "metabase-types/api/mocks/presets";
-import registerVisualizations from "metabase/visualizations/register";
 import ChartSettingsSidebar from "metabase/query_builder/components/view/sidebars/ChartSettingsSidebar";
+import registerVisualizations from "metabase/visualizations/register";
+import {
+  SAMPLE_DB_ID,
+  createSampleDatabase,
+} from "metabase-types/api/mocks/presets";
 
 registerVisualizations();
 

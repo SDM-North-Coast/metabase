@@ -3,7 +3,6 @@
    [clojure.test :refer :all]
    [metabase.models.card :refer [Card]]
    [metabase.models.moderation-review :as moderation-review :refer [ModerationReview]]
-   [metabase.public-settings.premium-features-test :as premium-features-test]
    [metabase.test :as mt]
    [toucan2.core :as t2]))
 
@@ -15,7 +14,7 @@
 (deftest create-test
   (testing "POST /api/moderation-review"
     (testing "Should require a token with `:content-verification`"
-      (premium-features-test/with-premium-features #{}
+      (mt/with-premium-features #{}
         (is (= "Content verification is a paid feature not currently available to your instance. Please upgrade to use it. Learn more at metabase.com/upgrade/"
                (mt/user-http-request :rasta :post 402 "moderation-review"
                                      {:text                "review"
@@ -23,7 +22,7 @@
                                       :moderated_item_id   1
                                       :moderated_item_type "card"})))))
 
-    (premium-features-test/with-premium-features #{:content-verification}
+    (mt/with-premium-features #{:content-verification}
       (mt/with-temp [Card {card-id :id} {:name "Test Card"}]
         (mt/with-model-cleanup [ModerationReview]
           (letfn [(moderate! [status text]
@@ -34,8 +33,8 @@
                                             :moderated_item_id   card-id
                                             :moderated_item_type "card"})))
                   (review-count [] (t2/count ModerationReview
-                                     :moderated_item_id card-id
-                                     :moderated_item_type "card"))]
+                                             :moderated_item_id card-id
+                                             :moderated_item_type "card"))]
             (testing "Non admin cannot create a moderation review"
               (is (= 0 (review-count)))
               (is (= "You don't have permissions to do that."
@@ -63,8 +62,8 @@
                        (into #{}
                              (map #(select-keys % [:text :status :most_recent]))
                              (t2/select ModerationReview
-                               :moderated_item_id card-id
-                               :moderated_item_type "card"))))))
+                                        :moderated_item_id card-id
+                                        :moderated_item_type "card"))))))
             (testing "Ensures we never have more than `modreview/max-moderation-reviews`"
               (t2/insert! ModerationReview (repeat (* 2 moderation-review/max-moderation-reviews)
                                                    {:moderated_item_id   card-id

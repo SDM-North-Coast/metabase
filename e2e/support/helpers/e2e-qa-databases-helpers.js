@@ -1,18 +1,18 @@
 import {
-  QA_POSTGRES_PORT,
+  QA_DB_CONFIG,
+  QA_DB_CREDENTIALS,
   QA_MONGO_PORT,
   QA_MYSQL_PORT,
-  QA_DB_CREDENTIALS,
+  QA_POSTGRES_PORT,
   WRITABLE_DB_CONFIG,
   WRITABLE_DB_ID,
-  QA_DB_CONFIG,
 } from "e2e/support/cypress_data";
 
 /*****************************************
  **            QA DATABASES             **
  ******************************************/
 
-export function addMongoDatabase(name = "QA Mongo4") {
+export function addMongoDatabase(name = "QA Mongo") {
   // https://hub.docker.com/layers/metabase/qa-databases/mongo-sample-4.4/images/sha256-8cdeaacf28c6f0a6f9fde42ce004fcc90200d706ac6afa996bdd40db78ec0305
   addQADatabase("mongo", name, QA_MONGO_PORT);
 }
@@ -82,7 +82,7 @@ function addQADatabase(engine, db_display_name, port, enable_actions = false) {
 
       // it's important that we don't enable actions until sync is complete
       if (dbId && enable_actions) {
-        cy.log(`**-- Enabling actions --**`);
+        cy.log("**-- Enabling actions --**");
         cy.request("PUT", `/api/database/${dbId}`, {
           settings: { "database-enable-actions": true },
         }).then(({ status }) => {
@@ -121,6 +121,40 @@ function recursiveCheck(id, i = 0) {
     });
     if (database.initial_sync_status !== "complete") {
       recursiveCheck(id, ++i);
+    } else {
+      recursiveCheckFields(id);
+    }
+  });
+}
+
+function recursiveCheckFields(id, i = 0) {
+  // Let's not wait more than 10s for the sync to finish
+  if (i === 10) {
+    cy.task("log", "The field sync isn't complete");
+    return;
+  }
+
+  cy.wait(1000);
+
+  cy.request("GET", `/api/database/${id}/schemas`).then(({ body: schemas }) => {
+    const [schema] = schemas;
+    if (schema) {
+      cy.request("GET", `/api/database/${id}/schema/${schema}`)
+        .then(({ body: schema }) => {
+          return schema[0].id;
+        })
+        .then(tableId => {
+          cy.request("GET", `/api/table/${tableId}/query_metadata`).then(
+            ({ body: table }) => {
+              const field = table.fields.find(
+                field => field.semantic_type !== "type/PK",
+              );
+              if (!field.last_analyzed) {
+                recursiveCheckFields(id, ++i);
+              }
+            },
+          );
+        });
     }
   });
 }
@@ -220,7 +254,7 @@ export const createModelFromTableName = ({
         query: {
           "source-table": tableId,
         },
-        dataset: true,
+        type: "model",
       },
       {
         wrapId: true,
@@ -275,7 +309,11 @@ export function waitForSyncToFinish({
   });
 }
 
-export function resyncDatabase({ dbId = 2, tableName = "", tableAlias }) {
+export function resyncDatabase({
+  dbId = 2,
+  tableName = "",
+  tableAlias = undefined, // TS was complaining that this was a required param
+}) {
   // must be signed in as admin to sync
   cy.request("POST", `/api/database/${dbId}/sync_schema`);
   cy.request("POST", `/api/database/${dbId}/rescan_values`);

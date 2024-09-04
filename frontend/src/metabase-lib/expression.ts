@@ -1,15 +1,22 @@
 import * as ML from "cljs/metabase.lib.js";
+
 import type {
+  AggregationClause,
   ColumnMetadata,
   ExpressionArg,
   ExpressionClause,
-  ExpressionOperator,
+  ExpressionOperatorName,
   ExpressionOptions,
   ExpressionParts,
   FilterClause,
   JoinCondition,
   Query,
 } from "./types";
+
+type ErrorWithMessage = {
+  message: string;
+  friendly?: boolean;
+};
 
 export function expression(
   query: Query,
@@ -20,14 +27,9 @@ export function expression(
   return ML.expression(query, stageIndex, expressionName, clause);
 }
 
-export function expressionName(clause: ExpressionClause): string {
-  return ML.expression_name(clause);
-}
-
-export function withExpressionName(
-  clause: ExpressionClause,
-  newName: string,
-): ExpressionClause {
+export function withExpressionName<
+  Clause extends AggregationClause | ExpressionClause,
+>(clause: Clause, newName: string): Clause {
   return ML.with_expression_name(clause, newName);
 }
 
@@ -40,23 +42,23 @@ export function expressions(
 
 export function expressionableColumns(
   query: Query,
-  stageIndex: number,
-  expressionPosition: number,
+  stageIndex?: number,
+  expressionIndex?: number,
 ): ColumnMetadata[] {
-  return ML.expressionable_columns(query, stageIndex, expressionPosition);
+  return ML.expressionable_columns(query, stageIndex, expressionIndex);
 }
 
 export function expressionParts(
   query: Query,
   stageIndex: number,
-  clause: ExpressionClause | FilterClause | JoinCondition,
+  clause: AggregationClause | ExpressionClause | FilterClause | JoinCondition,
 ): ExpressionParts {
   return ML.expression_parts(query, stageIndex, clause);
 }
 
 export function expressionClause(
-  operator: ExpressionOperator,
-  args: (ExpressionArg | ExpressionClause)[],
+  operator: ExpressionOperatorName,
+  args: (ExpressionArg | AggregationClause | ExpressionClause | FilterClause)[],
   options: ExpressionOptions | null = null,
 ): ExpressionClause {
   return ML.expression_clause(operator, args, options);
@@ -73,11 +75,28 @@ export function expressionClauseForLegacyExpression(
 export function legacyExpressionForExpressionClause(
   query: Query,
   stageIndex: number,
-  expressionClause: ExpressionClause,
+  expressionClause: ExpressionClause | AggregationClause | FilterClause,
 ): any {
   return ML.legacy_expression_for_expression_clause(
     query,
     stageIndex,
     expressionClause,
+  );
+}
+
+export type ExpressionMode = "expression" | "aggregation" | "filter";
+export function diagnoseExpression(
+  query: Query,
+  stageIndex: number,
+  expressionMode: ExpressionMode,
+  mbql: any,
+  expressionIndex?: number,
+): ErrorWithMessage | null {
+  return ML.diagnose_expression(
+    query,
+    stageIndex,
+    expressionMode,
+    mbql,
+    expressionIndex,
   );
 }

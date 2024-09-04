@@ -1,9 +1,10 @@
 import styled from "@emotion/styled";
-import { color } from "metabase/lib/colors";
-import Link from "metabase/core/components/Link";
+
 import BaseExternalLink from "metabase/core/components/ExternalLink";
-import { Icon } from "metabase/core/components/Icon";
+import Input from "metabase/core/components/Input";
+import Link from "metabase/core/components/Link";
 import { RecentsList } from "metabase/nav/components/search/RecentsList";
+import { Icon } from "metabase/ui";
 
 export const DisplayLinkCardWrapper = styled.div<{ fade?: boolean }>`
   padding: 0 0.5rem;
@@ -37,7 +38,7 @@ export const CardLink = styled(Link)`
   font-weight: bold;
 
   &:hover {
-    color: ${color("brand")};
+    color: var(--mb-color-brand);
   }
 `;
 
@@ -52,12 +53,12 @@ export const ExternalLink = styled(BaseExternalLink)`
   font-weight: bold;
 
   &:hover {
-    color: ${color("brand")};
+    color: var(--mb-color-brand);
   }
 `;
 
 export const BrandIconWithHorizontalMargin = styled(Icon)`
-  color: ${color("brand")};
+  color: var(--mb-color-brand);
   margin: 0 0.5rem;
 `;
 
@@ -67,14 +68,14 @@ const searchResultsStyles = `
   min-width: 20rem;
   overflow-y: auto;
 
-  background-color: ${color("bg-white")};
+  background-color: var(--mb-color-bg-white);
   line-height: 24px;
 
   max-height: 400px;
 
-  border: 1px solid ${color("border")};
+  border: 1px solid var(--mb-color-border);
   border-radius: 6px;
-  box-shadow: 0 7px 20px ${color("shadow")};
+  box-shadow: 0 7px 20px var(--mb-color-shadow);
   pointer-events: all;
 `;
 
@@ -84,4 +85,12 @@ export const SearchResultsContainer = styled.div`
 
 export const StyledRecentsList = styled(RecentsList)`
   ${searchResultsStyles}
+`;
+
+export const StyledInput = styled(Input)`
+  pointer-events: all;
+
+  * {
+    pointer-events: all;
+  }
 `;

@@ -7,10 +7,8 @@ display: table
 archived: false
 collection_id: vG58R8k-QddHWA7_47umn
 collection_preview: true
-collection_position: 16
+collection_position: 17
 query_type: query
-dataset: true
-cache_ttl: null
 database_id: Internal Metabase Database
 table_id:
 - Internal Metabase Database
@@ -331,7 +329,11 @@ result_metadata:
     - v_databases
     - creator_id
   - null
-  fk_target_field_id: 739
+  fk_target_field_id:
+  - Internal Metabase Database
+  - public
+  - v_users
+  - user_id
   id:
   - Internal Metabase Database
   - public
@@ -507,4 +509,7 @@ serdes/meta:
 - id: -19557ZnrWiDgG4h4cKxF
   label: databases
   model: Card
+archived_directly: false
 metabase_version: vUNKNOWN (0e09ac7)
+source_card_id: null
+type: model

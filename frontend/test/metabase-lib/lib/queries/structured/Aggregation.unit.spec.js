@@ -1,24 +1,18 @@
 import { createMockMetadata } from "__support__/metadata";
-import { createMockMetric } from "metabase-types/api/mocks";
+import Aggregation from "metabase-lib/v1/queries/structured/Aggregation";
 import {
-  createSampleDatabase,
   ORDERS,
   ORDERS_ID,
+  createSampleDatabase,
 } from "metabase-types/api/mocks/presets";
-import Aggregation from "metabase-lib/queries/structured/Aggregation";
-
-const TOTAL_ORDER_VALUE_METRIC = createMockMetric({
-  id: 1,
-  name: "Total Order Value",
-  table_id: ORDERS_ID,
-});
 
 const metadata = createMockMetadata({
   databases: [createSampleDatabase()],
-  metrics: [TOTAL_ORDER_VALUE_METRIC],
 });
 
-const query = metadata.table(ORDERS_ID).query();
+const query = metadata
+  .table(ORDERS_ID)
+  .legacyQuery({ useStructuredQuery: true });
 
 function aggregationForMBQL(mbql) {
   return new Aggregation(mbql, 0, query);
@@ -54,14 +48,6 @@ describe("Aggregation", () => {
           { "display-name": "named" },
         ]).displayName(),
       ).toEqual("named");
-    });
-    it("should format saved metric", () => {
-      expect(
-        aggregationForMBQL([
-          "metric",
-          TOTAL_ORDER_VALUE_METRIC.id,
-        ]).displayName(),
-      ).toEqual("Total Order Value");
     });
     it("should format aggregation with aggregation-options but not display-name", () => {
       expect(
@@ -101,11 +87,6 @@ describe("Aggregation", () => {
           ["sum", ["field", ORDERS.TOTAL, null]],
           { "display-name": "named" },
         ]).isValid(),
-      ).toBe(true);
-    });
-    it("should be true for saved metric", () => {
-      expect(
-        aggregationForMBQL(["metric", TOTAL_ORDER_VALUE_METRIC.id]).isValid(),
       ).toBe(true);
     });
     it("should be true for aggregation with aggregation-options but not display-name", () => {

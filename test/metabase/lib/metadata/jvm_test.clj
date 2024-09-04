@@ -8,17 +8,20 @@
    [metabase.lib.core :as lib]
    [metabase.lib.metadata :as lib.metadata]
    [metabase.lib.metadata.calculation :as lib.metadata.calculation]
+   [metabase.lib.metadata.invocation-tracker :as lib.metadata.invocation-tracker]
    [metabase.lib.metadata.jvm :as lib.metadata.jvm]
    [metabase.lib.metadata.protocols :as lib.metadata.protocols]
+   [metabase.lib.schema.metadata :as lib.schema.metadata]
+   ^{:clj-kondo/ignore [:discouraged-namespace]}
    [metabase.test :as mt]
    [metabase.util :as u]
-   #_{:clj-kondo/ignore [:discouraged-namespace]}
+   ^{:clj-kondo/ignore [:discouraged-namespace]}
    [toucan2.core :as t2]
    [toucan2.tools.with-temp :as t2.with-temp]))
 
 (deftest ^:parallel fetch-field-test
   (let [field (t2/select-one :metadata/column (mt/id :categories :id))]
-    (is (not (me/humanize (mc/validate lib.metadata/ColumnMetadata field))))))
+    (is (not (me/humanize (mc/validate ::lib.schema.metadata/column field))))))
 
 (deftest ^:parallel fetch-database-test
   (is (=? {:lib/type :metadata/database, :features set?}
@@ -48,7 +51,7 @@
             (lib.metadata.calculation/returned-columns query)))))
 
 (deftest ^:parallel join-with-aggregation-reference-in-fields-metadata-test
-  (mt/dataset sample-dataset
+  (mt/dataset test-data
     (let [query (mt/mbql-query products
                   {:joins [{:source-query {:source-table $$orders
                                            :breakout     [$orders.product_id]
@@ -157,7 +160,7 @@
                 (map #(lib/display-info agg-query %)
                      (lib.metadata.calculation/returned-columns agg-query))))))))
 
-(deftest ^:synchronized internal-remap-metadata-test
+(deftest ^:synchronized external-remap-metadata-test
   (mt/with-column-remappings [venues.id categories.name]
     (is (=? {:lib/type           :metadata/column
              :name               "ID"
@@ -169,7 +172,7 @@
              (lib.metadata.jvm/application-database-metadata-provider (mt/id))
              (mt/id :venues :id))))))
 
-(deftest ^:synchronized external-remap-metadata-test
+(deftest ^:synchronized internal-remap-metadata-test
   (mt/with-column-remappings [venues.id {1 "African", 2 "American", 3 "Artisan", 4 "BBQ"}]
     (is (=? {:lib/type           :metadata/column
              :name               "ID"
@@ -183,7 +186,9 @@
              (mt/id :venues :id))))))
 
 (deftest ^:synchronized persisted-info-metadata-test
-  (t2.with-temp/with-temp [:model/Card          {card-id :id} {}
+  (t2.with-temp/with-temp [:model/Card          {card-id :id} {:dataset_query {:database (mt/id)
+                                                                               :type     :query
+                                                                               :query    {:source-table (mt/id :venues)}}}
                            :model/PersistedInfo {}            {:card_id card-id, :database_id (mt/id)}]
     (is (=? {:lib/type           :metadata/card
              :id                 card-id
@@ -195,3 +200,19 @@
             (lib.metadata/card
              (lib.metadata.jvm/application-database-metadata-provider (mt/id))
              card-id)))))
+
+(deftest ^:parallel equality-test
+  (is (= (lib.metadata.jvm/application-database-metadata-provider (mt/id))
+         (lib.metadata.jvm/application-database-metadata-provider (mt/id)))))
+
+(deftest ^:synchronized all-methods-call-go-through-invocation-tracker-first-test
+  (binding [lib.metadata.invocation-tracker/*to-track-metadata-types* #{:metadata/column}]
+    (let [mp (lib.metadata.jvm/application-database-metadata-provider (mt/id))]
+      (testing "sanity check"
+        (is (empty? (lib.metadata/invoked-ids mp :metadata/column))))
+      (testing "getting card should invoke the tracker"
+        (is (some? (lib.metadata/field mp (mt/id :orders :id))))
+        (is (= [(mt/id :orders :id)] (lib.metadata/invoked-ids mp :metadata/column))))
+      (testing "2nd call, card shoudld should be cached by now, but invocation still keeping track of ids"
+        (is (some? (lib.metadata/field mp (mt/id :orders :id))))
+        (is (= [(mt/id :orders :id) (mt/id :orders :id)] (lib.metadata/invoked-ids mp :metadata/column)))))))

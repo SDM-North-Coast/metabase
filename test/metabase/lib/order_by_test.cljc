@@ -1,5 +1,6 @@
 (ns metabase.lib.order-by-test
   (:require
+   #?@(:cljs ([metabase.test-runner.assert-exprs.approximately-equal]))
    [clojure.test :refer [are deftest is testing]]
    [medley.core :as m]
    [metabase.lib.card :as lib.card]
@@ -7,12 +8,12 @@
    [metabase.lib.core :as lib]
    [metabase.lib.metadata :as lib.metadata]
    [metabase.lib.metadata.calculation :as lib.metadata.calculation]
+   [metabase.lib.order-by :as lib.order-by]
    [metabase.lib.query :as lib.query]
    [metabase.lib.test-metadata :as meta]
    [metabase.lib.test-util :as lib.tu]
    [metabase.lib.util :as lib.util]
-   [metabase.util :as u]
-   #?@(:cljs ([metabase.test-runner.assert-exprs.approximately-equal]))))
+   [metabase.util :as u]))
 
 #?(:cljs (comment metabase.test-runner.assert-exprs.approximately-equal/keep-me))
 
@@ -95,6 +96,57 @@
               (lib/order-by (meta/field-metadata :venues :id))
               lib/order-bys))))
 
+(deftest ^:parallel multiple-distinct-order-bys-test
+  (testing "Should be able to order by two distinct fields"
+    (is (=? [[:asc
+              {:lib/uuid string?}
+              [:field {:lib/uuid string?} (meta/id :venues :id)]]
+             [:asc
+              {:lib/uuid string?}
+              [:field {:lib/uuid string?} (meta/id :venues :price)]]]
+            (-> lib.tu/venues-query
+                (lib/order-by (meta/field-metadata :venues :id))
+                (lib/order-by (meta/field-metadata :venues :price))
+                lib/order-bys))))
+
+  (testing "Should be able to order by two distinct expressions"
+    (is (=? [[:asc
+              {:lib/uuid string?}
+              [:expression
+               {:lib/uuid string?
+                :base-type :type/Date
+                :effective-type :type/Date}
+               "expr"]]
+             [:asc
+              {:lib/uuid string?}
+              [:expression
+               {:lib/uuid string?
+                :base-type :type/Date
+                :effective-type :type/Date}
+               "expr2"]]]
+            (as-> lib.tu/query-with-expression $q
+              (lib/expression $q "expr2" (lib/absolute-datetime "2020" :month))
+              (lib/order-by $q (lib/expression-ref $q "expr"))
+              (lib/order-by $q (lib/expression-ref $q "expr2"))
+              (lib/order-bys $q))))))
+
+;; malli schemas for funcs are not enforced on cljs
+#?(:clj
+   (deftest ^:parallel duplicate-order-bys-test
+     (are [query] (thrown-with-msg?
+                   clojure.lang.ExceptionInfo
+                   #"Invalid output:.*Duplicate values ignoring uuids"
+                   query)
+       (-> lib.tu/venues-query
+           (lib/order-by (meta/field-metadata :venues :id))
+           (lib/order-by (meta/field-metadata :venues :id))
+           lib/order-bys)
+
+       (as-> lib.tu/query-with-expression $q
+         (lib/order-by $q (lib/expression-ref $q "expr"))
+         (lib/order-by $q (lib/expression-ref $q "expr"))
+         (lib/order-bys $q)))))
+
 ;;; the following tests use raw legacy MBQL because they're direct ports of JavaScript tests from MLv1 and I wanted to
 ;;; make sure that given an existing query the expected description was generated correctly.
 
@@ -172,13 +224,13 @@
           breakout-col (m/find-first #(= (:lib/source %) :source/expressions)
                                      (lib/breakoutable-columns query 0))
           query (lib/breakout query breakout-col)]
-    (are [query] (=? [:desc {} [:expression
-                                {:base-type :type/Integer, :effective-type :type/Integer}
-                                "Category ID + 1"]]
-                     (get-in (lib/order-by query 0 (first (lib/orderable-columns query 0)) :desc)
-                             [:stages 0 :order-by 0]))
-      query
-      (lib/append-stage query)))))
+      (are [query] (=? [:desc {} [:expression
+                                  {:base-type :type/Integer, :effective-type :type/Integer}
+                                  "Category ID + 1"]]
+                       (get-in (lib/order-by query 0 (first (lib/orderable-columns query 0)) :desc)
+                               [:stages 0 :order-by 0]))
+        query
+        (lib/append-stage query)))))
 
 (deftest ^:parallel orderable-columns-test
   (let [query lib.tu/venues-query]
@@ -284,14 +336,32 @@
                  {:id (meta/id :categories :name) :name "NAME"}]
                 (lib/orderable-columns query)))))))
 
+(deftest ^:parallel orderable-columns-exclude-expressions-containing-offset
+  (testing "orderable-columns should filter out expressions which contain :offset"
+    (let [query (-> lib.tu/venues-query
+                    (lib/order-by (meta/field-metadata :venues :id) :asc)
+                    (lib/expression "Offset col"    (lib/offset (meta/field-metadata :venues :price) -1))
+                    (lib/expression "Nested Offset"
+                                    (lib/* 100 (lib/offset (meta/field-metadata :venues :price) -1))))]
+      (testing (lib.util/format "Query =\n%s" (u/pprint-to-str query))
+        (is (=? [{:id (meta/id :venues :id) :name "ID"}
+                 {:id (meta/id :venues :name) :name "NAME"}
+                 {:id (meta/id :venues :category-id) :name "CATEGORY_ID"}
+                 {:id (meta/id :venues :latitude) :name "LATITUDE"}
+                 {:id (meta/id :venues :longitude) :name "LONGITUDE"}
+                 {:id (meta/id :venues :price) :name "PRICE"}
+                 {:id (meta/id :categories :id) :name "ID"}
+                 {:id (meta/id :categories :name) :name "NAME"}]
+                (lib/orderable-columns query)))))))
+
 (deftest ^:parallel orderable-explicit-joins-test
   (testing "orderable-columns should include columns from explicit joins"
     (let [query (-> lib.tu/venues-query
                     (lib/join (-> (lib/join-clause
                                    (meta/table-metadata :categories)
                                    [(lib/=
-                                      (meta/field-metadata :venues :category-id)
-                                      (lib/with-join-alias (meta/field-metadata :categories :id) "Cat"))])
+                                     (meta/field-metadata :venues :category-id)
+                                     (lib/with-join-alias (meta/field-metadata :categories :id) "Cat"))])
                                   (lib/with-join-alias "Cat")
                                   (lib/with-join-fields :all))))]
       (testing (lib.util/format "Query =\n%s" (u/pprint-to-str query))
@@ -331,7 +401,26 @@
                 :display-name             "Count"
                 :base-type                :type/Integer
                 :lib/source               :source/card
-                :lib/desired-column-alias "count"}]
+                :lib/desired-column-alias "count"}
+               ;; Implicitly joinable columns
+               {:name                     "ID"
+                :display-name             "ID"
+                :base-type                :type/BigInteger
+                :lib/source               :source/implicitly-joinable
+                :lib/desired-column-alias "USERS__via__USER_ID__ID"
+                :fk-field-id              (meta/id :checkins :user-id)}
+               {:name                     "NAME"
+                :display-name             "Name"
+                :base-type                :type/Text
+                :lib/source               :source/implicitly-joinable
+                :lib/desired-column-alias "USERS__via__USER_ID__NAME"
+                :fk-field-id              (meta/id :checkins :user-id)}
+               {:name                     "LAST_LOGIN"
+                :display-name             "Last Login"
+                :base-type                :type/DateTime
+                :lib/source               :source/implicitly-joinable
+                :lib/desired-column-alias "USERS__via__USER_ID__LAST_LOGIN"
+                :fk-field-id              (meta/id :checkins :user-id)}]
               (lib/orderable-columns query)))
       (testing `lib/display-info
         (is (=? [{:name                   "USER_ID"
@@ -343,7 +432,32 @@
                   :display-name           "Count"
                   :table                  {:name "My Card", :display-name "My Card"}
                   :is-from-previous-stage false
-                  :is-implicitly-joinable false}]
+                  :is-implicitly-joinable false}
+                 ;; Implicitly joinable columns
+                 {:name                   "ID"
+                  :display-name           "ID"
+                  :long-display-name      "User → ID"
+                  :table                  {:name            "USERS"
+                                           :display-name    "Users"
+                                           :is-source-table false}
+                  :is-from-previous-stage false
+                  :is-implicitly-joinable true}
+                 {:name                   "NAME"
+                  :display-name           "Name"
+                  :long-display-name      "User → Name"
+                  :table                  {:name            "USERS"
+                                           :display-name    "Users"
+                                           :is-source-table false}
+                  :is-from-previous-stage false
+                  :is-implicitly-joinable true}
+                 {:name                   "LAST_LOGIN"
+                  :display-name           "Last Login"
+                  :long-display-name      "User → Last Login"
+                  :table                  {:name            "USERS"
+                                           :display-name    "Users"
+                                           :is-source-table false}
+                  :is-from-previous-stage false
+                  :is-implicitly-joinable true}]
                 (for [col (lib/orderable-columns query)]
                   (lib/display-info query col))))))))
 
@@ -432,8 +546,8 @@
               (lib/join (-> (lib/join-clause
                              (meta/table-metadata :categories)
                              [(lib/=
-                                (meta/field-metadata :venues :category-id)
-                                (lib/with-join-alias (meta/field-metadata :categories :id) "Cat"))])
+                               (meta/field-metadata :venues :category-id)
+                               (lib/with-join-alias (meta/field-metadata :categories :id) "Cat"))])
                             (lib/with-join-alias "Cat")
                             (lib/with-join-fields :all)))
               (lib/with-fields [(meta/field-metadata :venues :id)
@@ -591,7 +705,7 @@
     (let [query lib.tu/venues-query
           query (-> query
                     (lib/order-by (m/find-first #(= (:id %) (meta/id :categories :name))
-                                   (lib/orderable-columns query))))]
+                                                (lib/orderable-columns query))))]
       (is (=? {:stages [{:order-by [[:asc {} [:field
                                               {:source-field (meta/id :venues :category-id)}
                                               (meta/id :categories :name)]]]}]}
@@ -782,3 +896,12 @@
       (is (= opposite (first new-order-by)))
       (is (= (assoc-in query [:stages 0 :order-by 0 0] opposite)
              new-query)))))
+
+(deftest ^:parallel remove-all-order-bys-test
+  (let [query (-> (lib/query meta/metadata-provider (meta/table-metadata :venues))
+                  (lib/order-by (meta/field-metadata :venues :id)))]
+    (is (=? {:stages [{:order-by [[:asc {} [:field {} (meta/id :venues :id)]]]}]}
+            query))
+    (let [query' (lib.order-by/remove-all-order-bys query)]
+      (is (=? {:stages [{:order-by (symbol "nil #_\"key is not present.\"")}]}
+              query')))))

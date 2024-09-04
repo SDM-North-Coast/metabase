@@ -1,5 +1,5 @@
-import { nestedSettings } from "metabase/visualizations/lib/settings/nested";
 import { getComputedSettings } from "metabase/visualizations/lib/settings";
+import { nestedSettings } from "metabase/visualizations/lib/settings/nested";
 
 describe("nestedSettings", () => {
   it("should add a nested setting function to settings", () => {
@@ -8,6 +8,7 @@ describe("nestedSettings", () => {
         objectName: "nested",
         getObjects: () => [1, 2, 3],
         getObjectKey: object => String(object),
+        getObjectSettings: (objects, key) => objects[key],
         getSettingDefinitionsForObject: () => ({
           foo: { getDefault: object => `foo${object}` },
         }),

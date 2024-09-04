@@ -2,6 +2,7 @@ import type {
   CollectionPermissions,
   GroupsPermissions,
   SettingDefinition,
+  SettingKey,
 } from "metabase-types/api";
 
 export type AdminPathKey =
@@ -12,7 +13,11 @@ export type AdminPathKey =
   | "permissions"
   | "troubleshooting"
   | "audit"
-  | "tools";
+  | "tools"
+  | "performance"
+  | "performance-models"
+  | "performance-dashboards-and-questions"
+  | "performance-databases";
 
 export type AdminPath = {
   key: AdminPathKey;
@@ -29,9 +34,14 @@ export interface AdminState {
     originalCollectionPermissions: CollectionPermissions;
     saveError?: string;
     isHelpReferenceOpen: boolean;
+    hasRevisionChanged: {
+      revision: number | null;
+      hasChanged: boolean;
+    };
   };
   settings: {
     settings: SettingDefinition[];
+    warnings: Partial<Record<SettingKey, unknown>>;
   };
 }
 

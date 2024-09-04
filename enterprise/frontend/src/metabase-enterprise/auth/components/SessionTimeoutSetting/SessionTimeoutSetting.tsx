@@ -2,15 +2,15 @@ import type { ChangeEventHandler } from "react";
 import { useState } from "react";
 import { t } from "ttag";
 
-import Toggle from "metabase/core/components/Toggle";
 import Select from "metabase/core/components/Select";
+import Toggle from "metabase/core/components/Toggle";
 
 import {
+  ErrorMessage,
   SessionTimeoutInput,
   SessionTimeoutInputContainer,
-  SessionTimeoutSettingRoot,
   SessionTimeoutSettingContainer,
-  ErrorMessage,
+  SessionTimeoutSettingRoot,
 } from "./SessionTimeoutSetting.styled";
 
 const UNITS = [

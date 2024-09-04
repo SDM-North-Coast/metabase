@@ -8,8 +8,26 @@
 
 (comment change.strict/keep-me)
 
+(def id-timestamp-format-re
+  "Timestamp is of format `yyyy-MM-dd'T'HH:mm:ss`.
+  E.g: v49.2023-12-14T08:54:54"
+  #"^v\d{2,}\.(\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])T([0-1][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9])$")
+
+(def id-number-format-re
+  "E.g: v49.00-008
+  This format should no longer be used for new migrations, use `id-timestamp-format-re` instead."
+  #"^v\d{2,}\.\d{2}-\d{3}$")
+
 (s/def ::id (s/and string?
-                   #(re-matches #"^v\d{2,}\.\d{2}-\d{3}$" %)))
+                   (s/or
+                    ;; new ids should conform this format
+                    :id-with-timestamp ;; e.g: v49.2023-12-14T08:54:54
+                    (s/and #(re-matches id-timestamp-format-re %))
+                    :id-with-old-verion-format ;; e.g: v49.00-008
+                    (s/and #(re-matches id-number-format-re %)
+                           ;; the cut off id for this old format is v49.00-060
+                           ;; see #36787 for context
+                           #(neg? (compare % "v49.00-061"))))))
 
 (s/def ::author string?)
 
@@ -17,7 +35,7 @@
   (s/keys :opt-un [::dbms]))
 
 (s/def ::preConditions
-  (s/coll-of ::preCondition))
+  (s/nilable (s/coll-of ::preCondition)))
 
 (s/def ::dbms
   (s/keys :req-un [::type]))
@@ -104,17 +122,45 @@
    (some change-types-supporting-rollback (mapcat keys changes))
    (contains? change-set :rollback)))
 
+(def ^:private change-types-requiring-preconditions
+  #{:createTable
+    :dropTable
+    :addColumn
+    :dropColumn
+    :createIndex
+    :dropIndex
+    :addForeignKeyConstraint
+    :dropForeignKeyConstraint})
+
+(defn- precondition-present-when-required?
+  "Ensures that certain changeSet types include a preCondition. The intent is for the preCondition to ensure that the changeSet is
+  idempotent by checking whether the table/column/index/etc does not exist before trying to create it. (Or inversely, that it does
+  exist before trying to drop it.)
+
+  We don't currently assert on the structure of the preCondition to provide flexibility if there are cases where idempotence is not
+  desired."
+  [{:keys [id changes] :as change-set}]
+  (or
+   (int? id)
+   (< (major-version id) 51)
+   (not-any? change-types-requiring-preconditions (mapcat keys changes))
+   (contains? change-set :preConditions)))
+
 (defn- disallow-delete-cascade-with-add-column
   "Returns false if addColumn changeSet uses deleteCascade. See Metabase issue #14321"
   [{:keys [changes]}]
   (let [[change-type {:keys [columns]}] (ffirst changes)]
-    (if (= :addColumn change-type)
-      (not-any? #(-> % :column :constraints :deleteCascade) columns)
-      true)))
+    (or (not= :addColumn change-type)
+        (not-any? (fn [c]
+                    (let [constraint (-> c :column :constraints)]
+                      (and (:deleteCascade constraint)
+                           (not (:deleteCascadeForce constraint)))))
+                  columns))))
 
 (s/def ::change-set
   (s/and
    rollback-present-when-required?
+   precondition-present-when-required?
    disallow-delete-cascade-with-add-column
    (s/keys :req-un [::id ::author ::changes ::comment]
            :opt-un [::preConditions])))

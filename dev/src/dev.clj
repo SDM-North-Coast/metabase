@@ -12,7 +12,8 @@
 ;;
 ;; - [Getting started with backend development](https://github.com/metabase/metabase/blob/master/docs/developers-guide/devenv.md#backend-development)
 ;; - [Additional notes on using tools.deps](https://github.com/metabase/metabase/wiki/Migrating-from-Leiningen-to-tools.deps)
-;; - [Other tips](https://github.com/metabase/metabase/wiki/Metabase-Backend-Dev-Secrets)
+;; - [Use the dev-scripts repo to run various local DBs](https://github.com/metabase/dev-scripts)
+;; - If you're on a Mac and need a VM to run Windows or Linux, [check out UTM](https://mac.getutm.app/)
 ;;
 ;; ## Important Parts of the Codebase
 ;;
@@ -29,6 +30,20 @@
 ;; - [Liquibase](https://docs.liquibase.com/concepts/changelogs/changeset.html) for database migrations
 ;; - [Compojure](https://github.com/weavejester/compojure) on top of [Ring](https://github.com/ring-clojure/ring) for our API
 ;;
+;; ## Other Helpful Things
+;;
+;; [Tips on our Github wiki](https://github.com/metabase/metabase/wiki/Metabase-Backend-Dev-Secrets)
+;;
+;; ### The Dev Debug Page
+;; If you want an easy way to GET/POST to an endpoint and display the results in a webpage, check out the [Dev Debug
+;; Page](https://github.com/metabase/metabase/pull/40580). Cherry-pick the commit from that PR, modify `DevDebug.jsx` as
+;; you see fit ([here](https://github.com/metabase/metabase/commit/4c5723f44424dca2a68a753b83e31ec8129da0fb) is an
+;; example from the ParseSQL project), and then play with the results at `/dev_debug`. *Don't forget to remove the
+;; commit before merging to `master`!*
+;;
+;; ### Lifecycle of a Query
+;; Dan wrote a nice guide [here](https://www.notion.so/metabase/Lifecycle-of-a-query-58e212402b7e444d937aba7757f9ec06?pvs=4)
+;;
 ;; <hr />
 
 
@@ -37,27 +52,33 @@
   (:require
    [clojure.core.async :as a]
    [clojure.string :as str]
+   [clojure.test]
    [dev.debug-qp :as debug-qp]
-   [dev.model-tracking :as model-tracking]
    [dev.explain :as dev.explain]
-   [honeysql.core :as hsql]
+   [dev.migrate :as dev.migrate]
+   [dev.model-tracking :as model-tracking]
+   [hashp.core :as hashp]
+   [honey.sql :as sql]
+   [java-time.api :as t]
    [malli.dev :as malli-dev]
    [metabase.api.common :as api]
    [metabase.config :as config]
    [metabase.core :as mbc]
-   [metabase.db.connection :as mdb.connection]
+   [metabase.db :as mdb]
    [metabase.db.env :as mdb.env]
-   [metabase.db.setup :as mdb.setup]
    [metabase.driver :as driver]
    [metabase.driver.sql-jdbc.connection :as sql-jdbc.conn]
    [metabase.driver.sql-jdbc.execute :as sql-jdbc.execute]
+   [metabase.email :as email]
    [metabase.models.database :refer [Database]]
-   [metabase.query-processor :as qp]
+   [metabase.models.setting :as setting]
+   [metabase.query-processor.compile :as qp.compile]
    [metabase.query-processor.timezone :as qp.timezone]
    [metabase.server :as server]
    [metabase.server.handler :as handler]
    [metabase.sync :as sync]
    [metabase.test :as mt]
+   [metabase.test-runner]
    [metabase.test.data.impl :as data.impl]
    [metabase.util :as u]
    [metabase.util.log :as log]
@@ -65,7 +86,8 @@
    [potemkin :as p]
    [toucan2.connection :as t2.connection]
    [toucan2.core :as t2]
-   [toucan2.pipeline :as t2.pipeline]))
+   [toucan2.pipeline :as t2.pipeline]
+   [toucan2.tools.hydrate :as t2.hydrate]))
 
 (set! *warn-on-reflection* true)
 
@@ -73,29 +95,44 @@
   debug-qp/keep-me
   model-tracking/keep-me)
 
+#_:clj-kondo/ignore
 (defn tap>-spy [x]
   (doto x tap>))
 
 (p/import-vars
  [debug-qp
-  process-query-debug
   pprint-sql]
  [dev.explain
   explain-query]
+ [dev.migrate
+  migrate!
+  rollback!
+  migration-sql-by-id]
  [model-tracking
   track!
   untrack!
   untrack-all!
   reset-changes!
-  changes])
+  changes]
+ [mt
+  set-ns-log-level!])
 
 (def initialized?
+  "Was Metabase already initialized? Used in `init!` to prevent calling `core/init!`
+   more than once (during `start!`, for example)."
   (atom nil))
 
 (defn init!
+  "Trigger general initialization, but only once."
   []
-  (mbc/init!)
-  (reset! initialized? true))
+  (when-not @initialized?
+    (mbc/init!)
+    (reset! initialized? true)))
+
+(defn migration-timestamp
+  "Returns a UTC timestamp in format `yyyy-MM-dd'T'HH:mm:ss` that you can used to postfix for migration ID."
+  []
+  (t/format (t/formatter "yyyy-MM-dd'T'HH:mm:ss") (t/zoned-date-time (t/zone-id "UTC"))))
 
 (defn deleted-inmem-databases
   "Finds in-memory Databases for which the underlying in-mem h2 db no longer exists."
@@ -103,6 +140,7 @@
   (let [h2-dbs (t2/select :model/Database :engine :h2)
         in-memory? (fn [db] (some-> db :details :db (str/starts-with? "mem:")))
         can-connect? (fn [db]
+                       #_:clj-kondo/ignore
                        (binding [metabase.driver.h2/*allow-testing-h2-connections* true]
                          (try
                            (driver/can-connect? :h2 (:details db))
@@ -122,20 +160,22 @@
     (t2/delete! :model/Database :id [:in outdated-ids])))
 
 (defn start!
+  "Start Metabase"
   []
   (server/start-web-server! #'handler/app)
-  (when-not @initialized?
-    (init!))
+  (init!)
   (when config/is-dev?
     (prune-deleted-inmem-databases!)
     (with-out-str (malli-dev/start!))))
 
 (defn stop!
+  "Stop Metabase"
   []
   (malli-dev/stop!)
   (server/stop-web-server!))
 
 (defn restart!
+  "Restart Metabase"
   []
   (stop!)
   (start!))
@@ -193,7 +233,7 @@
   first arg:
 
     (dev/query-jdbc-db
-     [:sqlserver 'test-data-with-time]
+     [:sqlserver 'time-test-data]
      [\"SELECT * FROM dbo.users WHERE dbo.users.last_login_time > ?\" (java-time/offset-time \"16:00Z\")])"
   {:arglists '([driver sql]            [[driver dataset] sql]
                [driver honeysql-form]  [[driver dataset] honeysql-form]
@@ -201,7 +241,7 @@
   [driver-or-driver+dataset sql-args]
   (let [[driver dataset] (u/one-or-many driver-or-driver+dataset)
         [sql & params]   (if (map? sql-args)
-                           (hsql/format sql-args)
+                           (sql/format sql-args)
                            (u/one-or-many sql-args))
         canceled-chan    (a/promise-chan)]
     (try
@@ -224,15 +264,6 @@
       (catch InterruptedException e
         (a/>!! canceled-chan :cancel)
         (throw e)))))
-
-(defn migrate!
-  "Run migrations for the Metabase application database. Possible directions are `:up` (default), `:force`, `:down`, and
-  `:release-locks`. When migrating `:down` pass along a version to migrate to (44+)."
-  ([]
-   (migrate! :up))
-  ([direction & [version]]
-   (mdb.setup/migrate! (mdb.connection/db-type) (mdb.connection/data-source)
-                       direction version)))
 
 (methodical/defmethod t2.connection/do-with-connection :model/Database
   "Support running arbitrary queries against data warehouse DBs for easy REPL debugging. Only works for SQL+JDBC drivers
@@ -275,20 +306,47 @@
   ;; make sure we use the application database when compiling the query and not something goofy like a connection for a
   ;; Data warehouse DB, if we're using this in combination with a Database as connectable
   (let [{:keys [query params]} (binding [t2.connection/*current-connectable* nil]
-                                 (qp/compile built-query))]
+                                 (qp.compile/compile built-query))]
     (into [query] params)))
+
+(defn- maybe-realize
+  "Realize a lazy sequence if it's a lazy sequence. Otherwise, return the value as is."
+  [x]
+  (if (instance? clojure.lang.LazySeq x)
+    (doall x)
+    x))
+
+(methodical/defmethod t2.hydrate/hydrate-with-strategy :around ::t2.hydrate/multimethod-simple
+  "Throws an error if simple hydrations make DB calls (which is an easy way to accidentally introduce an N+1 bug)."
+  [model strategy k instances]
+  (if (or config/is-prod?
+          (< (count instances) 2))
+    (next-method model strategy k instances)
+    (do
+      ;; prevent things like dereferencing metabase.api.common/*current-user-permissions-set* from triggering the check
+      ;; by calling `next-method` *twice*. To reduce the performance impact, just call it with the first instance.
+      (maybe-realize (next-method model strategy k [(first instances)]))
+      ;; Now we can actually run the hydration with the full set of instances and make sure no more DB calls happened.
+      (t2/with-call-count [call-count]
+        (let [res (maybe-realize (next-method model strategy k instances))]
+          ;; only throws an exception if the simple hydration makes a DB call
+          (when (pos-int? (call-count))
+              (throw (ex-info (format "N+1 hydration detected!!! Model %s, key %s]" (pr-str model) k)
+                              {:model model :strategy strategy :k k :items-count (count instances) :db-calls (call-count)})))
+          res)))))
 
 (defn app-db-as-data-warehouse
   "Add the application database as a Database. Currently only works if your app DB uses broken-out details!"
   []
   (binding [t2.connection/*current-connectable* nil]
     (or (t2/select-one Database :name "Application Database")
+        #_:clj-kondo/ignore
         (let [details (#'metabase.db.env/broken-out-details
-                       (mdb.connection/db-type)
+                       (mdb/db-type)
                        @#'metabase.db.env/env)
               app-db  (first (t2/insert-returning-instances! Database
                                                              {:name    "Application Database"
-                                                              :engine  (mdb.connection/db-type)
+                                                              :engine  (mdb/db-type)
                                                               :details details}))]
           (sync/sync-database! app-db)
           app-db))))
@@ -301,3 +359,60 @@
      (mt/with-driver (:engine db#)
        (mt/with-db db#
          ~@body))))
+
+(defmacro p
+  "#p, but to use in pipelines like `(-> 1 inc dev/p inc)`.
+
+  See https://github.com/weavejester/hashp"
+  [form]
+  (hashp/p* form))
+
+(defn- tests-in-var-ns [test-var]
+  (->> test-var meta :ns ns-interns vals
+       (filter (comp :test meta))))
+
+(defn find-root-test-failure!
+  "Sometimes tests fail due to another test not cleaning up after itself properly (e.g. leaving permissions in a dirty
+  state). This is a common cause of tests failing in CI, or when run via `find-and-run-tests`, but not when run alone.
+
+  This helper allows you to pass in a test var for a test that fails only after other tests run. It finds and runs all
+  tests, running your passed test after each.
+
+  When the passed test starts failing, it throws an exception notifying you of the test that caused it to start
+  failing. At that point, you can start investigating what pleasant surprises that test is leaving behind in the
+  database."
+  [failing-test-var & {:keys [scope] :or {scope :same-ns}}]
+  (let [failed? (fn []
+                  (not= [0 0] ((juxt :fail :error) (clojure.test/run-test-var failing-test-var))))]
+    (when (failed?)
+      (throw (ex-info "Test is already failing! Better go fix it." {:failed-test failing-test-var})))
+    (let [tests (case scope
+                  :same-ns (tests-in-var-ns failing-test-var)
+                  :full-suite (metabase.test-runner/find-tests))]
+      (doseq [test tests]
+        (clojure.test/run-test-var test)
+        (when (failed?)
+          (throw (ex-info (format "Test failed after running: `%s`" test)
+                          {:test test})))))))
+
+
+(defn setup-email!
+  "Set up email settings for sending emails from Metabase. This is useful for testing email sending in the REPL."
+  [& settings]
+  (let [settings (merge {:host     "localhost"
+                         :port     1025
+                         :user     "metabase"
+                         :pass     "metabase@secret"
+                         :security :none}
+                        settings)]
+    (when (::email/error (email/test-smtp-connection settings))
+      (throw (ex-info "Failed to connect to SMTP server" {:settings settings})))
+    (setting/set-many! (update-keys settings
+                                    {:host        :email-smtp-host,
+                                     :user        :email-smtp-username,
+                                     :pass        :email-smtp-password,
+                                     :port        :email-smtp-port,
+                                     :security    :email-smtp-security,
+                                     :sender-name :email-from-name,
+                                     :sender      :email-from-address,
+                                     :reply-to    :email-reply-to}))))

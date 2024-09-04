@@ -4,20 +4,21 @@
   (:require
    [clojure.java.jdbc :as jdbc]
    [metabase.connection-pool :as connection-pool]
-   [metabase.db.connection :as mdb.connection]
+   [metabase.db :as mdb]
    [metabase.driver :as driver]
+   [metabase.driver.util :as driver.u]
    [metabase.lib.metadata :as lib.metadata]
    [metabase.lib.metadata.jvm :as lib.metadata.jvm]
    [metabase.models.interface :as mi]
    [metabase.models.setting :as setting]
-   [metabase.query-processor.context.default :as context.default]
+   [metabase.query-processor.pipeline :as qp.pipeline]
    [metabase.query-processor.store :as qp.store]
    [metabase.util :as u]
-   [metabase.util.i18n :refer [trs tru]]
+   [metabase.util.i18n :refer [tru]]
    [metabase.util.log :as log]
    [metabase.util.malli :as mu]
    [metabase.util.ssh :as ssh]
-   #_{:clj-kondo/ignore [:discouraged-namespace]}
+   ^{:clj-kondo/ignore [:discouraged-namespace]}
    [toucan2.core :as t2])
   (:import
    (com.mchange.v2.c3p0 DataSources)
@@ -40,7 +41,6 @@
   {:added "0.32.0" :arglists '([driver details-map])}
   driver/dispatch-on-initialized-driver-safe-keys
   :hierarchy #'driver/hierarchy)
-
 
 ;;; +----------------------------------------------------------------------------------------------------------------+
 ;;; |                                           Creating Connection Pools                                            |
@@ -84,23 +84,28 @@
   :visibility :internal
   :type       :integer
   :default    15
-  :audit      :getter)
+  :audit      :getter
+  :doc "Change this to a higher value if you notice that regular usage consumes all or close to all connections.
+
+When all connections are in use then Metabase will be slower to return results for queries, since it would have to wait for an available connection before processing the next query in the queue.
+
+For setting the maximum, see [MB_APPLICATION_DB_MAX_CONNECTION_POOL_SIZE](#mb_application_db_max_connection_pool_size).")
 
 (setting/defsetting jdbc-data-warehouse-unreturned-connection-timeout-seconds
   "Kill connections if they are unreturned after this amount of time. In theory this should not be needed because the QP
   will kill connections that time out, but in practice it seems that connections disappear into the ether every once
   in a while; rather than exhaust the connection pool, let's be extra safe. This should be the same as the query
-  timeout in [[metabase.query-processor.context.default/query-timeout-ms]] by default."
+  timeout in [[metabase.query-processor.context/query-timeout-ms]] by default."
   :visibility :internal
   :type       :integer
   :getter     (fn []
                 (or (setting/get-value-of-type :integer :jdbc-data-warehouse-unreturned-connection-timeout-seconds)
-                    (long (/ context.default/query-timeout-ms 1000))))
+                    (long (/ qp.pipeline/*query-timeout-ms* 1000))))
   :setter     :none)
 
 (defmethod data-warehouse-connection-pool-properties :default
   [driver database]
-  { ;; only fetch one new connection at a time, rather than batching fetches (default = 3 at a time). This is done in
+  {;; only fetch one new connection at a time, rather than batching fetches (default = 3 at a time). This is done in
    ;; interest of minimizing memory consumption
    "acquireIncrement"             1
    ;; [From dox] Seconds a Connection can remain pooled but unused before being discarded.
@@ -161,19 +166,25 @@
   "Create a new C3P0 `ComboPooledDataSource` for connecting to the given `database`."
   [{:keys [id details], driver :engine, :as database}]
   {:pre [(map? database)]}
-  (log/debug (u/format-color 'cyan (trs "Creating new connection pool for {0} database {1} ..." driver id)))
+  (log/debug (u/format-color :cyan "Creating new connection pool for %s database %s ..." driver id))
   (let [details-with-tunnel (driver/incorporate-ssh-tunnel-details  ;; If the tunnel is disabled this returned unchanged
                              driver
                              (update details :port #(or % (default-ssh-tunnel-target-port driver))))
-        spec                (connection-details->spec driver details-with-tunnel)
+        details-with-auth   (driver.u/fetch-and-incorporate-auth-provider-details
+                             driver
+                             id
+                             details-with-tunnel)
+        spec                (connection-details->spec driver details-with-auth)
         properties          (data-warehouse-connection-pool-properties driver database)]
     (merge
-      (connection-pool-spec spec properties)
-      ;; also capture entries related to ssh tunneling for later use
-      (select-keys spec [:tunnel-enabled :tunnel-session :tunnel-tracker :tunnel-entrance-port :tunnel-entrance-host]))))
+     (connection-pool-spec spec properties)
+     ;; also capture entries related to ssh tunneling for later use
+     (select-keys spec [:tunnel-enabled :tunnel-session :tunnel-tracker :tunnel-entrance-port :tunnel-entrance-host])
+     ;; remember when the password expires
+     (select-keys details-with-auth [:password-expiry-timestamp]))))
 
 (defn- destroy-pool! [database-id pool-spec]
-  (log/debug (u/format-color 'red (trs "Closing old connection pool for database {0} ..." database-id)))
+  (log/debug (u/format-color :red "Closing old connection pool for database %s ..." database-id))
   (connection-pool/destroy-connection-pool! pool-spec)
   (ssh/close-tunnel! pool-spec))
 
@@ -185,7 +196,7 @@
   database-id->jdbc-spec-hash
   (atom {}))
 
-(mu/defn ^:private jdbc-spec-hash
+(mu/defn- jdbc-spec-hash
   "Computes a hash value for the JDBC connection spec based on `database`'s `:details` map, for the purpose of
   determining if details changed and therefore the existing connection pool needs to be invalidated."
   [{driver :engine, :keys [details], :as database} :- [:maybe :map]]
@@ -215,21 +226,16 @@
   [database]
   (set-pool! (u/the-id database) nil nil))
 
-(defn notify-database-updated
-  "Default implementation of [[driver/notify-database-updated]] for JDBC SQL drivers. We are being informed that a
-  `database` has been updated, so lets shut down the connection pool (if it exists) under the assumption that the
-  connection details have changed."
-  [database]
-  (invalidate-pool-for-db! database))
-
 (defn- log-ssh-tunnel-reconnect-msg! [db-id]
-  (log/warn (u/format-color 'red (trs "ssh tunnel for database {0} looks closed; marking pool invalid to reopen it"
-                                      db-id)))
+  (log/warn (u/format-color :red "ssh tunnel for database %s looks closed; marking pool invalid to reopen it" db-id))
   nil)
 
 (defn- log-jdbc-spec-hash-change-msg! [db-id]
-  (log/warn (u/format-color 'yellow (trs "Hash of database {0} details changed; marking pool invalid to reopen it"
-                                          db-id)))
+  (log/warn (u/format-color :yellow "Hash of database %s details changed; marking pool invalid to reopen it" db-id))
+  nil)
+
+(defn- log-password-expiry! [db-id]
+  (log/warn (u/format-color :yellow "Password of database %s expired; marking pool invalid to reopen it" db-id))
   nil)
 
 (defn db->pooled-connection-spec
@@ -254,7 +260,7 @@
                             ;; connections with *application-db* and 1 less connection pool. Note: This data-source is
                             ;; not in [[database-id->connection-pool]].
                             (:is-audit db)
-                            {:datasource (mdb.connection/data-source)}
+                            {:datasource (mdb/data-source)}
 
                             (= ::not-found details)
                             nil
@@ -270,6 +276,12 @@
                                                     jdbc-spec-hash))))
                             (when log-invalidation?
                               (log-jdbc-spec-hash-change-msg! db-id))
+
+                            (let [{:keys [password-expiry-timestamp]} details]
+                              (and (int? password-expiry-timestamp)
+                                   (<= password-expiry-timestamp (System/currentTimeMillis))))
+                            (when log-invalidation?
+                              (log-password-expiry! db-id))
 
                             (nil? (:tunnel-session details)) ; no tunnel in use; valid
                             details
@@ -314,7 +326,10 @@
   [driver details f]
   (let [details (update details :port #(or % (default-ssh-tunnel-target-port driver)))]
     (ssh/with-ssh-tunnel [details-with-tunnel details]
-      (let [spec (connection-details->spec driver details-with-tunnel)]
+      (let [details-with-auth (driver.u/fetch-and-incorporate-auth-provider-details
+                               driver
+                               details-with-tunnel)
+            spec (connection-details->spec driver details-with-auth)]
         (f spec)))))
 
 (defmacro with-connection-spec-for-testing-connection

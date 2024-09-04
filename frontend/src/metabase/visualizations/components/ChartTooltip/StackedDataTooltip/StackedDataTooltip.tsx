@@ -1,14 +1,17 @@
 import { useMemo } from "react";
+
 import { color } from "metabase/lib/colors";
 import type { StackedTooltipModel } from "metabase/visualizations/types";
+
 import { TooltipRow, TooltipTotalRow } from "../TooltipRow";
+
 import {
   DataPointHeader,
-  DataPointTableHeader,
   DataPointRoot,
-  DataPointTableBody,
   DataPointTable,
+  DataPointTableBody,
   DataPointTableFooter,
+  DataPointTableHeader,
 } from "./StackedDataTooltip.styled";
 import {
   getPercent,

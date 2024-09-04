@@ -1,13 +1,14 @@
+import type { DisplayTheme } from "metabase/public/lib/types";
 import type {
-  Dashboard,
-  DashboardId,
-  DashboardCard,
-  DashCardId,
   DashCardDataMap,
-  ParameterId,
-  ParameterValueOrArray,
+  DashCardId,
+  Dashboard,
+  DashboardCard,
+  DashboardId,
   DashboardTab,
   DashboardTabId,
+  ParameterId,
+  ParameterValueOrArray,
 } from "metabase-types/api";
 
 export type DashboardSidebarName =
@@ -18,6 +19,37 @@ export type DashboardSidebarName =
   | "sharing"
   | "info";
 
+interface BaseSidebarState {
+  name?: DashboardSidebarName;
+  props: Record<string, unknown> & {
+    dashcardId?: DashCardId;
+  };
+}
+
+type ClickBehaviorSidebarProps = {
+  dashcardId: DashCardId;
+};
+
+export interface ClickBehaviorSidebarState extends BaseSidebarState {
+  name: "clickBehavior";
+  props: ClickBehaviorSidebarProps;
+}
+
+type EditParameterSidebarProps = {
+  dashcardId?: DashCardId;
+  parameterId: ParameterId;
+};
+
+export interface EditParameterSidebarState extends BaseSidebarState {
+  name: "editParameter";
+  props: EditParameterSidebarProps;
+}
+
+export type DashboardSidebarState =
+  | BaseSidebarState
+  | ClickBehaviorSidebarState
+  | EditParameterSidebarState;
+
 export type StoreDashboardTab = DashboardTab & {
   isRemoved?: boolean;
 };
@@ -25,9 +57,11 @@ export type StoreDashboardTab = DashboardTab & {
 export type StoreDashboard = Omit<Dashboard, "dashcards" | "tabs"> & {
   dashcards: DashCardId[];
   tabs?: StoreDashboardTab[];
+  isDirty?: boolean;
 };
 
 export type StoreDashcard = DashboardCard & {
+  isAdded?: boolean;
   isDirty?: boolean;
   isRemoved?: boolean;
 };
@@ -42,6 +76,21 @@ export type TabDeletion = {
   removedDashCardIds: DashCardId[];
 };
 
+export type DashboardLoadingStatus = "idle" | "running" | "complete";
+
+export type DashboardCardsLoadingState = {
+  loadingIds: DashCardId[];
+  loadingStatus: DashboardLoadingStatus;
+  startTime: number | null;
+  endTime: number | null;
+};
+
+export type DashboardLoadingControls = {
+  isLoading: boolean;
+  documentTitle?: string;
+  showLoadCompleteFavicon?: boolean;
+};
+
 export interface DashboardState {
   dashboardId: DashboardId | null;
   selectedTabId: SelectedTabId;
@@ -51,28 +100,18 @@ export interface DashboardState {
   dashcardData: DashCardDataMap;
 
   parameterValues: Record<ParameterId, ParameterValueOrArray>;
+  draftParameterValues: Record<ParameterId, ParameterValueOrArray | null>;
 
-  loadingDashCards: {
-    loadingIds: DashCardId[];
-    loadingStatus: "idle" | "running" | "complete";
-    startTime: number | null;
-    endTime: number | null;
-  };
-  loadingControls: {
-    documentTitle?: string;
-    showLoadCompleteFavicon?: boolean;
-  };
+  loadingDashCards: DashboardCardsLoadingState;
+  loadingControls: DashboardLoadingControls;
 
-  isEditing: Dashboard | null;
+  editingDashboard: Dashboard | null;
   isAddParameterPopoverOpen: boolean;
   isNavigatingBackToDashboard: boolean;
 
-  slowCards: Record<DashCardId, unknown>;
+  slowCards: Record<DashCardId, boolean>;
 
-  sidebar: {
-    name?: DashboardSidebarName;
-    props: Record<string, unknown>;
-  };
+  sidebar: DashboardSidebarState;
 
   missingActionParameters: unknown;
 
@@ -81,4 +120,6 @@ export interface DashboardState {
     toastDashboardId: number | null;
   };
   tabDeletions: Record<TabDeletionId, TabDeletion>;
+
+  theme: DisplayTheme;
 }

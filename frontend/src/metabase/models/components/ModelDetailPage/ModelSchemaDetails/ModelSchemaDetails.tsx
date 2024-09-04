@@ -1,21 +1,19 @@
 import { useCallback, useMemo } from "react";
-import { t, ngettext, msgid } from "ttag";
+import { msgid, ngettext, t } from "ttag";
 
 import Button from "metabase/core/components/Button";
 import Link from "metabase/core/components/Link";
-
-import * as Urls from "metabase/lib/urls";
 import { getSemanticTypeIcon } from "metabase/lib/schema_metadata";
-
-import type Field from "metabase-lib/metadata/Field";
-import type Question from "metabase-lib/Question";
+import * as Urls from "metabase/lib/urls";
+import type Question from "metabase-lib/v1/Question";
+import type Field from "metabase-lib/v1/metadata/Field";
 
 import {
-  SchemaHeader,
+  FieldIcon,
   FieldList,
   FieldListItem,
   FieldTitle,
-  FieldIcon,
+  SchemaHeader,
 } from "./ModelSchemaDetails.styled";
 
 interface Props {
@@ -30,7 +28,7 @@ function ModelSchemaDetails({ model, hasEditMetadataLink }: Props) {
     type: "metadata",
   });
 
-  const fields = useMemo(() => model.table()?.fields || [], [model]);
+  const fields = useMemo(() => model.legacyQueryTable()?.fields || [], [model]);
 
   const fieldsCount = useMemo(() => {
     return ((count: number) =>

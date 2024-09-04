@@ -1,65 +1,65 @@
-import type { MantineTheme, MantineThemeOverride } from "@mantine/core";
+import type { MantineThemeOverride } from "@mantine/core";
 import { rem } from "@mantine/core";
-import { color } from "metabase/lib/colors";
+
+import { DEFAULT_METABASE_COMPONENT_THEME } from "embedding-sdk/lib/theme";
+
 import {
   getAccordionOverrides,
+  getActionIconOverrides,
+  getAlertOverrides,
   getAnchorOverrides,
+  getAutocompleteOverrides,
   getButtonOverrides,
   getCalendarOverrides,
   getCardOverrides,
   getCheckboxOverrides,
+  getChipOverrides,
   getDateInputOverrides,
   getDatePickerOverrides,
   getDividerOverrides,
   getFileInputOverrides,
+  getHoverCardOverrides,
   getInputOverrides,
+  getListOverrides,
   getMenuOverrides,
   getModalOverrides,
-  getRadioOverrides,
+  getMultiSelectOverrides,
+  getNavLinkOverrides,
   getPaperOverrides,
   getPopoverOverrides,
+  getProgressOverrides,
+  getRadioOverrides,
+  getScrollAreaOverrides,
+  getSegmentedControlOverrides,
   getSelectOverrides,
+  getSkeletonOverrides,
   getSwitchOverrides,
   getTabsOverrides,
-  getTextareaOverrides,
   getTextInputOverrides,
   getTextOverrides,
+  getTextareaOverrides,
   getTimeInputOverrides,
   getTitleOverrides,
   getTooltipOverrides,
 } from "./components";
+import { getThemeColors } from "./utils/colors";
 
-type ThemeColors = MantineTheme["colors"]["brand"];
-
-const getThemeColors = (colors: string[]): ThemeColors => {
-  return Array.from(
-    { length: 10 },
-    (_, index) => colors[index] ?? "transparent",
-  ) as ThemeColors;
+export const breakpoints = {
+  xs: "23em",
+  sm: "40em",
+  md: "60em",
+  lg: "80em",
+  xl: "120em",
 };
+export type BreakpointName = keyof typeof breakpoints;
 
 export const getThemeOverrides = (): MantineThemeOverride => ({
-  colors: {
-    brand: getThemeColors([color("brand-lighter"), color("brand")]),
-    text: getThemeColors([
-      color("text-light"),
-      color("text-medium"),
-      color("text-dark"),
-    ]),
-    focus: getThemeColors([color("focus")]),
-    border: getThemeColors([color("border")]),
-    bg: getThemeColors([
-      color("bg-light"),
-      color("bg-medium"),
-      color("bg-dark"),
-      color("bg-black"),
-    ]),
-    success: getThemeColors([color("success")]),
-    error: getThemeColors([color("error")]),
-  },
+  breakpoints,
+  colors: getThemeColors(),
   primaryColor: "brand",
-  primaryShade: 1,
+  primaryShade: 0,
   shadows: {
+    sm: "0px 1px 4px 2px rgba(0, 0, 0, 0.08)",
     md: "0px 4px 20px 0px rgba(0, 0, 0, 0.05)",
   },
   spacing: {
@@ -103,7 +103,7 @@ export const getThemeOverrides = (): MantineThemeOverride => ({
       },
     },
   },
-  fontFamily: "var(--default-font-family)",
+  fontFamily: "var(--mb-default-font-family), sans-serif",
   fontFamilyMonospace: "Monaco, monospace",
   focusRingStyles: {
     styles: theme => ({
@@ -113,11 +113,15 @@ export const getThemeOverrides = (): MantineThemeOverride => ({
   },
   components: {
     ...getAccordionOverrides(),
+    ...getActionIconOverrides(),
+    ...getAlertOverrides(),
     ...getAnchorOverrides(),
+    ...getAutocompleteOverrides(),
     ...getButtonOverrides(),
     ...getCalendarOverrides(),
     ...getCardOverrides(),
     ...getCheckboxOverrides(),
+    ...getChipOverrides(),
     ...getDateInputOverrides(),
     ...getDatePickerOverrides(),
     ...getDividerOverrides(),
@@ -125,9 +129,15 @@ export const getThemeOverrides = (): MantineThemeOverride => ({
     ...getInputOverrides(),
     ...getMenuOverrides(),
     ...getModalOverrides(),
+    ...getMultiSelectOverrides(),
+    ...getNavLinkOverrides(),
     ...getRadioOverrides(),
     ...getPaperOverrides(),
     ...getPopoverOverrides(),
+    ...getProgressOverrides(),
+    ...getSkeletonOverrides(),
+    ...getScrollAreaOverrides(),
+    ...getSegmentedControlOverrides(),
     ...getSelectOverrides(),
     ...getSwitchOverrides(),
     ...getTabsOverrides(),
@@ -137,5 +147,8 @@ export const getThemeOverrides = (): MantineThemeOverride => ({
     ...getTimeInputOverrides(),
     ...getTitleOverrides(),
     ...getTooltipOverrides(),
+    ...getHoverCardOverrides(),
+    ...getListOverrides(),
   },
+  other: DEFAULT_METABASE_COMPONENT_THEME,
 });

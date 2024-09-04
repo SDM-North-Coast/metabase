@@ -1,23 +1,23 @@
 import {
+  combineReducers,
   createAction,
   createThunkAction,
   handleActions,
-  combineReducers,
 } from "metabase/lib/redux";
-import {
-  SettingsApi,
-  EmailApi,
-  SlackApi,
-  LdapApi,
-  GoogleApi,
-  SamlApi,
-} from "metabase/services";
 import { refreshSiteSettings } from "metabase/redux/settings";
+import {
+  EmailApi,
+  GoogleApi,
+  LdapApi,
+  SamlApi,
+  SettingsApi,
+  SlackApi,
+} from "metabase/services";
 
 // ACTION TYPES AND ACTION CREATORS
 
 export const reloadSettings = () => async (dispatch, getState) => {
-  await Promise.all([
+  return await Promise.all([
     dispatch(refreshSettingsList()),
     dispatch(refreshSiteSettings()),
   ]);
@@ -53,7 +53,7 @@ export const UPDATE_SETTING = "metabase/admin/settings/UPDATE_SETTING";
 export const updateSetting = createThunkAction(
   UPDATE_SETTING,
   function (setting) {
-    return async function (dispatch, getState) {
+    return async function (dispatch) {
       try {
         await SettingsApi.put(setting);
       } catch (error) {
@@ -116,8 +116,11 @@ export const sendTestEmail = createThunkAction(SEND_TEST_EMAIL, function () {
 export const CLEAR_EMAIL_SETTINGS =
   "metabase/admin/settings/CLEAR_EMAIL_SETTINGS";
 
-export const clearEmailSettings = createAction(CLEAR_EMAIL_SETTINGS, () =>
-  EmailApi.clear(),
+export const clearEmailSettings = createThunkAction(
+  CLEAR_EMAIL_SETTINGS,
+  () => async dispatch => {
+    await EmailApi.clear(), await dispatch(reloadSettings());
+  },
 );
 
 export const UPDATE_SLACK_SETTINGS =

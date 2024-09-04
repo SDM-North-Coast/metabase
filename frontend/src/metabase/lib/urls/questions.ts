@@ -2,20 +2,17 @@ import slugg from "slugg";
 
 import { serializeCardForUrl } from "metabase/lib/card";
 import MetabaseSettings from "metabase/lib/settings";
-
+import type { QuestionCreatorOpts } from "metabase-lib/v1/Question";
+import Question from "metabase-lib/v1/Question";
+import * as ML_Urls from "metabase-lib/v1/urls";
 import type { CardId, Card as SavedCard } from "metabase-types/api";
-import type { QuestionCreatorOpts } from "metabase-lib/Question";
-import Question from "metabase-lib/Question";
-import * as ML_Urls from "metabase-lib/urls";
 
-import { appendSlug, extractQueryParams } from "./utils";
+import { appendSlug, getEncodedUrlSearchParams } from "./utils";
 
 type Card = Partial<SavedCard> & {
   card_id?: CardId | string;
   model?: "card" | "dataset";
 };
-
-export const newQuestionFlow = () => "/question/new";
 
 export type QuestionUrlBuilderParams = {
   mode?: "view" | "notebook";
@@ -25,7 +22,9 @@ export type QuestionUrlBuilderParams = {
 };
 
 export function question(
-  card: Card | null,
+  card: Partial<
+    Pick<Card, "id" | "name" | "type" | "card_id" | "model">
+  > | null,
   {
     mode = "view",
     hash = "",
@@ -38,13 +37,7 @@ export function question(
   }
 
   if (query && typeof query === "object") {
-    query = extractQueryParams(query)
-      .map(([key, value]) =>
-        value == null
-          ? `${encodeURIComponent(key)}=`
-          : [key, value].map(encodeURIComponent).join("="),
-      )
-      .join("&");
+    query = String(getEncodedUrlSearchParams(query));
   }
 
   if (hash && hash.charAt(0) !== "#") {
@@ -55,8 +48,10 @@ export function question(
     query = "?" + query;
   }
 
-  const isModel = card?.dataset || card?.model === "dataset";
-  let path = isModel ? "model" : "question";
+  const isModel = card?.type === "model" || card?.model === "dataset";
+  const fallbackPath = isModel ? "model" : "question";
+  let path: string = card?.type ?? fallbackPath;
+
   if (!card || !card.id) {
     return `/${path}${query}${hash}`;
   }
@@ -111,14 +106,13 @@ export function newQuestion({
     creationType,
     query: objectId ? { objectId } : undefined,
   });
-
-  const entity = question.isDataset() ? "model" : "question";
+  const type = question.type();
 
   if (mode) {
-    return url.replace(/^\/(question|model)/, `/${entity}\/${mode}`);
-  } else {
-    return url;
+    return url.replace(/^\/(question|model|metric)/, `/${type}\/${mode}`);
   }
+
+  return url;
 }
 
 export function publicQuestion({
@@ -128,7 +122,7 @@ export function publicQuestion({
   includeSiteUrl = true,
 }: {
   uuid: string;
-  type: string | null;
+  type?: string | null;
   query?: string;
   includeSiteUrl?: boolean;
 }) {

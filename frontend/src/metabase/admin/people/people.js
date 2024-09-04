@@ -1,26 +1,22 @@
-import _ from "underscore";
 import { assoc, dissoc } from "icepick";
+import _ from "underscore";
+
+import Users from "metabase/entities/users";
 import {
+  combineReducers,
   createAction,
   createThunkAction,
   handleActions,
-  combineReducers,
 } from "metabase/lib/redux";
-
-import * as MetabaseAnalytics from "metabase/lib/analytics";
-
 import { PermissionsApi } from "metabase/services";
 
-import Users from "metabase/entities/users";
-
 import {
-  LOAD_MEMBERSHIPS,
+  CLEAR_TEMPORARY_PASSWORD,
   CREATE_MEMBERSHIP,
   DELETE_MEMBERSHIP,
+  LOAD_MEMBERSHIPS,
   UPDATE_MEMBERSHIP,
-  CLEAR_TEMPORARY_PASSWORD,
 } from "./events";
-
 import { getMemberships } from "./selectors";
 
 // ACTION CREATORS
@@ -42,7 +38,7 @@ export const createMembership = createAction(
       user_id: userId,
       group_id: groupId,
     });
-    MetabaseAnalytics.trackStructEvent("People Groups", "Membership Added");
+
     return {
       user_id: userId,
       group_id: groupId,
@@ -56,7 +52,7 @@ export const deleteMembership = createThunkAction(
     const memberships = getMemberships(getState());
     const membership = memberships[membershipId];
     await PermissionsApi.deleteMembership({ id: membershipId });
-    MetabaseAnalytics.trackStructEvent("People Groups", "Membership Deleted");
+
     return { membershipId, groupId: membership.group_id };
   },
 );
@@ -68,7 +64,7 @@ export const updateMembership = createAction(
       ...membership,
       id: membership.membership_id,
     });
-    MetabaseAnalytics.trackStructEvent("People Groups", "Membership Updated");
+
     return membership;
   },
 );

@@ -14,7 +14,7 @@ Delete a specific `PermissionsGroup`.
 
 ### PARAMS:
 
-*  **`group-id`** value must be an integer greater than zero.
+-  **`group-id`** value must be an integer greater than zero.
 
 ## `DELETE /api/permissions/membership/:id`
 
@@ -22,25 +22,33 @@ Remove a User from a PermissionsGroup (delete their membership).
 
 ### PARAMS:
 
-*  **`id`** value must be an integer greater than zero.
-
-## `GET /api/permissions/execution/graph`
-
-Fetch a graph of execution permissions.
-
-You must be a superuser to do this.
+-  **`id`** value must be an integer greater than zero.
 
 ## `GET /api/permissions/graph`
 
-Fetch a graph of all v1 Permissions (excludes v2 query and data permissions).
+Fetch a graph of all Permissions.
 
 You must be a superuser to do this.
 
-## `GET /api/permissions/graph-v2`
+## `GET /api/permissions/graph/db/:db-id`
 
-Fetch a graph of all v2 Permissions (excludes v1 data permissions).
+Fetch a graph of all Permissions for db-id `db-id`.
 
 You must be a superuser to do this.
+
+### PARAMS:
+
+-  **`db-id`** value must be an integer greater than zero.
+
+## `GET /api/permissions/graph/group/:group-id`
+
+Fetch a graph of all Permissions for group-id `group-id`.
+
+You must be a superuser to do this.
+
+### PARAMS:
+
+-  **`group-id`** value must be an integer greater than zero.
 
 ## `GET /api/permissions/group`
 
@@ -55,7 +63,7 @@ Fetch the details for a certain permissions group.
 
 ### PARAMS:
 
-*  **`id`** value must be an integer greater than zero.
+-  **`id`** value must be an integer greater than zero.
 
 ## `GET /api/permissions/membership`
 
@@ -74,7 +82,7 @@ You must be a superuser to do this.
 
 ### PARAMS:
 
-*  **`name`** value must be a non-blank string.
+-  **`name`** value must be a non-blank string.
 
 ## `POST /api/permissions/membership`
 
@@ -82,26 +90,11 @@ Add a `User` to a `PermissionsGroup`. Returns updated list of members belonging 
 
 ### PARAMS:
 
-*  **`group_id`** value must be an integer greater than zero.
+-  **`group_id`** value must be an integer greater than zero.
 
-*  **`user_id`** value must be an integer greater than zero.
+-  **`user_id`** value must be an integer greater than zero.
 
-*  **`is_group_manager`** nullable boolean
-
-## `PUT /api/permissions/execution/graph`
-
-Do a batch update of execution permissions by passing in a modified graph. The modified graph of the same
-  form as returned by the corresponding GET endpoint.
-
-  Revisions to the permissions graph are tracked. If you fetch the permissions graph and some other third-party
-  modifies it before you can submit you revisions, the endpoint will instead make no changes and return a
-  409 (Conflict) response. In this case, you should fetch the updated graph and make desired changes to that.
-
-You must be a superuser to do this.
-
-### PARAMS:
-
-*  **`body`** map
+-  **`is_group_manager`** nullable boolean.
 
 ## `PUT /api/permissions/graph`
 
@@ -119,11 +112,15 @@ Do a batch update of Permissions by passing in a modified graph. This should ret
   response will be returned if this key is present and the server is not running the Enterprise Edition, and/or the
   `:sandboxes` feature flag is not present.
 
+  If the skip-graph query param is truthy, then the graph will not be returned.
+
 You must be a superuser to do this.
 
 ### PARAMS:
 
-*  **`body`** map
+-  **`skip-graph`** nullable boolean.
+
+-  **`body`** map.
 
 ## `PUT /api/permissions/group/:group-id`
 
@@ -131,9 +128,9 @@ Update the name of a `PermissionsGroup`.
 
 ### PARAMS:
 
-*  **`group-id`** value must be an integer greater than zero.
+-  **`group-id`** value must be an integer greater than zero.
 
-*  **`name`** value must be a non-blank string.
+-  **`name`** value must be a non-blank string.
 
 ## `PUT /api/permissions/membership/:group-id/clear`
 
@@ -141,7 +138,7 @@ Remove all members from a `PermissionsGroup`. Returns a 400 (Bad Request) if the
 
 ### PARAMS:
 
-*  **`group-id`** value must be an integer greater than zero.
+-  **`group-id`** value must be an integer greater than zero.
 
 ## `PUT /api/permissions/membership/:id`
 
@@ -149,9 +146,9 @@ Update a Permission Group membership. Returns the updated record.
 
 ### PARAMS:
 
-*  **`id`** value must be an integer greater than zero.
+-  **`id`** value must be an integer greater than zero.
 
-*  **`is_group_manager`** boolean
+-  **`is_group_manager`** boolean.
 
 ---
 

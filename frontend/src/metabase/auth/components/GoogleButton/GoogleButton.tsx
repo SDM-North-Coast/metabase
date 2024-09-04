@@ -1,16 +1,19 @@
+import { GoogleLogin, GoogleOAuthProvider } from "@react-oauth/google";
+import { getIn } from "icepick";
 import { useCallback, useState } from "react";
 import { t } from "ttag";
-import { getIn } from "icepick";
-import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
-import { useDispatch, useSelector } from "metabase/lib/redux";
+
 import ErrorBoundary from "metabase/ErrorBoundary";
+import { useDispatch, useSelector } from "metabase/lib/redux";
 import * as Urls from "metabase/lib/urls";
+
 import { loginGoogle } from "../../actions";
 import { getGoogleClientId, getSiteLocale } from "../../selectors";
+
 import {
-  GoogleButtonRoot,
   AuthError,
   AuthErrorRoot,
+  GoogleButtonRoot,
   TextLink,
 } from "./GoogleButton.styled";
 

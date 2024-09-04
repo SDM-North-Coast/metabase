@@ -1,8 +1,9 @@
+import { createMockMetadata } from "__support__/metadata";
 import { checkNotNull } from "metabase/lib/types";
 import type { Database, Schema } from "metabase-types/api";
 import { createMockDatabase, createMockSchema } from "metabase-types/api/mocks";
-import { createMockMetadata } from "__support__/metadata";
-import { getDatabaseOptions, getSchemaOptions, dbHasSchema } from "./utils";
+
+import { dbHasSchema, getDatabaseOptions, getSchemaOptions } from "./utils";
 
 interface SetupOpts {
   databases: Database[];

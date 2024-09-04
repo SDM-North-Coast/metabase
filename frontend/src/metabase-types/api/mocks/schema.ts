@@ -3,16 +3,15 @@ import type {
   NormalizedDatabase,
   NormalizedField,
   NormalizedFieldDimension,
-  NormalizedMetric,
   NormalizedSchema,
   NormalizedSegment,
   NormalizedTable,
   NormalizedTimeline,
 } from "metabase-types/api";
-import { createMockDatabase } from "./database";
+
 import { createMockCollection } from "./collection";
+import { createMockDatabase } from "./database";
 import { createMockField, createMockFieldDimension } from "./field";
-import { createMockMetric } from "./metric";
 import { createMockSegment } from "./segment";
 import { createMockSchema, createMockTable } from "./table";
 import { createMockTimeline } from "./timeline";
@@ -84,14 +83,6 @@ export const createMockNormalizedSegment = ({
   ...opts
 }: Partial<NormalizedSegment> = {}): NormalizedSegment => ({
   ...createMockSegment(opts),
-  table,
-});
-
-export const createMockNormalizedMetric = ({
-  table,
-  ...opts
-}: Partial<NormalizedMetric> = {}): NormalizedMetric => ({
-  ...createMockMetric(opts),
   table,
 });
 

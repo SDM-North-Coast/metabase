@@ -1,10 +1,13 @@
-import { t } from "ttag";
 import type { Location } from "history";
-import { Box } from "metabase/ui";
+import { t } from "ttag";
+
 import { useSelector } from "metabase/lib/redux";
 import type { AuthProvider } from "metabase/plugins/types";
-import { AuthLayout } from "../AuthLayout";
+import { getApplicationName } from "metabase/selectors/whitelabel";
+import { Box } from "metabase/ui";
+
 import { getAuthProviders } from "../../selectors";
+import { AuthLayout } from "../AuthLayout";
 
 interface LoginQueryString {
   redirect?: string;
@@ -23,11 +26,18 @@ export const Login = ({ params, location }: LoginProps): JSX.Element => {
   const providers = useSelector(getAuthProviders);
   const selection = getSelectedProvider(providers, params?.provider);
   const redirectUrl = location?.query?.redirect;
-
+  const applicationName = useSelector(getApplicationName);
   return (
     <AuthLayout>
-      <Box c="text.2" fz="1.25rem" fw="bold" lh="1.5rem" ta="center">
-        {t`Sign in to Metabase`}
+      <Box
+        role="heading"
+        c="text-dark"
+        fz="1.25rem"
+        fw="bold"
+        lh="1.5rem"
+        ta="center"
+      >
+        {t`Sign in to ${applicationName}`}
       </Box>
       {selection && selection.Panel && (
         <Box mt="2.5rem">

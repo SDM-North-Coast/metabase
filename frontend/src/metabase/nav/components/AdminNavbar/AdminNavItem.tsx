@@ -1,4 +1,4 @@
-import { AdminNavLink } from "./AdminNavItem.styled";
+import { AdminNavLink, AdminNavListItem } from "./AdminNavItem.styled";
 
 interface AdminNavItemProps {
   name: string;
@@ -11,13 +11,9 @@ export const AdminNavItem = ({
   path,
   currentPath,
 }: AdminNavItemProps) => (
-  <li>
-    <AdminNavLink
-      to={path}
-      data-metabase-event={`NavBar;${name}`}
-      isSelected={currentPath.startsWith(path)}
-    >
+  <AdminNavListItem path={path} currentPath={currentPath}>
+    <AdminNavLink to={path} isSelected={currentPath.startsWith(path)}>
       {name}
     </AdminNavLink>
-  </li>
+  </AdminNavListItem>
 );

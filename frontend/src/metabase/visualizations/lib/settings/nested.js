@@ -1,7 +1,8 @@
-import _ from "underscore";
 import { t } from "ttag";
+import _ from "underscore";
 
 import chartSettingNestedSettings from "metabase/visualizations/components/settings/ChartSettingNestedSettings";
+
 import { getComputedSettings, getSettingsWidgets } from "../settings";
 
 export function nestedSettings(
@@ -10,6 +11,7 @@ export function nestedSettings(
     objectName = "object",
     getObjects,
     getObjectKey,
+    getObjectSettings,
     getSettingDefinitionsForObject,
     getInheritedSettingsForObject = () => ({}),
     component,
@@ -41,7 +43,7 @@ export function nestedSettings(
       allComputedSettings[key] = getComputedSettingsForObject(
         series,
         object,
-        allStoredSettings[key] || {},
+        getObjectSettings(allStoredSettings, object) ?? {},
         extra,
       );
     }
@@ -76,6 +78,7 @@ export function nestedSettings(
   // decorate with nested settings HOC
   const widget = chartSettingNestedSettings({
     getObjectKey,
+    getObjectSettings,
     getSettingsWidgetsForObject,
   })(component);
 
@@ -111,7 +114,8 @@ export function nestedSettings(
           const key = getObjectKey(object);
           if (!cache.has(key)) {
             const inheritedSettings = getInheritedSettingsForObject(object);
-            const storedSettings = settings[id][key] || {};
+            const storedSettings =
+              getObjectSettings(settings[id], object) ?? {};
             cache.set(key, {
               ...getComputedSettingsForObject(
                 series,

@@ -1,12 +1,12 @@
 (ns metabase.lib.temporal-bucket-test
   (:require
+   #?@(:cljs ([metabase.test-runner.assert-exprs.approximately-equal]))
    [clojure.test :refer [are deftest is testing]]
    [medley.core :as m]
    [metabase.lib.core :as lib]
    [metabase.lib.temporal-bucket :as lib.temporal-bucket]
    [metabase.lib.test-metadata :as meta]
-   [metabase.lib.test-util :as lib.tu]
-   #?@(:cljs ([metabase.test-runner.assert-exprs.approximately-equal]))))
+   [metabase.lib.test-util :as lib.tu]))
 
 #?(:cljs (comment metabase.test-runner.assert-exprs.approximately-equal/keep-me))
 
@@ -114,10 +114,10 @@
     (testing "missing fingerprint"
       (let [column (dissoc column :fingerprint)
             options (lib.temporal-bucket/available-temporal-buckets-method nil -1 column)]
-          (is (= expected-units
-                 (into #{} (map :unit) options)))
-          (is (= expected-defaults
-                 (filter :default options)))))
+        (is (= expected-units
+               (into #{} (map :unit) options)))
+        (is (= expected-defaults
+               (filter :default options)))))
     (testing "existing fingerprint"
       (doseq [[latest unit] {"2019-04-15T13:34:19.931Z" :month
                              "2017-04-15T13:34:19.931Z" :week
@@ -158,13 +158,51 @@
                 (lib/available-temporal-buckets query)
                 (mapv #(select-keys % [:unit :default])))))))
 
+(def ^:private query-with-temporal-expression
+  (-> (lib/query meta/metadata-provider (meta/table-metadata :orders))
+      (lib/expression "NY created at"
+                      (lib/convert-timezone (meta/field-metadata :orders :created-at)
+                                            "America/New_York" "UTC"))))
+
 (deftest ^:parallel temporal-bucketing-options-expressions-test
-  (testing "There should be no bucketing options for expressions as they are not supported (#31367)"
-    (let [query (-> lib.tu/venues-query
-                    (lib/expression "myadd" (lib/+ 1 (meta/field-metadata :venues :category-id))))]
-      (is (empty? (->> (lib/returned-columns query)
-                       (m/find-first (comp #{"myadd"} :name))
-                       (lib/available-temporal-buckets query)))))))
+  (testing "Temporal bucketing should be available for Date and DateTime-valued expressions"
+    ;; TODO: Why is the default :month for a Field and :day for an expression?
+    (is (=? [{:unit :minute}
+             {:unit :hour}
+             {:unit :day, :default true}
+             {:unit :week}
+             {:unit :month}
+             {:unit :quarter}
+             {:unit :year}
+             {:unit :minute-of-hour}
+             {:unit :hour-of-day}
+             {:unit :day-of-week}
+             {:unit :day-of-month}
+             {:unit :day-of-year}
+             {:unit :week-of-year}
+             {:unit :month-of-year}
+             {:unit :quarter-of-year}]
+            (->> (lib/returned-columns query-with-temporal-expression)
+                 (m/find-first (comp #{"NY created at"} :name))
+                 (lib/available-temporal-buckets query-with-temporal-expression))))))
+
+(deftest ^:parallel temporal-bucketing-get-and-set-expressions-test
+  (let [expr           (m/find-first (comp #{"NY created at"} :name)
+                                     (lib/returned-columns query-with-temporal-expression))
+        query          (-> query-with-temporal-expression
+                           (lib/aggregate (lib/count))
+                           (lib/breakout (lib/with-temporal-bucket expr :week)))
+        [breakout-ref] (lib/breakouts query)
+        [breakout-col] (lib/returned-columns query)]
+    (testing `lib/temporal-bucket
+      (testing "on `:expression` refs"
+        (is (=? {:lib/type :option/temporal-bucketing
+                 :unit     :week}
+                (lib/temporal-bucket breakout-ref))))
+      (testing "on columns"
+        (is (=? {:lib/type :option/temporal-bucketing
+                 :unit     :week}
+                (lib/temporal-bucket breakout-col)))))))
 
 (deftest ^:parallel option-raw-temporal-bucket-test
   (let [option (m/find-first #(= (:unit %) :month)
@@ -176,21 +214,31 @@
 
 (deftest ^:parallel short-name-display-info-test
   (let [query lib.tu/venues-query]
-    (is (= #{"minute"
-             "hour"
-             "day"
-             "week"
-             "month"
-             "quarter"
-             "year"
-             "minute-of-hour"
-             "hour-of-day"
-             "day-of-week"
-             "day-of-month"
-             "day-of-year"
-             "week-of-year"
-             "month-of-year"
-             "quarter-of-year"}
-           (into #{}
-                 (map #(:short-name (lib/display-info query -1 %)))
+    (is (= {"minute"          false
+            "hour"            false
+            "day"             false
+            "week"            false
+            "month"           false
+            "quarter"         false
+            "year"            false
+            "minute-of-hour"  true
+            "hour-of-day"     true
+            "day-of-week"     true
+            "day-of-month"    true
+            "day-of-year"     true
+            "week-of-year"    true
+            "month-of-year"   true
+            "quarter-of-year" true}
+           (into {}
+                 (comp (map #(lib/display-info query -1 %))
+                       (map (juxt :short-name :is-temporal-extraction)))
                  (lib.temporal-bucket/available-temporal-buckets query (meta/field-metadata :products :created-at)))))))
+
+(deftest ^:parallel source-card-temporal-extraction-test
+  (let [query (-> (lib/query meta/metadata-provider (meta/table-metadata :orders))
+                  (lib/breakout (lib/with-temporal-bucket (meta/field-metadata :orders :created-at) :year)))]
+    (is (=? {:display-name "Created At: Year"
+             :is-temporal-extraction false}
+            (->> (lib/breakouts query)
+                 first
+                 (lib/display-info query -1))))))
